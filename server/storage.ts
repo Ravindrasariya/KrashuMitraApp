@@ -1,9 +1,12 @@
 import { db } from "./db";
-import { cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent } from "@shared/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent } from "@shared/schema";
+import { eq, desc, and, like, sql } from "drizzle-orm";
 
 export interface IStorage {
+  getUserById(id: string): Promise<User | undefined>;
+  ensureFarmerCode(userId: string): Promise<string>;
   getCropCardsByUser(userId: string): Promise<CropCard[]>;
+  getCropCardsWithEvents(userId: string): Promise<Array<CropCard & { events: CropEvent[] }>>;
   getCropCard(id: number): Promise<CropCard | undefined>;
   createCropCard(card: InsertCropCard): Promise<CropCard>;
   updateCropCard(id: number, data: Partial<InsertCropCard>): Promise<CropCard | undefined>;
@@ -18,8 +21,51 @@ export interface IStorage {
 }
 
 class DatabaseStorage implements IStorage {
+  async getUserById(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async ensureFarmerCode(userId: string): Promise<string> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error("User not found");
+    if (user.farmerCode) return user.farmerCode;
+
+    const createdAt = user.createdAt || new Date();
+    const dateStr = createdAt.toISOString().slice(0, 10).replace(/-/g, "");
+    const prefix = `FM${dateStr}`;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const existing = await db.select({ farmerCode: users.farmerCode })
+        .from(users)
+        .where(like(users.farmerCode, `${prefix}%`));
+      const seq = existing.length + 1 + attempt;
+      const code = `${prefix}${seq}`;
+
+      try {
+        await db.update(users).set({ farmerCode: code }).where(and(eq(users.id, userId), sql`farmer_code IS NULL`));
+        const updated = await this.getUserById(userId);
+        if (updated?.farmerCode) return updated.farmerCode;
+      } catch (e: any) {
+        if (e?.code === "23505") continue;
+        throw e;
+      }
+    }
+    throw new Error("Failed to generate unique farmer code");
+  }
+
   async getCropCardsByUser(userId: string): Promise<CropCard[]> {
     return db.select().from(cropCards).where(eq(cropCards.userId, userId)).orderBy(desc(cropCards.createdAt));
+  }
+
+  async getCropCardsWithEvents(userId: string): Promise<Array<CropCard & { events: CropEvent[] }>> {
+    const cards = await this.getCropCardsByUser(userId);
+    const result: Array<CropCard & { events: CropEvent[] }> = [];
+    for (const card of cards) {
+      const events = await this.getCropEvents(card.id);
+      result.push({ ...card, events });
+    }
+    return result;
   }
 
   async getCropCard(id: number): Promise<CropCard | undefined> {

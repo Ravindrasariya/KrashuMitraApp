@@ -2,6 +2,7 @@ import { useLocation, Link } from "wouter";
 import { Home, Stethoscope, ShoppingBag, Sprout, BookOpen, Globe, LogOut, User } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import { Separator } from "@/components/ui/separator";
 
 const navItems = [
@@ -16,6 +17,11 @@ export function SidebarNav() {
   const [location] = useLocation();
   const { t, language, toggleLanguage } = useTranslation();
   const { user, isAuthenticated } = useAuth();
+
+  const { data: profile } = useQuery<{ farmerCode: string }>({
+    queryKey: ["/api/farmer/profile"],
+    enabled: isAuthenticated,
+  });
 
   return (
     <aside
@@ -74,6 +80,11 @@ export function SidebarNav() {
                 <p className="text-sm font-medium truncate" data-testid="sidebar-username">
                   {user?.firstName || user?.email || "User"}
                 </p>
+                {profile?.farmerCode && (
+                  <p className="text-[11px] text-primary font-medium truncate" data-testid="sidebar-farmer-code">
+                    {profile.farmerCode}
+                  </p>
+                )}
                 <p className="text-[11px] text-muted-foreground truncate">{user?.email}</p>
               </div>
             </div>

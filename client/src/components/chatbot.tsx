@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2 } from "lucide-react";
+import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil } from "lucide-react";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -28,13 +28,31 @@ interface CropCardDraft {
   }>;
 }
 
+interface CropCardEditDraft {
+  type: "crop_card_edit_draft";
+  cardId: number;
+  updates?: {
+    cropName?: string;
+    farmName?: string;
+    variety?: string;
+  };
+  addEvents?: Array<{
+    eventType: string;
+    description: string;
+    eventDate: string;
+  }>;
+  removeEventIds?: number[];
+}
+
+type Draft = CropCardDraft | CropCardEditDraft;
+
 const CHAT_STORAGE_KEY = "krashu-chat-history";
 const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 function stripJsonFromMessage(text: string): string {
   let cleaned = text.replace(/```json\s*[\s\S]*?```/g, "").trim();
   cleaned = cleaned.replace(/```\s*[\s\S]*?```/g, "").trim();
-  cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"crop_card_draft"[\s\S]*\}/g, "").trim();
+  cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"crop_card_(draft|edit_draft)"[\s\S]*\}/g, "").trim();
   return cleaned;
 }
 
@@ -62,6 +80,31 @@ function saveMessages(messages: ChatMessage[]) {
   } catch {}
 }
 
+function tryParseDraft(text: string): Draft | null {
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed.type === "crop_card_draft" || parsed.type === "crop_card_edit_draft") return parsed;
+  } catch {}
+
+  try {
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (parsed.type === "crop_card_draft" || parsed.type === "crop_card_edit_draft") return parsed;
+    }
+  } catch {}
+
+  try {
+    const rawMatch = text.match(/\{[\s\S]*"type"\s*:\s*"crop_card_(draft|edit_draft)"[\s\S]*\}/);
+    if (rawMatch) {
+      const parsed = JSON.parse(rawMatch[0]);
+      return parsed;
+    }
+  } catch {}
+
+  return null;
+}
+
 export function Chatbot() {
   const { t, language } = useTranslation();
   const { isAuthenticated } = useAuth();
@@ -71,9 +114,14 @@ export function Chatbot() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [draft, setDraft] = useState<CropCardDraft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  const { data: profile } = useQuery<{ farmerCode: string; firstName: string; lastName: string }>({
+    queryKey: ["/api/farmer/profile"],
+    enabled: isAuthenticated && isOpen,
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -139,28 +187,8 @@ export function Chatbot() {
                   return updated;
                 });
 
-                try {
-                  const parsed = JSON.parse(data.fullResponse);
-                  if (parsed.type === "crop_card_draft") {
-                    setDraft(parsed);
-                  }
-                } catch {
-                  try {
-                    const jsonMatch = data.fullResponse.match(/```json\s*([\s\S]*?)```/);
-                    if (jsonMatch) {
-                      const parsed = JSON.parse(jsonMatch[1]);
-                      if (parsed.type === "crop_card_draft") {
-                        setDraft(parsed);
-                      }
-                    } else {
-                      const rawMatch = data.fullResponse.match(/\{[\s\S]*"type"\s*:\s*"crop_card_draft"[\s\S]*\}/);
-                      if (rawMatch) {
-                        const parsed = JSON.parse(rawMatch[0]);
-                        setDraft(parsed);
-                      }
-                    }
-                  } catch {}
-                }
+                const parsedDraft = tryParseDraft(data.fullResponse);
+                if (parsedDraft) setDraft(parsedDraft);
               }
             } catch {}
           }
@@ -178,30 +206,62 @@ export function Chatbot() {
 
   const approveDraft = useCallback(async () => {
     if (!draft) return;
+
     try {
-      const cardRes = await apiRequest("POST", "/api/crop-cards", {
-        cropName: draft.cropName,
-        farmName: draft.farmName || null,
-        variety: draft.variety || null,
-        startDate: draft.startDate,
-      });
-      const card = await cardRes.json();
-
-      for (const event of draft.events) {
-        await apiRequest("POST", `/api/crop-cards/${card.id}/events`, {
-          eventType: event.eventType,
-          description: event.description,
-          eventDate: event.eventDate,
+      if (draft.type === "crop_card_draft") {
+        const cardRes = await apiRequest("POST", "/api/crop-cards", {
+          cropName: draft.cropName,
+          farmName: draft.farmName || null,
+          variety: draft.variety || null,
+          startDate: draft.startDate,
         });
-      }
+        const card = await cardRes.json();
 
-      queryClient.invalidateQueries({ queryKey: ["/api/crop-cards"] });
-      toast({ title: t("cropCardCreated") });
-      setDraft(null);
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: language === "hi" ? "फसल कार्ड सफलतापूर्वक बनाया गया! आप इसे फसल प्रबंधन टैब में देख सकते हैं।" : "Crop card created successfully! You can view it in the Farm Management tab."
-      }]);
+        for (const event of draft.events) {
+          await apiRequest("POST", `/api/crop-cards/${card.id}/events`, {
+            eventType: event.eventType,
+            description: event.description,
+            eventDate: event.eventDate,
+          });
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["/api/crop-cards"] });
+        toast({ title: t("cropCardCreated") });
+        setDraft(null);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: language === "hi" ? "फसल कार्ड सफलतापूर्वक बनाया गया! आप इसे फसल प्रबंधन टैब में देख सकते हैं।" : "Crop card created successfully! You can view it in the Farm Management tab."
+        }]);
+      } else if (draft.type === "crop_card_edit_draft") {
+        if (draft.updates && Object.keys(draft.updates).length > 0) {
+          await apiRequest("PATCH", `/api/crop-cards/${draft.cardId}`, draft.updates);
+        }
+
+        if (draft.addEvents && draft.addEvents.length > 0) {
+          for (const event of draft.addEvents) {
+            await apiRequest("POST", `/api/crop-cards/${draft.cardId}/events`, {
+              eventType: event.eventType,
+              description: event.description,
+              eventDate: event.eventDate,
+            });
+          }
+        }
+
+        if (draft.removeEventIds && draft.removeEventIds.length > 0) {
+          for (const eventId of draft.removeEventIds) {
+            await apiRequest("DELETE", `/api/crop-events/${eventId}`);
+          }
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["/api/crop-cards"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", draft.cardId, "events"] });
+        toast({ title: t("cropCardUpdated") });
+        setDraft(null);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: language === "hi" ? "फसल कार्ड सफलतापूर्वक अपडेट किया गया!" : "Crop card updated successfully!"
+        }]);
+      }
     } catch (error) {
       toast({ title: "Error", variant: "destructive" });
     }
@@ -249,6 +309,10 @@ export function Chatbot() {
 
   if (!isAuthenticated) return null;
 
+  const isEditDraft = draft?.type === "crop_card_edit_draft";
+  const editDraft = isEditDraft ? (draft as CropCardEditDraft) : null;
+  const createDraft = !isEditDraft ? (draft as CropCardDraft | null) : null;
+
   return (
     <>
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -270,6 +334,11 @@ export function Chatbot() {
                 <h3 className="text-sm font-bold">KrashuVed</h3>
                 <p className="text-[10px] text-muted-foreground">
                   {language === "hi" ? "कृषि AI सहायक" : "Agri AI Assistant"}
+                  {profile?.farmerCode && (
+                    <span className="ml-1.5 text-primary font-medium" data-testid="text-farmer-code-chat">
+                      · {profile.farmerCode}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -284,6 +353,11 @@ export function Chatbot() {
                 <p className="text-sm text-muted-foreground max-w-xs mx-auto">
                   {t("krashuvedIntro")}
                 </p>
+                {profile?.farmerCode && (
+                  <p className="text-xs text-primary mt-2 font-medium" data-testid="text-farmer-id-intro">
+                    {t("farmerId")}: {profile.farmerCode}
+                  </p>
+                )}
               </div>
             )}
 
@@ -313,28 +387,28 @@ export function Chatbot() {
               </div>
             )}
 
-            {draft && (
+            {createDraft && (
               <Card className="p-3 border-primary/30 bg-primary/5" data-testid="draft-card">
                 <h4 className="text-sm font-bold mb-2">
                   {language === "hi" ? "फसल कार्ड ड्राफ्ट:" : "Crop Card Draft:"}
                 </h4>
-                <p className="text-sm"><strong>{language === "hi" ? "फसल:" : "Crop:"}</strong> {draft.cropName}</p>
-                {draft.farmName && <p className="text-sm"><strong>{language === "hi" ? "खेत:" : "Farm:"}</strong> {draft.farmName}</p>}
-                {draft.variety && <p className="text-sm"><strong>{language === "hi" ? "किस्म:" : "Variety:"}</strong> {draft.variety}</p>}
-                <p className="text-sm"><strong>{language === "hi" ? "तारीख:" : "Date:"}</strong> {draft.startDate}</p>
-                {draft.events.length > 0 && (
+                <p className="text-sm"><strong>{language === "hi" ? "फसल:" : "Crop:"}</strong> {createDraft.cropName}</p>
+                {createDraft.farmName && <p className="text-sm"><strong>{language === "hi" ? "खेत:" : "Farm:"}</strong> {createDraft.farmName}</p>}
+                {createDraft.variety && <p className="text-sm"><strong>{language === "hi" ? "किस्म:" : "Variety:"}</strong> {createDraft.variety}</p>}
+                <p className="text-sm"><strong>{language === "hi" ? "तारीख:" : "Date:"}</strong> {createDraft.startDate}</p>
+                {createDraft.events.length > 0 && (
                   <div className="mt-2 space-y-1">
                     <p className="text-xs font-medium text-muted-foreground">
-                      {language === "hi" ? `${draft.events.length} गतिविधियाँ:` : `${draft.events.length} events:`}
+                      {language === "hi" ? `${createDraft.events.length} गतिविधियाँ:` : `${createDraft.events.length} events:`}
                     </p>
-                    {draft.events.slice(0, 6).map((e, i) => (
+                    {createDraft.events.slice(0, 6).map((e, i) => (
                       <p key={i} className="text-xs text-muted-foreground">
                         {e.eventDate} - {e.eventType}: {e.description}
                       </p>
                     ))}
-                    {draft.events.length > 6 && (
+                    {createDraft.events.length > 6 && (
                       <p className="text-xs text-muted-foreground italic">
-                        {language === "hi" ? `...और ${draft.events.length - 6} और` : `...and ${draft.events.length - 6} more`}
+                        {language === "hi" ? `...और ${createDraft.events.length - 6} और` : `...and ${createDraft.events.length - 6} more`}
                       </p>
                     )}
                   </div>
@@ -345,6 +419,62 @@ export function Chatbot() {
                     {t("approve")}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-draft">
+                    <X className="w-3 h-3 mr-1" />
+                    {t("reject")}
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {editDraft && (
+              <Card className="p-3 border-amber-500/30 bg-amber-50 dark:bg-amber-950/20" data-testid="edit-draft-card">
+                <div className="flex items-center gap-2 mb-2">
+                  <Pencil className="w-4 h-4 text-amber-600" />
+                  <h4 className="text-sm font-bold">
+                    {language === "hi" ? `कार्ड #${editDraft.cardId} में बदलाव:` : `Edit Card #${editDraft.cardId}:`}
+                  </h4>
+                </div>
+                {editDraft.updates && Object.keys(editDraft.updates).length > 0 && (
+                  <div className="space-y-0.5 mb-2">
+                    {editDraft.updates.cropName && (
+                      <p className="text-sm"><strong>{language === "hi" ? "नया नाम:" : "New name:"}</strong> {editDraft.updates.cropName}</p>
+                    )}
+                    {editDraft.updates.farmName && (
+                      <p className="text-sm"><strong>{language === "hi" ? "नया खेत:" : "New farm:"}</strong> {editDraft.updates.farmName}</p>
+                    )}
+                    {editDraft.updates.variety && (
+                      <p className="text-sm"><strong>{language === "hi" ? "नई किस्म:" : "New variety:"}</strong> {editDraft.updates.variety}</p>
+                    )}
+                  </div>
+                )}
+                {editDraft.addEvents && editDraft.addEvents.length > 0 && (
+                  <div className="mt-1 space-y-1">
+                    <p className="text-xs font-medium text-green-700 dark:text-green-400">
+                      {language === "hi" ? `+ ${editDraft.addEvents.length} नई गतिविधियाँ:` : `+ ${editDraft.addEvents.length} new events:`}
+                    </p>
+                    {editDraft.addEvents.slice(0, 6).map((e, i) => (
+                      <p key={i} className="text-xs text-muted-foreground">
+                        {e.eventDate} - {e.eventType}: {e.description}
+                      </p>
+                    ))}
+                    {editDraft.addEvents.length > 6 && (
+                      <p className="text-xs text-muted-foreground italic">
+                        {language === "hi" ? `...और ${editDraft.addEvents.length - 6} और` : `...and ${editDraft.addEvents.length - 6} more`}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {editDraft.removeEventIds && editDraft.removeEventIds.length > 0 && (
+                  <p className="text-xs text-red-600 mt-1">
+                    {language === "hi" ? `- ${editDraft.removeEventIds.length} गतिविधियाँ हटाई जाएंगी` : `- ${editDraft.removeEventIds.length} events will be removed`}
+                  </p>
+                )}
+                <div className="flex gap-2 mt-3">
+                  <Button size="sm" onClick={approveDraft} data-testid="button-approve-edit-draft">
+                    <Check className="w-3 h-3 mr-1" />
+                    {t("approve")}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-edit-draft">
                     <X className="w-3 h-3 mr-1" />
                     {t("reject")}
                   </Button>

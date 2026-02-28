@@ -65,6 +65,8 @@ const translations = {
   editEvent: { hi: "गतिविधि संपादित करें", en: "Edit Event" },
   eventUpdated: { hi: "गतिविधि अपडेट की गई!", en: "Event updated!" },
   update: { hi: "अपडेट करें", en: "Update" },
+  farmerId: { hi: "किसान ID", en: "Farmer ID" },
+  cropCardUpdated: { hi: "फसल कार्ड अपडेट किया गया!", en: "Crop card updated!" },
   cropCardCreated: { hi: "फसल कार्ड बनाया गया!", en: "Crop card created!" },
   eventAdded: { hi: "गतिविधि जोड़ी गई!", en: "Event added!" },
 } as const;
