@@ -58,6 +58,10 @@ const translations = {
   no: { hi: "नहीं", en: "No" },
   loading: { hi: "लोड हो रहा है...", en: "Loading..." },
   featureComingSoon: { hi: "यह सुविधा जल्द उपलब्ध होगी", en: "This feature will be available soon" },
+  farmName: { hi: "खेत / प्लॉट", en: "Farm / Plot" },
+  farmNamePlaceholder: { hi: "खेत या प्लॉट का नाम (वैकल्पिक)", en: "Farm or plot name (optional)" },
+  variety: { hi: "किस्म", en: "Variety" },
+  varietyPlaceholder: { hi: "फसल की किस्म (वैकल्पिक)", en: "Crop variety (optional)" },
   cropCardCreated: { hi: "फसल कार्ड बनाया गया!", en: "Crop card created!" },
   eventAdded: { hi: "गतिविधि जोड़ी गई!", en: "Event added!" },
 } as const;

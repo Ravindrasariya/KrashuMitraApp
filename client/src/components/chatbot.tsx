@@ -18,6 +18,8 @@ interface ChatMessage {
 interface CropCardDraft {
   type: "crop_card_draft";
   cropName: string;
+  farmName?: string;
+  variety?: string;
   startDate: string;
   events: Array<{
     eventType: string;
@@ -179,6 +181,8 @@ export function Chatbot() {
     try {
       const cardRes = await apiRequest("POST", "/api/crop-cards", {
         cropName: draft.cropName,
+        farmName: draft.farmName || null,
+        variety: draft.variety || null,
         startDate: draft.startDate,
       });
       const card = await cardRes.json();
@@ -315,6 +319,8 @@ export function Chatbot() {
                   {language === "hi" ? "फसल कार्ड ड्राफ्ट:" : "Crop Card Draft:"}
                 </h4>
                 <p className="text-sm"><strong>{language === "hi" ? "फसल:" : "Crop:"}</strong> {draft.cropName}</p>
+                {draft.farmName && <p className="text-sm"><strong>{language === "hi" ? "खेत:" : "Farm:"}</strong> {draft.farmName}</p>}
+                {draft.variety && <p className="text-sm"><strong>{language === "hi" ? "किस्म:" : "Variety:"}</strong> {draft.variety}</p>}
                 <p className="text-sm"><strong>{language === "hi" ? "तारीख:" : "Date:"}</strong> {draft.startDate}</p>
                 {draft.events.length > 0 && (
                   <div className="mt-2 space-y-1">

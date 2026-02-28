@@ -12,6 +12,8 @@ export const cropCards = pgTable("crop_cards", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   cropName: text("crop_name").notNull(),
+  farmName: text("farm_name"),
+  variety: text("variety"),
   startDate: date("start_date").notNull(),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),

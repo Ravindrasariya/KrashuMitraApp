@@ -78,12 +78,25 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
                   <Sprout className={`w-5 h-5 ${isActive ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`} />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-base truncate" data-testid={`text-crop-name-${card.id}`}>
-                    {card.cropName}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {format(new Date(card.startDate), "dd MMM yyyy")}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-base truncate" data-testid={`text-crop-name-${card.id}`}>
+                      {card.cropName}
+                    </h3>
+                    {card.variety && (
+                      <span className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded-full shrink-0" data-testid={`text-variety-${card.id}`}>
+                        {card.variety}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    {card.farmName && (
+                      <>
+                        <span className="truncate" data-testid={`text-farm-name-${card.id}`}>{card.farmName}</span>
+                        <span>·</span>
+                      </>
+                    )}
+                    <span>{format(new Date(card.startDate), "dd MMM yyyy")}</span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">

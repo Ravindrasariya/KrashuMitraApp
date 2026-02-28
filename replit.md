@@ -65,7 +65,7 @@ shared/
 ## Database Tables
 - `users` - Replit Auth users
 - `sessions` - Session storage
-- `crop_cards` - Farmer's crop cards (userId, cropName, startDate, status)
+- `crop_cards` - Farmer's crop cards (userId, cropName, farmName?, variety?, startDate, status)
 - `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted)
 - `conversations` - Chat conversations
 - `messages` - Chat messages

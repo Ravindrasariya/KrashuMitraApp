@@ -13,6 +13,8 @@ import { Sprout } from "lucide-react";
 
 const cropCardFormSchema = z.object({
   cropName: z.string().min(1, "Required"),
+  farmName: z.string().optional(),
+  variety: z.string().optional(),
   startDate: z.string().min(1, "Required"),
 });
 
@@ -44,6 +46,8 @@ export function AddCropCardDialog({ open, onOpenChange }: AddCropCardDialogProps
     resolver: zodResolver(cropCardFormSchema),
     defaultValues: {
       cropName: "",
+      farmName: "",
+      variety: "",
       startDate: new Date().toISOString().split("T")[0],
     },
   });
@@ -108,6 +112,44 @@ export function AddCropCardDialog({ open, onOpenChange }: AddCropCardDialogProps
                   {language === "hi" ? crop.hi : crop.en}
                 </button>
               ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="farmName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("farmName")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={t("farmNamePlaceholder")}
+                        data-testid="input-farm-name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="variety"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("variety")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={t("varietyPlaceholder")}
+                        data-testid="input-variety"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <FormField
