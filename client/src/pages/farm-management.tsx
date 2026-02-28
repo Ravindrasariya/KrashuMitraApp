@@ -29,7 +29,7 @@ export default function FarmManagementPage() {
 
   if (!authLoading && !isAuthenticated) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 pb-20" data-testid="page-farm-management-login">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 pb-20 md:pb-8" data-testid="page-farm-management-login">
         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
           <Sprout className="w-8 h-8 text-primary" />
         </div>
@@ -43,8 +43,8 @@ export default function FarmManagementPage() {
   }
 
   return (
-    <div className="pb-20" data-testid="page-farm-management">
-      <div className="px-4 pt-4 pb-2 max-w-lg mx-auto">
+    <div className="pb-20 md:pb-8" data-testid="page-farm-management">
+      <div className="px-4 md:px-8 pt-4 pb-2 max-w-lg md:max-w-3xl mx-auto">
         <div className="flex items-center justify-between gap-2 mb-4">
           <h2 className="text-lg font-bold" data-testid="text-my-crop-cards">{t("myCropCards")}</h2>
           <Button

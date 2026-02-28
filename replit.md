@@ -14,13 +14,14 @@ Bilingual (Hindi default, English toggle). Uses Replit Auth for login and Gemini
 ## Structure
 ```
 client/src/
-  App.tsx                    - Main app layout with bottom nav
+  App.tsx                    - Main app layout (sidebar on desktop, bottom nav on mobile)
   lib/i18n.ts               - Hindi/English translation system
   lib/queryClient.ts        - TanStack Query client
   hooks/use-auth.ts         - Authentication hook
   components/
-    bottom-nav.tsx           - Mobile bottom navigation
-    header.tsx               - App header with language toggle
+    sidebar-nav.tsx          - Desktop sidebar navigation (hidden on mobile)
+    bottom-nav.tsx           - Mobile bottom navigation (hidden on desktop)
+    header.tsx               - Mobile app header with language toggle (hidden on desktop)
     chatbot.tsx              - KrashuVed AI chatbot (voice + text)
     crop-card-item.tsx       - Expandable crop card component
     crop-timeline.tsx        - Timeline view for crop events
@@ -53,7 +54,7 @@ shared/
 6. **Admin** - Not yet implemented (password protected, hidden)
 
 ## Key Features
-- Mobile-first bottom navigation (like Mandi Mitra reference)
+- Responsive layout: sidebar navigation on desktop (md+), bottom navigation on mobile
 - Hindi default language with English toggle
 - Crop card management with expandable timeline
 - Event types: Plantation, Fertiliser, Pesticide, Watering (color-coded)

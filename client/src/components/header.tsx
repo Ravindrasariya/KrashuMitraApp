@@ -5,7 +5,7 @@ export function AppHeader() {
   const { t, language, toggleLanguage } = useTranslation();
 
   return (
-    <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b" data-testid="app-header">
+    <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b md:hidden" data-testid="app-header">
       <div className="flex items-center justify-between px-4 h-14 max-w-lg mx-auto">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">

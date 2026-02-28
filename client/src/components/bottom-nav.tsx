@@ -22,7 +22,7 @@ export function BottomNav() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t safe-area-bottom" data-testid="bottom-nav">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t safe-area-bottom md:hidden" data-testid="bottom-nav">
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-1">
         {navItems.map(item => {
           const isActive = location === item.path;

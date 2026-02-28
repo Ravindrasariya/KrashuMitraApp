@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageContext, useLanguage } from "@/lib/i18n";
 import { BottomNav } from "@/components/bottom-nav";
+import { SidebarNav } from "@/components/sidebar-nav";
 import { AppHeader } from "@/components/header";
 import { Chatbot } from "@/components/chatbot";
 import NotFound from "@/pages/not-found";
@@ -33,12 +34,15 @@ function Router() {
 
 function AppContent() {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <AppHeader />
-      <main className="flex-1">
-        <Router />
-      </main>
-      <BottomNav />
+    <div className="min-h-screen bg-background flex">
+      <SidebarNav />
+      <div className="flex-1 flex flex-col min-h-screen">
+        <AppHeader />
+        <main className="flex-1">
+          <Router />
+        </main>
+        <BottomNav />
+      </div>
       <Chatbot />
     </div>
   );
