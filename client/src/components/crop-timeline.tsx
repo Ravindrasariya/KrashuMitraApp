@@ -95,11 +95,11 @@ export function CropTimeline({ events, isLoading, onToggle, onDelete }: CropTime
 
               <div className="flex-1 min-w-0 pt-1">
                 <div className="flex items-center justify-between gap-1">
-                  <span className={`text-xs font-semibold ${event.isCompleted ? "line-through text-muted-foreground" : ""}`}>
+                  <span className={`text-sm font-semibold ${event.isCompleted ? "line-through text-muted-foreground" : ""}`}>
                     {label}
                   </span>
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {format(new Date(event.eventDate), "dd MMM")}
                     </span>
                     <button
@@ -112,7 +112,7 @@ export function CropTimeline({ events, isLoading, onToggle, onDelete }: CropTime
                   </div>
                 </div>
                 {event.description && (
-                  <p className={`text-xs mt-0.5 ${event.isCompleted ? "line-through text-muted-foreground" : "text-muted-foreground"}`}>
+                  <p className={`text-sm mt-0.5 ${event.isCompleted ? "line-through text-muted-foreground" : "text-muted-foreground"}`}>
                     {event.description}
                   </p>
                 )}

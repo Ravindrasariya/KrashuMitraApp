@@ -160,35 +160,45 @@ export async function registerRoutes(
       const { message, language } = req.body;
       const userId = req.user.claims.sub;
 
+      const today = new Date().toISOString().split("T")[0];
+
       const systemPrompt = language === "hi"
         ? `तुम KrashuVed (कृषुवेद) हो, एक कृषि विशेषज्ञ AI सहायक। तुम किसानों की मदद करते हो फसल प्रबंधन में।
 
-जब किसान "Krashuved" या "कृषुवेद" कहकर फसल कार्ड बनाने को कहे, तो तुम्हें JSON format में जवाब देना है:
-{
-  "type": "crop_card_draft",
-  "cropName": "फसल का नाम",
-  "startDate": "YYYY-MM-DD",
-  "events": [
-    {"eventType": "plantation|fertiliser|pesticide|watering", "description": "विवरण", "eventDate": "YYYY-MM-DD"}
-  ]
-}
+आज की तारीख: ${today}
 
-अगर किसान सामान्य कृषि सवाल पूछे तो सादा हिंदी में जवाब दो। जवाब छोटा और उपयोगी रखो।
-अगर crop card बनाने का अनुरोध है तो ONLY JSON दो, कोई अतिरिक्त text नहीं।`
+जब किसान "Krashuved" या "कृषुवेद" कहकर फसल कार्ड बनाने को कहे, तो:
+1. पहले एक छोटा सा सारांश लिखो जो किसान को समझ आए (जैसे "मैंने आलू का फसल कार्ड तैयार किया है जिसमें बुवाई, खाद, और सिंचाई शामिल है।")
+2. फिर नई लाइन पर JSON ब्लॉक दो इस format में:
+\`\`\`json
+{"type":"crop_card_draft","cropName":"फसल का नाम","startDate":"YYYY-MM-DD","events":[{"eventType":"plantation|fertiliser|pesticide|watering","description":"विवरण","eventDate":"YYYY-MM-DD"}]}
+\`\`\`
+
+महत्वपूर्ण नियम:
+- अगर किसान कोई तारीख नहीं बताए तो startDate आज (${today}) रखो।
+- अगर किसान "2 महीने पहले" या "3 हफ्ते पहले" बोले तो आज की तारीख से गणना करो।
+- अगर कोई recurring/बार-बार होने वाली गतिविधि हो (जैसे "हर 15 दिन में सिंचाई"), तो हर बार के लिए अलग-अलग entry बनाओ अपनी-अपनी तारीख के साथ। कम से कम 3-4 महीने की अवधि के लिए entries बनाओ।
+- eventType केवल ये हो सकते हैं: plantation, fertiliser, pesticide, watering
+
+अगर किसान सामान्य कृषि सवाल पूछे तो सादा हिंदी में जवाब दो। जवाब छोटा और उपयोगी रखो।`
         : `You are KrashuVed, an agricultural expert AI assistant. You help farmers with crop management.
 
-When a farmer says "Krashuved" and asks to create a crop card, respond ONLY with JSON:
-{
-  "type": "crop_card_draft",
-  "cropName": "crop name",
-  "startDate": "YYYY-MM-DD",
-  "events": [
-    {"eventType": "plantation|fertiliser|pesticide|watering", "description": "details", "eventDate": "YYYY-MM-DD"}
-  ]
-}
+Today's date: ${today}
 
-For general agriculture questions, answer concisely and helpfully.
-If it's a crop card request, respond ONLY with the JSON, no additional text.`;
+When a farmer says "Krashuved" and asks to create a crop card:
+1. First write a brief friendly summary in plain language (e.g., "I've prepared a potato crop card with plantation, fertilizer, and watering events.")
+2. Then on a new line, output the JSON block in this format:
+\`\`\`json
+{"type":"crop_card_draft","cropName":"crop name","startDate":"YYYY-MM-DD","events":[{"eventType":"plantation|fertiliser|pesticide|watering","description":"details","eventDate":"YYYY-MM-DD"}]}
+\`\`\`
+
+Important rules:
+- If no date is specified, use today (${today}) as the startDate.
+- If the farmer says "2 months ago" or "3 weeks back", calculate from today's date.
+- For recurring activities (e.g., "watering every 15 days"), create individual entries for EACH occurrence with specific dates. Generate entries for at least 3-4 months.
+- eventType must be one of: plantation, fertiliser, pesticide, watering
+
+For general agriculture questions, answer concisely and helpfully.`;
 
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");

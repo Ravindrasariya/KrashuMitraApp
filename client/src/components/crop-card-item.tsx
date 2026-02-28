@@ -78,10 +78,10 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
                   <Sprout className={`w-5 h-5 ${isActive ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`} />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-sm truncate" data-testid={`text-crop-name-${card.id}`}>
+                  <h3 className="font-semibold text-base truncate" data-testid={`text-crop-name-${card.id}`}>
                     {card.cropName}
                   </h3>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     {format(new Date(card.startDate), "dd MMM yyyy")}
                   </p>
                 </div>
@@ -89,7 +89,7 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Badge
                   variant={isActive ? "default" : "secondary"}
-                  className="text-[10px] no-default-active-elevate"
+                  className="text-xs no-default-active-elevate"
                   data-testid={`badge-status-${card.id}`}
                 >
                   {isActive ? t("active") : t("completed")}
@@ -106,7 +106,7 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
                     style={{ width: `${(completedCount / totalCount) * 100}%` }}
                   />
                 </div>
-                <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                <span className="text-xs text-muted-foreground flex-shrink-0">
                   {completedCount}/{totalCount}
                 </span>
               </div>
@@ -136,7 +136,7 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
 
               {showDeleteConfirm ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-destructive">{t("deleteConfirm")}</span>
+                  <span className="text-sm text-destructive">{t("deleteConfirm")}</span>
                   <Button size="sm" variant="destructive" onClick={onDelete} data-testid={`button-confirm-delete-${card.id}`}>
                     {t("yes")}
                   </Button>

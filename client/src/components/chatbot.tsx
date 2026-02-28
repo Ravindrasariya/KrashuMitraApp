@@ -26,12 +26,46 @@ interface CropCardDraft {
   }>;
 }
 
+const CHAT_STORAGE_KEY = "krashu-chat-history";
+const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
+
+function stripJsonFromMessage(text: string): string {
+  let cleaned = text.replace(/```json\s*[\s\S]*?```/g, "").trim();
+  cleaned = cleaned.replace(/```\s*[\s\S]*?```/g, "").trim();
+  cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"crop_card_draft"[\s\S]*\}/g, "").trim();
+  return cleaned;
+}
+
+function loadSavedMessages(): ChatMessage[] {
+  try {
+    const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    if (Date.now() - parsed.timestamp > CHAT_EXPIRY_MS) {
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+      return [];
+    }
+    return parsed.messages || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMessages(messages: ChatMessage[]) {
+  try {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
+      messages,
+      timestamp: Date.now(),
+    }));
+  } catch {}
+}
+
 export function Chatbot() {
   const { t, language } = useTranslation();
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadSavedMessages());
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -41,6 +75,12 @@ export function Chatbot() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveMessages(messages);
+    }
   }, [messages]);
 
   const sendMessage = useCallback(async (text: string) => {
@@ -82,13 +122,21 @@ export function Chatbot() {
               const data = JSON.parse(line.slice(6));
               if (data.content) {
                 assistantContent += data.content;
+                const displayContent = stripJsonFromMessage(assistantContent);
                 setMessages(prev => {
                   const updated = [...prev];
-                  updated[updated.length - 1] = { role: "assistant", content: assistantContent };
+                  updated[updated.length - 1] = { role: "assistant", content: displayContent };
                   return updated;
                 });
               }
               if (data.done && data.fullResponse) {
+                const displayContent = stripJsonFromMessage(data.fullResponse);
+                setMessages(prev => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = { role: "assistant", content: displayContent || (language === "hi" ? "फसल कार्ड तैयार है। कृपया नीचे देखें और मंजूर करें।" : "Crop card is ready. Please review below and approve.") };
+                  return updated;
+                });
+
                 try {
                   const parsed = JSON.parse(data.fullResponse);
                   if (parsed.type === "crop_card_draft") {
@@ -96,10 +144,18 @@ export function Chatbot() {
                   }
                 } catch {
                   try {
-                    const jsonMatch = data.fullResponse.match(/\{[\s\S]*"type"\s*:\s*"crop_card_draft"[\s\S]*\}/);
+                    const jsonMatch = data.fullResponse.match(/```json\s*([\s\S]*?)```/);
                     if (jsonMatch) {
-                      const parsed = JSON.parse(jsonMatch[0]);
-                      setDraft(parsed);
+                      const parsed = JSON.parse(jsonMatch[1]);
+                      if (parsed.type === "crop_card_draft") {
+                        setDraft(parsed);
+                      }
+                    } else {
+                      const rawMatch = data.fullResponse.match(/\{[\s\S]*"type"\s*:\s*"crop_card_draft"[\s\S]*\}/);
+                      if (rawMatch) {
+                        const parsed = JSON.parse(rawMatch[0]);
+                        setDraft(parsed);
+                      }
                     }
                   } catch {}
                 }
@@ -194,7 +250,7 @@ export function Chatbot() {
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetTrigger asChild>
           <button
-            className="fixed right-4 bottom-20 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg"
+            className="fixed right-4 bottom-20 md:bottom-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg"
             data-testid="button-open-chatbot"
           >
             <MessageCircle className="w-6 h-6" />
@@ -262,11 +318,19 @@ export function Chatbot() {
                 <p className="text-sm"><strong>{language === "hi" ? "तारीख:" : "Date:"}</strong> {draft.startDate}</p>
                 {draft.events.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    {draft.events.map((e, i) => (
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {language === "hi" ? `${draft.events.length} गतिविधियाँ:` : `${draft.events.length} events:`}
+                    </p>
+                    {draft.events.slice(0, 6).map((e, i) => (
                       <p key={i} className="text-xs text-muted-foreground">
                         {e.eventDate} - {e.eventType}: {e.description}
                       </p>
                     ))}
+                    {draft.events.length > 6 && (
+                      <p className="text-xs text-muted-foreground italic">
+                        {language === "hi" ? `...और ${draft.events.length - 6} और` : `...and ${draft.events.length - 6} more`}
+                      </p>
+                    )}
                   </div>
                 )}
                 <div className="flex gap-2 mt-3">
