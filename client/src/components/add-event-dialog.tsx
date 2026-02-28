@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,8 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sprout, Leaf, Bug, Droplets } from "lucide-react";
+import type { CropEvent } from "@shared/schema";
 
 const eventFormSchema = z.object({
   eventType: z.string().min(1, "Required"),
@@ -25,6 +25,7 @@ interface AddEventDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cropCardId: number;
+  editEvent?: CropEvent | null;
 }
 
 const eventTypes = [
@@ -41,9 +42,10 @@ const commonDescriptions: Record<string, string[]> = {
   plantation: ["Direct / सीधी बुवाई", "Transplant / रोपाई", "Broadcasting / छिड़काव"],
 };
 
-export function AddEventDialog({ open, onOpenChange, cropCardId }: AddEventDialogProps) {
+export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: AddEventDialogProps) {
   const { t, language } = useTranslation();
   const { toast } = useToast();
+  const isEditMode = !!editEvent;
 
   const { data: suggestions = [] } = useQuery<string[]>({
     queryKey: ["/api/suggestions"],
@@ -58,6 +60,22 @@ export function AddEventDialog({ open, onOpenChange, cropCardId }: AddEventDialo
       eventDate: new Date().toISOString().split("T")[0],
     },
   });
+
+  useEffect(() => {
+    if (open && editEvent) {
+      form.reset({
+        eventType: editEvent.eventType,
+        description: editEvent.description || "",
+        eventDate: editEvent.eventDate,
+      });
+    } else if (open && !editEvent) {
+      form.reset({
+        eventType: "",
+        description: "",
+        eventDate: new Date().toISOString().split("T")[0],
+      });
+    }
+  }, [open, editEvent, form]);
 
   const selectedType = form.watch("eventType");
 
@@ -75,21 +93,43 @@ export function AddEventDialog({ open, onOpenChange, cropCardId }: AddEventDialo
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: (data: EventFormData) =>
+      apiRequest("PATCH", `/api/crop-events/${editEvent!.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", cropCardId, "events"] });
+      toast({ title: t("eventUpdated") });
+      form.reset();
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Error", variant: "destructive" });
+    },
+  });
+
   const onSubmit = (data: EventFormData) => {
-    createMutation.mutate(data);
+    if (isEditMode) {
+      updateMutation.mutate(data);
+    } else {
+      createMutation.mutate(data);
+    }
   };
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
 
   const quickDescriptions = [
     ...(commonDescriptions[selectedType] || []),
     ...suggestions.filter(s => !commonDescriptions[selectedType]?.includes(s)),
   ].slice(0, 8);
 
+  const dialogTitle = isEditMode ? t("editEvent") : t("addEvent");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl" data-testid="dialog-add-event">
         <DialogHeader>
-          <DialogTitle>{t("addEvent")}</DialogTitle>
-          <DialogDescription className="sr-only">{t("addEvent")}</DialogDescription>
+          <DialogTitle>{dialogTitle}</DialogTitle>
+          <DialogDescription className="sr-only">{dialogTitle}</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -190,10 +230,10 @@ export function AddEventDialog({ open, onOpenChange, cropCardId }: AddEventDialo
               <Button
                 type="submit"
                 className="flex-1"
-                disabled={createMutation.isPending}
+                disabled={isPending}
                 data-testid="button-save-event"
               >
-                {createMutation.isPending ? t("loading") : t("save")}
+                {isPending ? t("loading") : isEditMode ? t("update") : t("save")}
               </Button>
             </div>
           </form>

@@ -62,6 +62,9 @@ const translations = {
   farmNamePlaceholder: { hi: "खेत या प्लॉट का नाम (वैकल्पिक)", en: "Farm or plot name (optional)" },
   variety: { hi: "किस्म", en: "Variety" },
   varietyPlaceholder: { hi: "फसल की किस्म (वैकल्पिक)", en: "Crop variety (optional)" },
+  editEvent: { hi: "गतिविधि संपादित करें", en: "Edit Event" },
+  eventUpdated: { hi: "गतिविधि अपडेट की गई!", en: "Event updated!" },
+  update: { hi: "अपडेट करें", en: "Update" },
   cropCardCreated: { hi: "फसल कार्ड बनाया गया!", en: "Crop card created!" },
   eventAdded: { hi: "गतिविधि जोड़ी गई!", en: "Event added!" },
 } as const;

@@ -106,19 +106,6 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/crop-events/:id", isAuthenticated, async (req: any, res) => {
-    try {
-      const event = await storage.getCropEvent(parseInt(req.params.id));
-      if (!event) return res.status(404).json({ message: "Not found" });
-      const card = await storage.getCropCard(event.cropCardId);
-      if (!card || card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
-      const updated = await storage.updateCropEvent(parseInt(req.params.id), req.body);
-      res.json(updated);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to update event" });
-    }
-  });
-
   app.post("/api/crop-events/:id/toggle", isAuthenticated, async (req: any, res) => {
     try {
       const event = await storage.getCropEvent(parseInt(req.params.id));
@@ -129,6 +116,22 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Failed to toggle event" });
+    }
+  });
+
+  app.patch("/api/crop-events/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const event = await storage.getCropEvent(parseInt(req.params.id));
+      if (!event) return res.status(404).json({ message: "Not found" });
+      const card = await storage.getCropCard(event.cropCardId);
+      if (!card || card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      const allowedFields = insertCropEventSchema.pick({ eventType: true, description: true, eventDate: true }).partial();
+      const parsed = allowedFields.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
+      const updated = await storage.updateCropEvent(parseInt(req.params.id), parsed.data);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update event" });
     }
   });
 

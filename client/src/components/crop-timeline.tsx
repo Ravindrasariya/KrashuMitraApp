@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Check, Sprout, Droplets, Bug, Leaf, Trash2, Circle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Check, Sprout, Droplets, Bug, Leaf, Trash2, Pencil, Circle } from "lucide-react";
 import type { CropEvent } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -37,10 +39,12 @@ interface CropTimelineProps {
   isLoading: boolean;
   onToggle: (id: number) => void;
   onDelete: (id: number) => void;
+  onEdit: (event: CropEvent) => void;
 }
 
-export function CropTimeline({ events, isLoading, onToggle, onDelete }: CropTimelineProps) {
+export function CropTimeline({ events, isLoading, onToggle, onDelete, onEdit }: CropTimelineProps) {
   const { t, language } = useTranslation();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   if (isLoading) {
     return (
@@ -65,11 +69,12 @@ export function CropTimeline({ events, isLoading, onToggle, onDelete }: CropTime
       <div className="absolute left-[19px] top-4 bottom-4 w-0.5 bg-border" />
 
       <div className="space-y-1">
-        {events.map((event, index) => {
+        {events.map((event) => {
           const Icon = eventIcons[event.eventType] || Circle;
           const bgColor = eventBgColors[event.eventType] || "bg-muted";
           const lightBg = eventLightBg[event.eventType] || "bg-muted/50";
           const label = eventTypeLabels[event.eventType]?.[language] || event.eventType;
+          const isConfirmingDelete = confirmDeleteId === event.id;
 
           return (
             <div
@@ -98,12 +103,19 @@ export function CropTimeline({ events, isLoading, onToggle, onDelete }: CropTime
                   <span className={`text-sm font-semibold ${event.isCompleted ? "line-through text-muted-foreground" : ""}`}>
                     {label}
                   </span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-muted-foreground">
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-xs text-muted-foreground mr-1">
                       {format(new Date(event.eventDate), "dd MMM")}
                     </span>
                     <button
-                      onClick={() => onDelete(event.id)}
+                      onClick={() => onEdit(event)}
+                      className="p-1 rounded hover-elevate"
+                      data-testid={`button-edit-event-${event.id}`}
+                    >
+                      <Pencil className="w-3 h-3 text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(event.id)}
                       className="p-1 rounded hover-elevate"
                       data-testid={`button-delete-event-${event.id}`}
                     >
@@ -115,6 +127,30 @@ export function CropTimeline({ events, isLoading, onToggle, onDelete }: CropTime
                   <p className={`text-sm mt-0.5 ${event.isCompleted ? "line-through text-muted-foreground" : "text-muted-foreground"}`}>
                     {event.description}
                   </p>
+                )}
+
+                {isConfirmingDelete && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs text-destructive">{t("deleteConfirm")}</span>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => { onDelete(event.id); setConfirmDeleteId(null); }}
+                      data-testid={`button-confirm-delete-event-${event.id}`}
+                    >
+                      {t("yes")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => setConfirmDeleteId(null)}
+                      data-testid={`button-cancel-delete-event-${event.id}`}
+                    >
+                      {t("no")}
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

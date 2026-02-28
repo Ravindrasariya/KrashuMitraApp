@@ -6,25 +6,11 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Trash2, Plus, Sprout, Droplets, Bug, Leaf } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2, Plus, Sprout } from "lucide-react";
 import { AddEventDialog } from "@/components/add-event-dialog";
 import { CropTimeline } from "@/components/crop-timeline";
 import type { CropCard, CropEvent } from "@shared/schema";
 import { format } from "date-fns";
-
-const eventIcons: Record<string, typeof Sprout> = {
-  plantation: Sprout,
-  fertiliser: Leaf,
-  pesticide: Bug,
-  watering: Droplets,
-};
-
-const eventColors: Record<string, string> = {
-  plantation: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  fertiliser: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  pesticide: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  watering: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-};
 
 interface CropCardItemProps {
   card: CropCard;
@@ -35,6 +21,7 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CropEvent | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: events = [], isLoading: eventsLoading } = useQuery<CropEvent[]>({
@@ -134,6 +121,7 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
               isLoading={eventsLoading}
               onToggle={(id) => toggleMutation.mutate(id)}
               onDelete={(id) => deleteEventMutation.mutate(id)}
+              onEdit={(event) => setEditingEvent(event)}
             />
 
             <div className="flex items-center justify-between gap-2 mt-4">
@@ -176,6 +164,13 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
         open={showAddEvent}
         onOpenChange={setShowAddEvent}
         cropCardId={card.id}
+      />
+
+      <AddEventDialog
+        open={!!editingEvent}
+        onOpenChange={(open) => { if (!open) setEditingEvent(null); }}
+        cropCardId={card.id}
+        editEvent={editingEvent}
       />
     </Collapsible>
   );
