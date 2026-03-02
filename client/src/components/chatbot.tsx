@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil } from "lucide-react";
+import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2 } from "lucide-react";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -105,6 +105,31 @@ function tryParseDraft(text: string): Draft | null {
   return null;
 }
 
+function speakText(text: string, lang: string) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang === "hi" ? "hi-IN" : "en-IN";
+  utterance.rate = 0.9;
+  utterance.pitch = 1.1;
+
+  const voices = window.speechSynthesis.getVoices();
+  const targetLang = lang === "hi" ? "hi" : "en";
+  const langVoices = voices.filter(v => v.lang.startsWith(targetLang));
+  const femaleVoice = langVoices.find(v =>
+    /female|woman|mahila|stree/i.test(v.name)
+  );
+  if (femaleVoice) {
+    utterance.voice = femaleVoice;
+  } else if (langVoices.length > 0) {
+    const nonMale = langVoices.find(v => !/\bmale\b/i.test(v.name));
+    utterance.voice = nonMale || langVoices[0];
+  }
+
+  window.speechSynthesis.speak(utterance);
+}
+
 export function Chatbot() {
   const { t, language } = useTranslation();
   const { isAuthenticated } = useAuth();
@@ -122,6 +147,12 @@ export function Chatbot() {
     queryKey: ["/api/farmer/profile"],
     enabled: isAuthenticated && isOpen,
   });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.getVoices();
+    }
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -181,11 +212,14 @@ export function Chatbot() {
               }
               if (data.done && data.fullResponse) {
                 const displayContent = stripJsonFromMessage(data.fullResponse);
+                const finalContent = displayContent || (language === "hi" ? "फसल कार्ड तैयार है। कृपया नीचे देखें और मंजूर करें।" : "Crop card is ready. Please review below and approve.");
                 setMessages(prev => {
                   const updated = [...prev];
-                  updated[updated.length - 1] = { role: "assistant", content: displayContent || (language === "hi" ? "फसल कार्ड तैयार है। कृपया नीचे देखें और मंजूर करें।" : "Crop card is ready. Please review below and approve.") };
+                  updated[updated.length - 1] = { role: "assistant", content: finalContent };
                   return updated;
                 });
+
+                speakText(finalContent, language);
 
                 const parsedDraft = tryParseDraft(data.fullResponse);
                 if (parsedDraft) setDraft(parsedDraft);
@@ -286,7 +320,6 @@ export function Chatbot() {
       const text = event.results[0][0].transcript;
       setInput(text);
       setIsListening(false);
-      sendMessage(text);
     };
 
     recognition.onerror = () => {
@@ -300,7 +333,7 @@ export function Chatbot() {
     recognitionRef.current = recognition;
     recognition.start();
     setIsListening(true);
-  }, [language, sendMessage, toast]);
+  }, [language, toast]);
 
   const stopListening = useCallback(() => {
     recognitionRef.current?.stop();
@@ -375,6 +408,16 @@ export function Chatbot() {
                   data-testid={`chat-message-${i}`}
                 >
                   <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                  {msg.role === "assistant" && msg.content && (
+                    <button
+                      onClick={() => speakText(msg.content, language)}
+                      className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                      data-testid={`button-speak-${i}`}
+                    >
+                      <Volume2 className="w-3.5 h-3.5" />
+                      <span>{t("listenAgain")}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

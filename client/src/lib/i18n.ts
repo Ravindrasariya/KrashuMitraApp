@@ -92,6 +92,7 @@ const translations = {
   loginFailed: { hi: "लॉगिन विफल हुआ", en: "Login failed" },
   resetFailed: { hi: "पिन रीसेट विफल हुआ", en: "PIN reset failed" },
   pinReset: { hi: "पिन सफलतापूर्वक रीसेट हो गया!", en: "PIN reset successfully!" },
+  listenAgain: { hi: "फिर सुनें", en: "Listen again" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

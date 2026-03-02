@@ -70,7 +70,10 @@ shared/
 - Event types: Plantation, Fertiliser, Pesticide, Watering (color-coded)
 - Edit and delete events with confirmation dialogs
 - Auto-suggestions for descriptions based on history
-- KrashuVed AI chatbot with voice support (Hindi)
+- KrashuVed AI chatbot with voice input and TTS output (Hindi female voice preference)
+- Voice input fills input box for review before sending (no auto-send)
+- Chatbot responds with short bullet-point answers (3-5 points) and suggests 1-2 follow-up questions
+- Assistant messages have a "Listen again" speaker button to replay TTS
 - Chatbot is context-aware: knows farmer's existing crop cards and events
 - Chatbot can create new crop cards via conversation (crop_card_draft)
 - Chatbot can edit existing crop cards via conversation (crop_card_edit_draft)
