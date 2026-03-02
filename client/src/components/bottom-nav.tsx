@@ -18,7 +18,7 @@ const navItems = [
 export function BottomNav() {
   const [location] = useLocation();
   const { t, language, toggleLanguage } = useTranslation();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
@@ -74,28 +74,31 @@ export function BottomNav() {
                       <p className="font-medium" data-testid="text-username">
                         {user?.firstName || user?.email || "User"}
                       </p>
-                      <p className="text-xs text-muted-foreground">{user?.email}</p>
+                      {user?.phoneNumber && (
+                        <p className="text-xs text-muted-foreground">+91 {user.phoneNumber}</p>
+                      )}
                     </div>
                   </div>
                   <Separator />
-                  <a
-                    href="/api/logout"
+                  <button
+                    onClick={() => { logout(); setSheetOpen(false); }}
                     className="flex items-center gap-3 w-full p-3 rounded-md hover-elevate text-destructive"
                     data-testid="button-logout"
                   >
                     <LogOut className="w-5 h-5" />
                     <span className="font-medium">{t("logout")}</span>
-                  </a>
+                  </button>
                 </>
               ) : (
-                <a
-                  href="/api/login"
+                <Link
+                  href="/auth"
+                  onClick={() => setSheetOpen(false)}
                   className="flex items-center gap-3 w-full p-3 rounded-md hover-elevate"
                   data-testid="button-login"
                 >
                   <User className="w-5 h-5 text-primary" />
                   <span className="font-medium">{t("login")}</span>
-                </a>
+                </Link>
               )}
             </div>
           </SheetContent>

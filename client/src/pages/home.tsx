@@ -25,12 +25,12 @@ export default function HomePage() {
             {t("heroSubtitle")}
           </p>
           {!isAuthenticated && !isLoading && (
-            <a href="/api/login">
+            <Link href="/auth">
               <Button data-testid="button-hero-login">
                 {t("getStarted")}
                 <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
-            </a>
+            </Link>
           )}
         </div>
       </div>

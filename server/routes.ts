@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { setupPhoneAuth, isAuthenticated } from "./auth-phone";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
 import { insertCropCardSchema, insertCropEventSchema } from "@shared/schema";
@@ -18,13 +18,12 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  await setupAuth(app);
-  registerAuthRoutes(app);
+  setupPhoneAuth(app);
   registerChatRoutes(app);
 
   app.get("/api/farmer/profile", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       const farmerCode = await storage.ensureFarmerCode(userId);
       const user = await storage.getUserById(userId);
       res.json({ ...user, farmerCode });
@@ -36,7 +35,7 @@ export async function registerRoutes(
 
   app.get("/api/crop-cards", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       const cards = await storage.getCropCardsByUser(userId);
       res.json(cards);
     } catch (error) {
@@ -49,7 +48,7 @@ export async function registerRoutes(
     try {
       const card = await storage.getCropCard(parseInt(req.params.id));
       if (!card) return res.status(404).json({ message: "Not found" });
-      if (card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       res.json(card);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch crop card" });
@@ -58,7 +57,7 @@ export async function registerRoutes(
 
   app.post("/api/crop-cards", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       const data = insertCropCardSchema.parse({ ...req.body, userId });
       const card = await storage.createCropCard(data);
       res.status(201).json(card);
@@ -72,7 +71,7 @@ export async function registerRoutes(
     try {
       const card = await storage.getCropCard(parseInt(req.params.id));
       if (!card) return res.status(404).json({ message: "Not found" });
-      if (card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const allowedFields = insertCropCardSchema.pick({ cropName: true, farmName: true, variety: true, status: true }).partial();
       const parsed = allowedFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
@@ -87,7 +86,7 @@ export async function registerRoutes(
     try {
       const card = await storage.getCropCard(parseInt(req.params.id));
       if (!card) return res.status(404).json({ message: "Not found" });
-      if (card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       await storage.deleteCropCard(parseInt(req.params.id));
       res.status(204).send();
     } catch (error) {
@@ -99,7 +98,7 @@ export async function registerRoutes(
     try {
       const card = await storage.getCropCard(parseInt(req.params.id));
       if (!card) return res.status(404).json({ message: "Not found" });
-      if (card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const events = await storage.getCropEvents(parseInt(req.params.id));
       res.json(events);
     } catch (error) {
@@ -111,7 +110,7 @@ export async function registerRoutes(
     try {
       const card = await storage.getCropCard(parseInt(req.params.id));
       if (!card) return res.status(404).json({ message: "Not found" });
-      if (card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const data = insertCropEventSchema.parse({ ...req.body, cropCardId: parseInt(req.params.id) });
       const event = await storage.createCropEvent(data);
       res.status(201).json(event);
@@ -126,7 +125,7 @@ export async function registerRoutes(
       const event = await storage.getCropEvent(parseInt(req.params.id));
       if (!event) return res.status(404).json({ message: "Not found" });
       const card = await storage.getCropCard(event.cropCardId);
-      if (!card || card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!card || card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const updated = await storage.toggleCropEventComplete(parseInt(req.params.id));
       res.json(updated);
     } catch (error) {
@@ -139,7 +138,7 @@ export async function registerRoutes(
       const event = await storage.getCropEvent(parseInt(req.params.id));
       if (!event) return res.status(404).json({ message: "Not found" });
       const card = await storage.getCropCard(event.cropCardId);
-      if (!card || card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!card || card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const allowedFields = insertCropEventSchema.pick({ eventType: true, description: true, eventDate: true }).partial();
       const parsed = allowedFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
@@ -155,7 +154,7 @@ export async function registerRoutes(
       const event = await storage.getCropEvent(parseInt(req.params.id));
       if (!event) return res.status(404).json({ message: "Not found" });
       const card = await storage.getCropCard(event.cropCardId);
-      if (!card || card.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      if (!card || card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       await storage.deleteCropEvent(parseInt(req.params.id));
       res.status(204).send();
     } catch (error) {
@@ -165,7 +164,7 @@ export async function registerRoutes(
 
   app.get("/api/suggestions", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       const suggestions = await storage.getSuggestions(userId);
       res.json(suggestions);
     } catch (error) {
@@ -176,7 +175,7 @@ export async function registerRoutes(
   app.post("/api/krashuved/chat", isAuthenticated, async (req: any, res) => {
     try {
       const { message, language } = req.body;
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
 
       const today = new Date().toISOString().split("T")[0];
 

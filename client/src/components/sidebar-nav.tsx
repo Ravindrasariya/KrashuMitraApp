@@ -16,7 +16,7 @@ const navItems = [
 export function SidebarNav() {
   const [location] = useLocation();
   const { t, language, toggleLanguage } = useTranslation();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const { data: profile } = useQuery<{ farmerCode: string }>({
     queryKey: ["/api/farmer/profile"],
@@ -85,27 +85,29 @@ export function SidebarNav() {
                     {profile.farmerCode}
                   </p>
                 )}
-                <p className="text-[11px] text-muted-foreground truncate">{user?.email}</p>
+                {user?.phoneNumber && (
+                  <p className="text-[11px] text-muted-foreground truncate">+91 {user.phoneNumber}</p>
+                )}
               </div>
             </div>
-            <a
-              href="/api/logout"
+            <button
+              onClick={() => logout()}
               className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors"
               data-testid="sidebar-logout"
             >
               <LogOut className="w-5 h-5" />
               <span>{t("logout")}</span>
-            </a>
+            </button>
           </>
         ) : (
-          <a
-            href="/api/login"
+          <Link
+            href="/auth"
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             data-testid="sidebar-login"
           >
             <User className="w-5 h-5 text-primary" />
             <span>{t("login")}</span>
-          </a>
+          </Link>
         )}
       </div>
     </aside>

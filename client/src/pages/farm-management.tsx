@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Plus, Sprout } from "lucide-react";
+import { Link } from "wouter";
 import { CropCardItem } from "@/components/crop-card-item";
 import { AddCropCardDialog } from "@/components/add-crop-card-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,9 +36,9 @@ export default function FarmManagementPage() {
         </div>
         <h2 className="text-xl font-bold mb-2">{t("farmManagement")}</h2>
         <p className="text-sm text-muted-foreground mb-4 text-center">{t("loginRequired")}</p>
-        <a href="/api/login">
+        <Link href="/auth">
           <Button data-testid="button-login-farm">{t("login")}</Button>
-        </a>
+        </Link>
       </div>
     );
   }

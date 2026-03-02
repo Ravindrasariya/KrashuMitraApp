@@ -11,12 +11,14 @@ import { Chatbot } from "@/components/chatbot";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home";
 import FarmManagementPage from "@/pages/farm-management";
+import AuthPage from "@/pages/auth-page";
 import PlaceholderPage from "@/pages/placeholder-page";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={HomePage} />
+      <Route path="/auth" component={AuthPage} />
       <Route path="/farm-management" component={FarmManagementPage} />
       <Route path="/digital-clinic">
         <PlaceholderPage titleKey="digitalClinic" />
