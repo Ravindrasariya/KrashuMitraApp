@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -163,8 +163,17 @@ export function Chatbot() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 768px)").matches);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const { data: profile } = useQuery<{ farmerCode: string; firstName: string; lastName: string }>({
     queryKey: ["/api/farmer/profile"],
@@ -369,225 +378,249 @@ export function Chatbot() {
   const editDraft = isEditDraft ? (draft as CropCardEditDraft) : null;
   const createDraft = !isEditDraft ? (draft as CropCardDraft | null) : null;
 
+  const chatContent = (
+    <>
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-primary/5 shrink-0 rounded-t-2xl">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+            <Sprout className="w-4 h-4 text-primary-foreground" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold">KrashuVed</h3>
+            <p className="text-[10px] text-muted-foreground">
+              {language === "hi" ? "कृषि AI सहायक" : "Agri AI Assistant"}
+              {profile?.farmerCode && (
+                <span className="ml-1.5 text-primary font-medium" data-testid="text-farmer-code-chat">
+                  · {profile.farmerCode}
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setIsOpen(false)}
+          className="hidden md:flex w-7 h-7 items-center justify-center rounded-full hover:bg-muted transition-colors"
+          data-testid="button-close-chatbot"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {messages.length === 0 && (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+              <Sprout className="w-8 h-8 text-primary" />
+            </div>
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+              {t("krashuvedIntro")}
+            </p>
+            {profile?.farmerCode && (
+              <p className="text-xs text-primary mt-2 font-medium" data-testid="text-farmer-id-intro">
+                {t("farmerId")}: {profile.farmerCode}
+              </p>
+            )}
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                msg.role === "user"
+                  ? "bg-primary text-primary-foreground rounded-br-sm"
+                  : "bg-muted rounded-bl-sm"
+              }`}
+              data-testid={`chat-message-${i}`}
+            >
+              <p className="whitespace-pre-wrap break-words">
+                {msg.role === "assistant" ? renderFormattedText(msg.content) : msg.content}
+              </p>
+              {msg.role === "assistant" && msg.content && (
+                <button
+                  onClick={() => speakText(msg.content, language)}
+                  className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                  data-testid={`button-speak-${i}`}
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>{t("listenAgain")}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {isStreaming && (
+          <div className="flex justify-start">
+            <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+          </div>
+        )}
+
+        {createDraft && (
+          <Card className="p-3 border-primary/30 bg-primary/5" data-testid="draft-card">
+            <h4 className="text-sm font-bold mb-2">
+              {language === "hi" ? "फसल कार्ड ड्राफ्ट:" : "Crop Card Draft:"}
+            </h4>
+            <p className="text-sm"><strong>{language === "hi" ? "फसल:" : "Crop:"}</strong> {createDraft.cropName}</p>
+            {createDraft.farmName && <p className="text-sm"><strong>{language === "hi" ? "खेत:" : "Farm:"}</strong> {createDraft.farmName}</p>}
+            {createDraft.variety && <p className="text-sm"><strong>{language === "hi" ? "किस्म:" : "Variety:"}</strong> {createDraft.variety}</p>}
+            <p className="text-sm"><strong>{language === "hi" ? "तारीख:" : "Date:"}</strong> {createDraft.startDate}</p>
+            {createDraft.events.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {language === "hi" ? `${createDraft.events.length} गतिविधियाँ:` : `${createDraft.events.length} events:`}
+                </p>
+                {createDraft.events.slice(0, 6).map((e, i) => (
+                  <p key={i} className="text-xs text-muted-foreground">
+                    {e.eventDate} - {e.eventType}: {e.description}
+                  </p>
+                ))}
+                {createDraft.events.length > 6 && (
+                  <p className="text-xs text-muted-foreground italic">
+                    {language === "hi" ? `...और ${createDraft.events.length - 6} और` : `...and ${createDraft.events.length - 6} more`}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" onClick={approveDraft} data-testid="button-approve-draft">
+                <Check className="w-3 h-3 mr-1" />
+                {t("approve")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-draft">
+                <X className="w-3 h-3 mr-1" />
+                {t("reject")}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {editDraft && (
+          <Card className="p-3 border-amber-500/30 bg-amber-50 dark:bg-amber-950/20" data-testid="edit-draft-card">
+            <div className="flex items-center gap-2 mb-2">
+              <Pencil className="w-4 h-4 text-amber-600" />
+              <h4 className="text-sm font-bold">
+                {language === "hi" ? `कार्ड #${editDraft.cardId} में बदलाव:` : `Edit Card #${editDraft.cardId}:`}
+              </h4>
+            </div>
+            {editDraft.updates && Object.keys(editDraft.updates).length > 0 && (
+              <div className="space-y-0.5 mb-2">
+                {editDraft.updates.cropName && (
+                  <p className="text-sm"><strong>{language === "hi" ? "नया नाम:" : "New name:"}</strong> {editDraft.updates.cropName}</p>
+                )}
+                {editDraft.updates.farmName && (
+                  <p className="text-sm"><strong>{language === "hi" ? "नया खेत:" : "New farm:"}</strong> {editDraft.updates.farmName}</p>
+                )}
+                {editDraft.updates.variety && (
+                  <p className="text-sm"><strong>{language === "hi" ? "नई किस्म:" : "New variety:"}</strong> {editDraft.updates.variety}</p>
+                )}
+              </div>
+            )}
+            {editDraft.addEvents && editDraft.addEvents.length > 0 && (
+              <div className="mt-1 space-y-1">
+                <p className="text-xs font-medium text-green-700 dark:text-green-400">
+                  {language === "hi" ? `+ ${editDraft.addEvents.length} नई गतिविधियाँ:` : `+ ${editDraft.addEvents.length} new events:`}
+                </p>
+                {editDraft.addEvents.slice(0, 6).map((e, i) => (
+                  <p key={i} className="text-xs text-muted-foreground">
+                    {e.eventDate} - {e.eventType}: {e.description}
+                  </p>
+                ))}
+                {editDraft.addEvents.length > 6 && (
+                  <p className="text-xs text-muted-foreground italic">
+                    {language === "hi" ? `...और ${editDraft.addEvents.length - 6} और` : `...and ${editDraft.addEvents.length - 6} more`}
+                  </p>
+                )}
+              </div>
+            )}
+            {editDraft.removeEventIds && editDraft.removeEventIds.length > 0 && (
+              <p className="text-xs text-red-600 mt-1">
+                {language === "hi" ? `- ${editDraft.removeEventIds.length} गतिविधियाँ हटाई जाएंगी` : `- ${editDraft.removeEventIds.length} events will be removed`}
+              </p>
+            )}
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" onClick={approveDraft} data-testid="button-approve-edit-draft">
+                <Check className="w-3 h-3 mr-1" />
+                {t("approve")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-edit-draft">
+                <X className="w-3 h-3 mr-1" />
+                {t("reject")}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="p-3 border-t bg-background shrink-0 rounded-b-2xl">
+        <div className="flex items-center gap-2 max-w-lg mx-auto">
+          <Button
+            size="icon"
+            variant={isListening ? "destructive" : "outline"}
+            onClick={isListening ? stopListening : startListening}
+            disabled={isStreaming}
+            data-testid="button-voice"
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </Button>
+          <Input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder={t("askKrashuved")}
+            onKeyDown={e => e.key === "Enter" && sendMessage(input)}
+            disabled={isStreaming}
+            className="flex-1"
+            data-testid="input-chat"
+          />
+          <Button
+            size="icon"
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || isStreaming}
+            data-testid="button-send-chat"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+        {isListening && (
+          <p className="text-xs text-center text-primary mt-1 animate-pulse">{t("listening")}</p>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <>
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetTrigger asChild>
-          <button
-            className="fixed right-4 bottom-20 md:bottom-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg"
-            data-testid="button-open-chatbot"
-          >
-            <MessageCircle className="w-6 h-6" />
-          </button>
-        </SheetTrigger>
-        <SheetContent side="bottom" className="h-[80vh] rounded-t-2xl p-0 flex flex-col" data-testid="chatbot-sheet">
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-primary/5">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                <Sprout className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold">KrashuVed</h3>
-                <p className="text-[10px] text-muted-foreground">
-                  {language === "hi" ? "कृषि AI सहायक" : "Agri AI Assistant"}
-                  {profile?.farmerCode && (
-                    <span className="ml-1.5 text-primary font-medium" data-testid="text-farmer-code-chat">
-                      · {profile.farmerCode}
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed right-4 bottom-20 md:bottom-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg"
+        data-testid="button-open-chatbot"
+      >
+        {isOpen && isDesktop ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+      </button>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {messages.length === 0 && (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                  <Sprout className="w-8 h-8 text-primary" />
-                </div>
-                <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                  {t("krashuvedIntro")}
-                </p>
-                {profile?.farmerCode && (
-                  <p className="text-xs text-primary mt-2 font-medium" data-testid="text-farmer-id-intro">
-                    {t("farmerId")}: {profile.farmerCode}
-                  </p>
-                )}
-              </div>
-            )}
+      {!isDesktop && (
+        <Sheet open={isOpen} onOpenChange={setIsOpen}>
+          <SheetContent side="bottom" className="h-[80vh] rounded-t-2xl p-0 flex flex-col" data-testid="chatbot-sheet">
+            {chatContent}
+          </SheetContent>
+        </Sheet>
+      )}
 
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-br-sm"
-                      : "bg-muted rounded-bl-sm"
-                  }`}
-                  data-testid={`chat-message-${i}`}
-                >
-                  <p className="whitespace-pre-wrap break-words">
-                    {msg.role === "assistant" ? renderFormattedText(msg.content) : msg.content}
-                  </p>
-                  {msg.role === "assistant" && msg.content && (
-                    <button
-                      onClick={() => speakText(msg.content, language)}
-                      className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-                      data-testid={`button-speak-${i}`}
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span>{t("listenAgain")}</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {isStreaming && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                </div>
-              </div>
-            )}
-
-            {createDraft && (
-              <Card className="p-3 border-primary/30 bg-primary/5" data-testid="draft-card">
-                <h4 className="text-sm font-bold mb-2">
-                  {language === "hi" ? "फसल कार्ड ड्राफ्ट:" : "Crop Card Draft:"}
-                </h4>
-                <p className="text-sm"><strong>{language === "hi" ? "फसल:" : "Crop:"}</strong> {createDraft.cropName}</p>
-                {createDraft.farmName && <p className="text-sm"><strong>{language === "hi" ? "खेत:" : "Farm:"}</strong> {createDraft.farmName}</p>}
-                {createDraft.variety && <p className="text-sm"><strong>{language === "hi" ? "किस्म:" : "Variety:"}</strong> {createDraft.variety}</p>}
-                <p className="text-sm"><strong>{language === "hi" ? "तारीख:" : "Date:"}</strong> {createDraft.startDate}</p>
-                {createDraft.events.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      {language === "hi" ? `${createDraft.events.length} गतिविधियाँ:` : `${createDraft.events.length} events:`}
-                    </p>
-                    {createDraft.events.slice(0, 6).map((e, i) => (
-                      <p key={i} className="text-xs text-muted-foreground">
-                        {e.eventDate} - {e.eventType}: {e.description}
-                      </p>
-                    ))}
-                    {createDraft.events.length > 6 && (
-                      <p className="text-xs text-muted-foreground italic">
-                        {language === "hi" ? `...और ${createDraft.events.length - 6} और` : `...and ${createDraft.events.length - 6} more`}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <div className="flex gap-2 mt-3">
-                  <Button size="sm" onClick={approveDraft} data-testid="button-approve-draft">
-                    <Check className="w-3 h-3 mr-1" />
-                    {t("approve")}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-draft">
-                    <X className="w-3 h-3 mr-1" />
-                    {t("reject")}
-                  </Button>
-                </div>
-              </Card>
-            )}
-
-            {editDraft && (
-              <Card className="p-3 border-amber-500/30 bg-amber-50 dark:bg-amber-950/20" data-testid="edit-draft-card">
-                <div className="flex items-center gap-2 mb-2">
-                  <Pencil className="w-4 h-4 text-amber-600" />
-                  <h4 className="text-sm font-bold">
-                    {language === "hi" ? `कार्ड #${editDraft.cardId} में बदलाव:` : `Edit Card #${editDraft.cardId}:`}
-                  </h4>
-                </div>
-                {editDraft.updates && Object.keys(editDraft.updates).length > 0 && (
-                  <div className="space-y-0.5 mb-2">
-                    {editDraft.updates.cropName && (
-                      <p className="text-sm"><strong>{language === "hi" ? "नया नाम:" : "New name:"}</strong> {editDraft.updates.cropName}</p>
-                    )}
-                    {editDraft.updates.farmName && (
-                      <p className="text-sm"><strong>{language === "hi" ? "नया खेत:" : "New farm:"}</strong> {editDraft.updates.farmName}</p>
-                    )}
-                    {editDraft.updates.variety && (
-                      <p className="text-sm"><strong>{language === "hi" ? "नई किस्म:" : "New variety:"}</strong> {editDraft.updates.variety}</p>
-                    )}
-                  </div>
-                )}
-                {editDraft.addEvents && editDraft.addEvents.length > 0 && (
-                  <div className="mt-1 space-y-1">
-                    <p className="text-xs font-medium text-green-700 dark:text-green-400">
-                      {language === "hi" ? `+ ${editDraft.addEvents.length} नई गतिविधियाँ:` : `+ ${editDraft.addEvents.length} new events:`}
-                    </p>
-                    {editDraft.addEvents.slice(0, 6).map((e, i) => (
-                      <p key={i} className="text-xs text-muted-foreground">
-                        {e.eventDate} - {e.eventType}: {e.description}
-                      </p>
-                    ))}
-                    {editDraft.addEvents.length > 6 && (
-                      <p className="text-xs text-muted-foreground italic">
-                        {language === "hi" ? `...और ${editDraft.addEvents.length - 6} और` : `...and ${editDraft.addEvents.length - 6} more`}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {editDraft.removeEventIds && editDraft.removeEventIds.length > 0 && (
-                  <p className="text-xs text-red-600 mt-1">
-                    {language === "hi" ? `- ${editDraft.removeEventIds.length} गतिविधियाँ हटाई जाएंगी` : `- ${editDraft.removeEventIds.length} events will be removed`}
-                  </p>
-                )}
-                <div className="flex gap-2 mt-3">
-                  <Button size="sm" onClick={approveDraft} data-testid="button-approve-edit-draft">
-                    <Check className="w-3 h-3 mr-1" />
-                    {t("approve")}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-edit-draft">
-                    <X className="w-3 h-3 mr-1" />
-                    {t("reject")}
-                  </Button>
-                </div>
-              </Card>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          <div className="p-3 border-t bg-background">
-            <div className="flex items-center gap-2 max-w-lg mx-auto">
-              <Button
-                size="icon"
-                variant={isListening ? "destructive" : "outline"}
-                onClick={isListening ? stopListening : startListening}
-                disabled={isStreaming}
-                data-testid="button-voice"
-              >
-                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </Button>
-              <Input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder={t("askKrashuved")}
-                onKeyDown={e => e.key === "Enter" && sendMessage(input)}
-                disabled={isStreaming}
-                className="flex-1"
-                data-testid="input-chat"
-              />
-              <Button
-                size="icon"
-                onClick={() => sendMessage(input)}
-                disabled={!input.trim() || isStreaming}
-                data-testid="button-send-chat"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-            {isListening && (
-              <p className="text-xs text-center text-primary mt-1 animate-pulse">{t("listening")}</p>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      {isDesktop && isOpen && (
+        <div
+          className="fixed bottom-[5.5rem] right-4 w-[380px] h-[550px] z-50 rounded-2xl shadow-2xl border bg-background flex flex-col overflow-hidden"
+          data-testid="chatbot-desktop-dialog"
+        >
+          {chatContent}
+        </div>
+      )}
     </>
   );
 }
