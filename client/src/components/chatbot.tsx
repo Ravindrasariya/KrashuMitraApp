@@ -105,11 +105,34 @@ function tryParseDraft(text: string): Draft | null {
   return null;
 }
 
+function cleanTextForSpeech(text: string): string {
+  let clean = text;
+  clean = clean.replace(/\*\*/g, "");
+  clean = clean.replace(/\*/g, "");
+  clean = clean.replace(/`/g, "");
+  clean = clean.replace(/🔎/g, "");
+  clean = clean.replace(/•/g, ",");
+  clean = clean.replace(/[#_~|>\[\]{}]/g, "");
+  clean = clean.replace(/\n{2,}/g, ". ");
+  clean = clean.replace(/\s{2,}/g, " ");
+  return clean.trim();
+}
+
+function renderFormattedText(text: string) {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 function speakText(text: string, lang: string) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
 
-  const utterance = new SpeechSynthesisUtterance(text);
+  const utterance = new SpeechSynthesisUtterance(cleanTextForSpeech(text));
   utterance.lang = lang === "hi" ? "hi-IN" : "en-IN";
   utterance.rate = 0.9;
   utterance.pitch = 1.1;
@@ -407,7 +430,9 @@ export function Chatbot() {
                   }`}
                   data-testid={`chat-message-${i}`}
                 >
-                  <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                  <p className="whitespace-pre-wrap break-words">
+                    {msg.role === "assistant" ? renderFormattedText(msg.content) : msg.content}
+                  </p>
                   {msg.role === "assistant" && msg.content && (
                     <button
                       onClick={() => speakText(msg.content, language)}
