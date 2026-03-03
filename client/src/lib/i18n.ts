@@ -4,7 +4,7 @@ export type Language = "hi" | "en";
 
 const translations = {
   appName: { hi: "कृषु मित्र", en: "Krashu Mitra" },
-  appTagline: { hi: "KrashuVed द्वारा", en: "by KrashuVed" },
+  appTagline: { hi: "कृषु मित्र द्वारा", en: "by Krashu Mitra" },
   home: { hi: "होम", en: "Home" },
   digitalClinic: { hi: "डिजिटल क्लिनिक", en: "Digital Clinic" },
   marketplace: { hi: "बाज़ार", en: "Marketplace" },
@@ -41,9 +41,9 @@ const translations = {
   heroSubtitle: { hi: "AI-संचालित फसल प्रबंधन, डिजिटल क्लिनिक, और बाज़ार - सब एक जगह", en: "AI-powered crop management, digital clinic, and marketplace - all in one place" },
   getStarted: { hi: "शुरू करें", en: "Get Started" },
   comingSoon: { hi: "जल्द आ रहा है", en: "Coming Soon" },
-  chatWithKrashuved: { hi: "कृषुवेद से बात करें", en: "Chat with KrashuVed" },
-  askKrashuved: { hi: "कृषुवेद से पूछें...", en: "Ask KrashuVed..." },
-  krashuvedIntro: { hi: "मैं कृषुवेद हूँ, आपका कृषि सहायक। 'कृषुवेद' कहकर फसल कार्ड बनवाएं या कोई भी कृषि सवाल पूछें।", en: "I am KrashuVed, your agriculture assistant. Say 'Krashuved' to create crop cards or ask any farming question." },
+  chatWithKrashuved: { hi: "कृषु मित्र से बात करें", en: "Chat with Krashu Mitra" },
+  askKrashuved: { hi: "कृषु मित्र से पूछें...", en: "Ask Krashu Mitra..." },
+  krashuvedIntro: { hi: "मैं कृषु मित्र हूँ, आपकी कृषि सहायिका। फसल कार्ड बनवाएं या कोई भी कृषि सवाल पूछें।", en: "I am Krashu Mitra, your agriculture assistant. Create crop cards or ask any farming question." },
   approve: { hi: "मंजूर करें", en: "Approve" },
   reject: { hi: "अस्वीकार करें", en: "Reject" },
   listening: { hi: "सुन रहा हूँ...", en: "Listening..." },

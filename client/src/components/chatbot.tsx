@@ -209,7 +209,7 @@ export function Chatbot() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ message: text, language }),
+        body: JSON.stringify({ message: text, language, history: messages.slice(-20) }),
       });
 
       if (!response.ok) throw new Error("Failed");
@@ -386,9 +386,9 @@ export function Chatbot() {
             <Sprout className="w-4 h-4 text-primary-foreground" />
           </div>
           <div>
-            <h3 className="text-sm font-bold">KrashuVed</h3>
+            <h3 className="text-sm font-bold">{language === "hi" ? "कृषु मित्र" : "Krashu Mitra"}</h3>
             <p className="text-[10px] text-muted-foreground">
-              {language === "hi" ? "कृषि AI सहायक" : "Agri AI Assistant"}
+              {language === "hi" ? "कृषि AI सहायिका" : "Agri AI Assistant"}
               {profile?.farmerCode && (
                 <span className="ml-1.5 text-primary font-medium" data-testid="text-farmer-code-chat">
                   · {profile.farmerCode}

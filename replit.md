@@ -2,13 +2,13 @@
 
 ## Overview
 A mobile-first responsive web app for Indian farmers. Built with React + Express + PostgreSQL. 
-Bilingual (Hindi default, English toggle). Uses phone number + PIN authentication and Gemini AI for the "KrashuVed" chatbot.
+Bilingual (Hindi default, English toggle). Uses phone number + PIN authentication and Gemini AI for the "Krashu Mitra" chatbot.
 
 ## Architecture
 - **Frontend**: React + Vite + TailwindCSS + Shadcn UI + Wouter routing
 - **Backend**: Express.js + Drizzle ORM + PostgreSQL
 - **Auth**: Phone number + 4-digit PIN (bcryptjs hashing, express-session, IP-based forgot-PIN)
-- **AI**: Gemini via Replit AI Integrations (KrashuVed chatbot)
+- **AI**: Gemini via Replit AI Integrations (Krashu Mitra chatbot)
 - **Language**: Hindi/English with custom i18n system
 
 ## Structure
@@ -23,7 +23,7 @@ client/src/
     sidebar-nav.tsx          - Desktop sidebar navigation (hidden on mobile)
     bottom-nav.tsx           - Mobile bottom navigation (hidden on desktop)
     header.tsx               - Mobile app header with language toggle (hidden on desktop)
-    chatbot.tsx              - KrashuVed AI chatbot (voice + text, context-aware)
+    chatbot.tsx              - Krashu Mitra AI chatbot (voice + text, context-aware)
     crop-card-item.tsx       - Expandable crop card component
     crop-timeline.tsx        - Timeline view for crop events (with edit/delete)
     add-crop-card-dialog.tsx - Dialog to create crop cards
@@ -37,7 +37,7 @@ client/src/
 
 server/
   index.ts                   - Express server entry
-  routes.ts                  - API routes + KrashuVed chat + farmer profile
+  routes.ts                  - API routes + Krashu Mitra chat + farmer profile
   auth-phone.ts              - Phone/PIN auth (register, login, forgot-pin, session mgmt)
   storage.ts                 - Database CRUD operations
   db.ts                      - Database connection
@@ -79,7 +79,7 @@ shared/
 - Event types: Plantation, Fertiliser, Pesticide, Watering (color-coded)
 - Edit and delete events with confirmation dialogs
 - Auto-suggestions for descriptions based on history
-- KrashuVed AI chatbot with voice input and TTS output (Hindi female voice preference)
+- Krashu Mitra AI chatbot with voice input and TTS output (Hindi female voice, feminine persona)
 - Voice input fills input box for review before sending (no auto-send)
 - Chatbot responds with short bullet-point answers (3-5 points) and suggests 1-2 follow-up questions
 - Assistant messages have a "Listen again" speaker button to replay TTS
@@ -117,4 +117,4 @@ shared/
 - `GET /api/admin/users` - List all users (admin only)
 - `PATCH /api/admin/users/:id` - Edit user details (admin only)
 - `POST /api/admin/users/:id/reset-pin` - Reset PIN to 0000 (admin only)
-- `POST /api/krashuved/chat` - Chatbot (streams response, includes farmer context)
+- `POST /api/krashuved/chat` - Chatbot (streams response, includes farmer context + conversation history)

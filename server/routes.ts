@@ -241,7 +241,7 @@ export async function registerRoutes(
 
   app.post("/api/krashuved/chat", isAuthenticated, async (req: any, res) => {
     try {
-      const { message, language } = req.body;
+      const { message, language, history } = req.body;
       const userId = req.session.userId;
 
       const today = new Date().toISOString().split("T")[0];
@@ -292,7 +292,8 @@ export async function registerRoutes(
       }
 
       const systemPrompt = language === "hi"
-        ? `तुम KrashuVed (कृषुवेद) हो, एक कृषि विशेषज्ञ AI सहायक। तुम किसानों की मदद करते हो फसल प्रबंधन में।
+        ? `तुम कृषु मित्र (Krashu Mitra) हो, एक कृषि विशेषज्ञ AI सहायिका। तुम किसानों की मदद करती हो फसल प्रबंधन में।
+तुम एक महिला सहायिका हो, इसलिए हमेशा स्त्रीलिंग क्रियाओं का उपयोग करो (जैसे: करती हूँ, बताती हूँ, देती हूँ, लिखती हूँ, सुझाव देती हूँ)।
 
 आज की तारीख: ${today}
 ${farmerContext}
@@ -327,9 +328,10 @@ ${farmerContext}
 - जवाब हमेशा छोटा और सटीक रखो (अधिकतम 3-5 बुलेट पॉइंट)।
 - मुख्य जानकारी के लिए बुलेट पॉइंट (•) का उपयोग करो।
 - जवाब के अंत में 1-2 संबंधित सवाल सुझाओ जो किसान आगे पूछ सकता है, हर सुझाव "🔎" से शुरू करो।
+- हमेशा स्त्रीलिंग में बोलो (मैं बताती हूँ, मैं सुझाव देती हूँ, मैंने देखा, etc.)।
 
 अगर किसान सामान्य कृषि सवाल पूछे तो सादा हिंदी में जवाब दो।`
-        : `You are KrashuVed, an agricultural expert AI assistant. You help farmers with crop management.
+        : `You are Krashu Mitra, an agricultural expert AI assistant. You help farmers with crop management.
 
 Today's date: ${today}
 ${farmerContext}
@@ -371,11 +373,24 @@ For general agriculture questions, answer concisely and helpfully.`;
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
+      const conversationHistory: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+      if (Array.isArray(history) && history.length > 0) {
+        const recentHistory = history.slice(-20);
+        for (const msg of recentHistory) {
+          if (msg.role === "user" && msg.content) {
+            conversationHistory.push({ role: "user", parts: [{ text: msg.content }] });
+          } else if (msg.role === "assistant" && msg.content) {
+            conversationHistory.push({ role: "model", parts: [{ text: msg.content }] });
+          }
+        }
+      }
+
       const stream = await ai.models.generateContentStream({
         model: "gemini-2.5-flash",
         contents: [
           { role: "user", parts: [{ text: systemPrompt }] },
-          { role: "model", parts: [{ text: language === "hi" ? "मैं कृषुवेद हूँ, आपकी कृषि सहायता के लिए तैयार हूँ। बताइए क्या मदद चाहिए?" : "I am KrashuVed, ready to assist you with agriculture. How can I help?" }] },
+          { role: "model", parts: [{ text: language === "hi" ? "मैं कृषु मित्र हूँ, आपकी कृषि सहायिका। बताइए मैं क्या मदद कर सकती हूँ?" : "I am Krashu Mitra, ready to assist you with agriculture. How can I help?" }] },
+          ...conversationHistory,
           { role: "user", parts: [{ text: message }] },
         ],
         config: { maxOutputTokens: 8192 },
