@@ -89,8 +89,9 @@ shared/
 - Assistant messages have a "Listen again" speaker button to replay TTS
 - Chatbot shows inline images for visual topics (diseases, pests, growth stages) via [IMG: search keywords] markers — images pulled from Wikimedia Commons (free, no API key)
 - Image search happens after text streaming completes; "Generating images..." loading indicator shown during search
-- Images rendered inline in chat messages with rounded corners and full-width display
+- Images rendered inline between main answer and 🔎 follow-up suggestions (not at bottom)
 - Markdown rendering: * and - bullets → • dots, ### headers → bold text, **bold** preserved, empty bullet lines cleaned
+- Chat input is auto-growing textarea (1 row default, expands up to 4 rows, Enter sends, Shift+Enter new line)
 - Chatbot is context-aware: knows farmer's existing crop cards and events
 - Chatbot can create new crop cards via conversation (crop_card_draft)
 - Chatbot can edit existing crop cards via conversation (crop_card_edit_draft)

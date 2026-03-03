@@ -5,7 +5,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2, Square } from "lucide-react";
@@ -196,6 +195,7 @@ export function Chatbot() {
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 768px)").matches);
   const [loadingImages, setLoadingImages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
@@ -229,6 +229,15 @@ export function Chatbot() {
     }
   }, [messages]);
 
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      if (input) {
+        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 96) + "px";
+      }
+    }
+  }, [input]);
+
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -250,6 +259,7 @@ export function Chatbot() {
     const userMsg: ChatMessage = { role: "user", content: text };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
     setIsStreaming(true);
 
     const controller = new AbortController();
@@ -519,22 +529,35 @@ export function Chatbot() {
               }`}
               data-testid={`chat-message-${i}`}
             >
-              <div className={msg.role === "user" ? "whitespace-pre-wrap break-words" : "break-words"}>
-                {msg.role === "assistant" ? renderFormattedText(msg.content) : msg.content}
-              </div>
-              {msg.role === "assistant" && msg.images && msg.images.length > 0 && (
-                <div className="mt-2 space-y-2" data-testid={`chat-images-${i}`}>
-                  {msg.images.map((imgSrc, imgIdx) => (
-                    <img
-                      key={imgIdx}
-                      src={imgSrc}
-                      alt={language === "hi" ? "सहायक चित्र" : "Helpful illustration"}
-                      className="rounded-lg max-w-full w-full object-cover border border-border/50"
-                      data-testid={`chat-image-${i}-${imgIdx}`}
-                    />
-                  ))}
-                </div>
-              )}
+              {msg.role === "user" ? (
+                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+              ) : (() => {
+                const lines = msg.content.split("\n");
+                const suggestionIdx = lines.findIndex(l => l.trimStart().startsWith("🔎"));
+                const mainLines = suggestionIdx >= 0 ? lines.slice(0, suggestionIdx) : lines;
+                const suggestionLines = suggestionIdx >= 0 ? lines.slice(suggestionIdx) : [];
+                const mainText = mainLines.join("\n").trimEnd();
+                const suggestText = suggestionLines.join("\n").trimStart();
+                return (
+                  <>
+                    {mainText && <div className="break-words">{renderFormattedText(mainText)}</div>}
+                    {msg.images && msg.images.length > 0 && (
+                      <div className="mt-2 space-y-2" data-testid={`chat-images-${i}`}>
+                        {msg.images.map((imgSrc, imgIdx) => (
+                          <img
+                            key={imgIdx}
+                            src={imgSrc}
+                            alt={language === "hi" ? "सहायक चित्र" : "Helpful illustration"}
+                            className="rounded-lg max-w-full w-full object-cover border border-border/50"
+                            data-testid={`chat-image-${i}-${imgIdx}`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {suggestText && <div className="break-words mt-2 pt-2 border-t border-border/30">{renderFormattedText(suggestText)}</div>}
+                  </>
+                );
+              })()}
               {msg.role === "assistant" && msg.content && (
                 <button
                   onClick={() => speakText(msg.content, language)}
@@ -665,7 +688,7 @@ export function Chatbot() {
       </div>
 
       <div className="p-3 border-t bg-background shrink-0 rounded-b-2xl">
-        <div className="flex items-center gap-2 max-w-lg mx-auto">
+        <div className="flex items-end gap-2 max-w-lg mx-auto">
           <Button
             size="icon"
             variant={isListening ? "destructive" : "outline"}
@@ -675,13 +698,21 @@ export function Chatbot() {
           >
             {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </Button>
-          <Input
+          <textarea
+            ref={textareaRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder={t("askKrashuved")}
-            onKeyDown={e => e.key === "Enter" && !isStreaming && sendMessage(input)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey && !isStreaming) {
+                e.preventDefault();
+                sendMessage(input);
+              }
+            }}
             disabled={isStreaming}
-            className="flex-1"
+            rows={1}
+            className="flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ maxHeight: "96px" }}
             data-testid="input-chat"
           />
           {isStreaming ? (
