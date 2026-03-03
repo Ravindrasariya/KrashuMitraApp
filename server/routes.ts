@@ -153,7 +153,7 @@ export async function registerRoutes(
       if (!event) return res.status(404).json({ message: "Not found" });
       const card = await storage.getCropCard(event.cropCardId);
       if (!card || card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
-      const allowedFields = insertCropEventSchema.pick({ eventType: true, description: true, eventDate: true, productionPerBigha: true }).partial();
+      const allowedFields = insertCropEventSchema.pick({ eventType: true, description: true, eventDate: true, productionPerBigha: true, productionUnit: true }).partial();
       const parsed = allowedFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
       const updated = await storage.updateCropEvent(parseInt(req.params.id), parsed.data);

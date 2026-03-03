@@ -134,7 +134,9 @@ export function CropTimeline({ events, isLoading, onToggle, onDelete, onEdit }: 
                 )}
                 {event.eventType === "harvesting" && event.productionPerBigha && (
                   <p className="text-xs mt-0.5 text-purple-600 dark:text-purple-400 font-medium" data-testid={`text-production-${event.id}`}>
-                    {language === "hi" ? `उपज: ${event.productionPerBigha} क्विंटल/बीघा` : `Yield: ${event.productionPerBigha} Quintal/Bigha`}
+                    {language === "hi"
+                      ? `उपज: ${event.productionPerBigha} ${event.productionUnit === "bag" ? "बोरी/बीघा" : "क्विंटल/बीघा"}`
+                      : `Yield: ${event.productionPerBigha} ${event.productionUnit === "bag" ? "Bag/Bigha" : "Quintal/Bigha"}`}
                   </p>
                 )}
 

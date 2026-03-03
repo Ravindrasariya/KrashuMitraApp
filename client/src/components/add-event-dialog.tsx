@@ -18,6 +18,7 @@ const eventFormSchema = z.object({
   description: z.string().optional(),
   eventDate: z.string().min(1, "Required"),
   productionPerBigha: z.string().optional(),
+  productionUnit: z.string().optional(),
 });
 
 type EventFormData = z.infer<typeof eventFormSchema>;
@@ -62,6 +63,7 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
       description: "",
       eventDate: new Date().toISOString().split("T")[0],
       productionPerBigha: "",
+      productionUnit: "quintal",
     },
   });
 
@@ -72,6 +74,7 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
         description: editEvent.description || "",
         eventDate: editEvent.eventDate,
         productionPerBigha: editEvent.productionPerBigha || "",
+        productionUnit: editEvent.productionUnit || "quintal",
       });
     } else if (open && !editEvent) {
       form.reset({
@@ -79,6 +82,7 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
         description: "",
         eventDate: new Date().toISOString().split("T")[0],
         productionPerBigha: "",
+        productionUnit: "quintal",
       });
     }
   }, [open, editEvent, form]);
@@ -224,26 +228,63 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
             />
 
             {selectedType === "harvesting" && (
-              <FormField
-                control={form.control}
-                name="productionPerBigha"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("productionPerBigha")}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder={language === "hi" ? "जैसे: 2.5" : "e.g. 2.5"}
-                        data-testid="input-production-per-bigha"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <>
+                <FormField
+                  control={form.control}
+                  name="productionUnit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{language === "hi" ? "इकाई" : "Unit"}</FormLabel>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => field.onChange("quintal")}
+                          className={`flex-1 py-2 px-3 rounded-md border-2 text-sm font-medium transition-all ${
+                            field.value === "quintal"
+                              ? "border-primary bg-primary/5"
+                              : "border-transparent bg-muted/50"
+                          }`}
+                          data-testid="button-unit-quintal"
+                        >
+                          {language === "hi" ? "क्विंटल/बीघा" : "Quintal/Bigha"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => field.onChange("bag")}
+                          className={`flex-1 py-2 px-3 rounded-md border-2 text-sm font-medium transition-all ${
+                            field.value === "bag"
+                              ? "border-primary bg-primary/5"
+                              : "border-transparent bg-muted/50"
+                          }`}
+                          data-testid="button-unit-bag"
+                        >
+                          {language === "hi" ? "बोरी/बीघा" : "Bag/Bigha"}
+                        </button>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="productionPerBigha"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{language === "hi" ? "उपज प्रति बीघा" : "Production per Bigha"}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder={language === "hi" ? "जैसे: 2.5" : "e.g. 2.5"}
+                          data-testid="input-production-per-bigha"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
             )}
 
             <div className="flex gap-2 pt-2">
