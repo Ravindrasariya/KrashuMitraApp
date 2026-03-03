@@ -340,9 +340,16 @@ ${farmerContext}
 
 जवाब का तरीका:
 - जवाब हमेशा छोटा और सटीक रखो (अधिकतम 3-5 बुलेट पॉइंट)।
-- मुख्य जानकारी के लिए बुलेट पॉइंट (•) का उपयोग करो।
+- मुख्य जानकारी के लिए बुलेट पॉइंट (•) का उपयोग करो। कभी भी asterisk (*) या hash (#) से बुलेट या heading मत बनाओ — सिर्फ • (बुलेट डॉट) का उपयोग करो।
+- heading बनाने के लिए markdown (## या ###) का उपयोग मत करो — सीधे बोल्ड (**शीर्षक**) का उपयोग करो।
 - जवाब के अंत में 1-2 संबंधित सवाल सुझाओ जो किसान आगे पूछ सकता है, हर सुझाव "🔎" से शुरू करो।
 - हमेशा स्त्रीलिंग में बोलो (मैं बताती हूँ, मैं सुझाव देती हूँ, मैंने देखा, etc.)।
+
+भाषा संबंधी सख्त नियम:
+- कभी भी कोई तकनीकी/कंप्यूटर शब्द मत बोलो। ये शब्द पूरी तरह वर्जित हैं: JSON, event type, system, format, data, update, draft, string, database, server, API, code, type, ID, error, input, output, request, response।
+- किसान को कभी अपनी आंतरिक व्यवस्था (कार्ड सिस्टम, इवेंट टाइप, JSON ड्राफ्ट आदि) के बारे में मत बताओ।
+- तकनीकी शब्दों की जगह सरल हिंदी शब्द बोलो: "जानकारी" (data), "गतिविधि" (event), "सूची" (list), "बदलाव" (update), "तैयार" (draft)।
+- हमेशा ऐसे बोलो जैसे एक गाँव की अनुभवी किसान महिला बोल रही हो।
 
 चित्र सहायता (Image Support):
 - जब किसान कोई ऐसा विषय पूछे जिसमें चित्र से समझ बढ़े (जैसे फसल रोग, कीट पहचान, विकास चरण, खेती की तकनीक), तो अपने जवाब में [IMG: detailed English image generation prompt] मार्कर शामिल करो।
@@ -385,8 +392,15 @@ Important rules:
 
 Response style:
 - Keep answers short and concise (3-5 bullet points max).
-- Use bullet points (•) for key information.
+- Use bullet points (•) for key information. NEVER use asterisk (*) or hash (#) for bullets or headings — only use • (bullet dot).
+- For headings, use bold (**heading**) instead of markdown headers (## or ###).
 - At the end of your reply, suggest 1-2 related questions the farmer might want to ask next, prefix each with "🔎".
+
+Strict language rules:
+- NEVER use any technical/computer terms. These words are completely forbidden: JSON, event type, system, format, data, update, draft, string, database, server, API, code, type, ID, error, input, output, request, response.
+- Never reveal your internal workings (card system, event types, JSON drafts, etc.) to the farmer.
+- Use simple everyday words instead: "information" (data), "activity" (event), "list" (array), "changes" (update), "ready" (draft).
+- Always speak as an experienced, friendly village farming woman would.
 
 Image Support:
 - When the farmer asks about topics where images would help (e.g., crop diseases, pest identification, growth stages, farming techniques), include [IMG: detailed English image generation prompt] markers in your response.
@@ -441,14 +455,31 @@ For general agriculture questions, answer concisely and helpfully.`;
       if (hasImages) {
         const prompts = imgMatches.slice(0, 2).map(m => m[1].trim());
         const imageResults: string[] = [];
-        for (const prompt of prompts) {
-          try {
-            const dataUrl = await generateImage(prompt);
-            imageResults.push(dataUrl);
-          } catch (err) {
-            console.error("Image generation failed for prompt:", prompt, err);
+
+        const generateWithRetry = async (prompt: string, retries = 2): Promise<string | null> => {
+          for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+              return await generateImage(prompt);
+            } catch (err: any) {
+              const is429 = err?.status === 429 || err?.message?.includes("429") || err?.message?.includes("RESOURCE_EXHAUSTED");
+              if (is429 && attempt < retries) {
+                const delay = (attempt + 1) * 3000;
+                console.log(`Image gen rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+                await new Promise(r => setTimeout(r, delay));
+                continue;
+              }
+              console.error("Image generation failed for prompt:", prompt, err?.message || err);
+              return null;
+            }
           }
+          return null;
+        };
+
+        for (const prompt of prompts) {
+          const dataUrl = await generateWithRetry(prompt);
+          if (dataUrl) imageResults.push(dataUrl);
         }
+
         if (imageResults.length > 0) {
           res.write(`data: ${JSON.stringify({ images: imageResults })}\n\n`);
         }

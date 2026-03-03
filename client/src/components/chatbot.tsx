@@ -122,13 +122,37 @@ function cleanTextForSpeech(text: string): string {
   return clean.trim();
 }
 
-function renderFormattedText(text: string) {
+function renderInlineBold(text: string, keyPrefix: string) {
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>;
+      return <strong key={`${keyPrefix}-${i}`}>{part.slice(2, -2)}</strong>;
     }
-    return <span key={i}>{part}</span>;
+    if (!part) return null;
+    return <span key={`${keyPrefix}-${i}`}>{part}</span>;
+  });
+}
+
+function renderFormattedText(text: string) {
+  const lines = text.split("\n");
+  return lines.map((line, i) => {
+    const trimmed = line.trimStart();
+
+    if (/^#{1,4}\s+/.test(trimmed)) {
+      const headerText = trimmed.replace(/^#{1,4}\s+/, "");
+      return <div key={i} className="font-bold mt-1">{renderInlineBold(headerText, `h-${i}`)}</div>;
+    }
+
+    if (/^[*\-]\s+/.test(trimmed)) {
+      const bulletText = trimmed.replace(/^[*\-]\s+/, "");
+      return <div key={i} className="flex gap-1"><span>•</span><span>{renderInlineBold(bulletText, `b-${i}`)}</span></div>;
+    }
+
+    if (trimmed === "") {
+      return <br key={i} />;
+    }
+
+    return <div key={i}>{renderInlineBold(line, `l-${i}`)}</div>;
   });
 }
 
@@ -493,9 +517,9 @@ export function Chatbot() {
               }`}
               data-testid={`chat-message-${i}`}
             >
-              <p className="whitespace-pre-wrap break-words">
+              <div className={msg.role === "user" ? "whitespace-pre-wrap break-words" : "break-words"}>
                 {msg.role === "assistant" ? renderFormattedText(msg.content) : msg.content}
-              </p>
+              </div>
               {msg.role === "assistant" && msg.images && msg.images.length > 0 && (
                 <div className="mt-2 space-y-2" data-testid={`chat-images-${i}`}>
                   {msg.images.map((imgSrc, imgIdx) => (
