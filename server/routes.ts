@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupPhoneAuth, isAuthenticated } from "./auth-phone";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
+import { generateImage } from "./replit_integrations/image/client";
 import { insertCropCardSchema, insertCropEventSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
@@ -343,6 +344,13 @@ ${farmerContext}
 - जवाब के अंत में 1-2 संबंधित सवाल सुझाओ जो किसान आगे पूछ सकता है, हर सुझाव "🔎" से शुरू करो।
 - हमेशा स्त्रीलिंग में बोलो (मैं बताती हूँ, मैं सुझाव देती हूँ, मैंने देखा, etc.)।
 
+चित्र सहायता (Image Support):
+- जब किसान कोई ऐसा विषय पूछे जिसमें चित्र से समझ बढ़े (जैसे फसल रोग, कीट पहचान, विकास चरण, खेती की तकनीक), तो अपने जवाब में [IMG: detailed English image generation prompt] मार्कर शामिल करो।
+- IMG मार्कर का text हमेशा अंग्रेज़ी में लिखो और विस्तृत हो (जैसे: [IMG: close-up photograph of wheat leaf rust disease showing orange-brown pustules on green wheat leaves])
+- एक जवाब में अधिकतम 2 IMG मार्कर रखो।
+- IMG मार्कर केवल तब दो जब चित्र वाकई उपयोगी हो — साधारण सवालों (मौसम, तारीख, सामान्य सलाह) में IMG मत दो।
+- IMG मार्कर को जवाब के text के बीच में उचित स्थान पर रखो, जहाँ चित्र प्रासंगिक हो।
+
 अगर किसान सामान्य कृषि सवाल पूछे तो सादा हिंदी में जवाब दो।`
         : `You are Krashu Mitra, an agricultural expert AI assistant. You help farmers with crop management.
 
@@ -379,6 +387,13 @@ Response style:
 - Keep answers short and concise (3-5 bullet points max).
 - Use bullet points (•) for key information.
 - At the end of your reply, suggest 1-2 related questions the farmer might want to ask next, prefix each with "🔎".
+
+Image Support:
+- When the farmer asks about topics where images would help (e.g., crop diseases, pest identification, growth stages, farming techniques), include [IMG: detailed English image generation prompt] markers in your response.
+- The IMG marker text must be in English and descriptive (e.g., [IMG: close-up photograph of wheat leaf rust disease showing orange-brown pustules on green wheat leaves])
+- Maximum 2 IMG markers per response.
+- Only include IMG markers when images genuinely add value — not for simple Q&A (weather, dates, general advice).
+- Place IMG markers at relevant positions within your text response, where the image would be most helpful.
 
 For general agriculture questions, answer concisely and helpfully.`;
 
@@ -418,7 +433,28 @@ For general agriculture questions, answer concisely and helpfully.`;
         }
       }
 
-      res.write(`data: ${JSON.stringify({ done: true, fullResponse })}\n\n`);
+      const imgMatches = [...fullResponse.matchAll(/\[IMG:\s*(.+?)\]/g)];
+      const hasImages = imgMatches.length > 0;
+
+      res.write(`data: ${JSON.stringify({ done: true, fullResponse, imagesPending: hasImages })}\n\n`);
+
+      if (hasImages) {
+        const prompts = imgMatches.slice(0, 2).map(m => m[1].trim());
+        const imageResults: string[] = [];
+        for (const prompt of prompts) {
+          try {
+            const dataUrl = await generateImage(prompt);
+            imageResults.push(dataUrl);
+          } catch (err) {
+            console.error("Image generation failed for prompt:", prompt, err);
+          }
+        }
+        if (imageResults.length > 0) {
+          res.write(`data: ${JSON.stringify({ images: imageResults })}\n\n`);
+        }
+        res.write(`data: ${JSON.stringify({ imagesDone: true })}\n\n`);
+      }
+
       res.end();
     } catch (error) {
       console.error("Error in Krashuved chat:", error);

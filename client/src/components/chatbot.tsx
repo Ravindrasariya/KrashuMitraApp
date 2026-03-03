@@ -13,6 +13,7 @@ import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Vo
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  images?: string[];
 }
 
 interface CropCardDraft {
@@ -53,6 +54,7 @@ function stripJsonFromMessage(text: string): string {
   let cleaned = text.replace(/```json\s*[\s\S]*?```/g, "").trim();
   cleaned = cleaned.replace(/```\s*[\s\S]*?```/g, "").trim();
   cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"crop_card_(draft|edit_draft)"[\s\S]*\}/g, "").trim();
+  cleaned = cleaned.replace(/\[IMG:\s*.+?\]/g, "").trim();
   return cleaned;
 }
 
@@ -166,6 +168,7 @@ export function Chatbot() {
   const [isListening, setIsListening] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 768px)").matches);
+  const [loadingImages, setLoadingImages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -192,7 +195,7 @@ export function Chatbot() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, loadingImages]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -266,12 +269,28 @@ export function Chatbot() {
                   return updated;
                 });
               }
+              if (data.images && Array.isArray(data.images)) {
+                setMessages(prev => {
+                  const updated = [...prev];
+                  const lastMsg = updated[updated.length - 1];
+                  if (lastMsg && lastMsg.role === "assistant") {
+                    updated[updated.length - 1] = { ...lastMsg, images: [...(lastMsg.images || []), ...data.images] };
+                  }
+                  return updated;
+                });
+              }
+              if (data.imagesDone) {
+                setLoadingImages(false);
+              }
               if (data.done && data.fullResponse) {
                 const displayContent = stripJsonFromMessage(data.fullResponse);
                 const finalContent = displayContent || (language === "hi" ? "फसल कार्ड तैयार है। कृपया नीचे देखें और मंजूर करें।" : "Crop card is ready. Please review below and approve.");
+                if (data.imagesPending) {
+                  setLoadingImages(true);
+                }
                 setMessages(prev => {
                   const updated = [...prev];
-                  updated[updated.length - 1] = { role: "assistant", content: finalContent };
+                  updated[updated.length - 1] = { ...updated[updated.length - 1], role: "assistant", content: finalContent };
                   return updated;
                 });
 
@@ -286,6 +305,7 @@ export function Chatbot() {
       }
     } catch (error: any) {
       if (error?.name === "AbortError") {
+        setLoadingImages(false);
         setMessages(prev => {
           const updated = [...prev];
           if (updated.length > 0 && updated[updated.length - 1].role === "assistant" && !updated[updated.length - 1].content.trim()) {
@@ -303,6 +323,7 @@ export function Chatbot() {
       abortControllerRef.current = null;
       readerRef.current = null;
       setIsStreaming(false);
+      setLoadingImages(false);
     }
   }, [isStreaming, language]);
 
@@ -475,6 +496,19 @@ export function Chatbot() {
               <p className="whitespace-pre-wrap break-words">
                 {msg.role === "assistant" ? renderFormattedText(msg.content) : msg.content}
               </p>
+              {msg.role === "assistant" && msg.images && msg.images.length > 0 && (
+                <div className="mt-2 space-y-2" data-testid={`chat-images-${i}`}>
+                  {msg.images.map((imgSrc, imgIdx) => (
+                    <img
+                      key={imgIdx}
+                      src={imgSrc}
+                      alt={language === "hi" ? "सहायक चित्र" : "Helpful illustration"}
+                      className="rounded-lg max-w-full w-full object-cover border border-border/50"
+                      data-testid={`chat-image-${i}-${imgIdx}`}
+                    />
+                  ))}
+                </div>
+              )}
               {msg.role === "assistant" && msg.content && (
                 <button
                   onClick={() => speakText(msg.content, language)}
@@ -493,6 +527,15 @@ export function Chatbot() {
           <div className="flex justify-start">
             <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2">
               <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+          </div>
+        )}
+
+        {loadingImages && !isStreaming && (
+          <div className="flex justify-start" data-testid="loading-images-indicator">
+            <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>{language === "hi" ? "चित्र तैयार हो रहे हैं..." : "Generating images..."}</span>
             </div>
           </div>
         )}
