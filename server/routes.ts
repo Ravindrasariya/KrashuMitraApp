@@ -61,6 +61,19 @@ export async function registerRoutes(
       const userId = req.session.userId;
       const data = insertCropCardSchema.parse({ ...req.body, userId });
       const card = await storage.createCropCard(data);
+
+      const startDate = new Date(data.startDate);
+      const harvestDate = new Date(startDate);
+      harvestDate.setMonth(harvestDate.getMonth() + 4);
+      await storage.createCropEvent({
+        cropCardId: card.id,
+        eventType: "harvesting",
+        description: null,
+        eventDate: harvestDate.toISOString().split("T")[0],
+        isCompleted: false,
+        productionPerBigha: null,
+      });
+
       res.status(201).json(card);
     } catch (error) {
       console.error("Error creating crop card:", error);
@@ -140,7 +153,7 @@ export async function registerRoutes(
       if (!event) return res.status(404).json({ message: "Not found" });
       const card = await storage.getCropCard(event.cropCardId);
       if (!card || card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
-      const allowedFields = insertCropEventSchema.pick({ eventType: true, description: true, eventDate: true }).partial();
+      const allowedFields = insertCropEventSchema.pick({ eventType: true, description: true, eventDate: true, productionPerBigha: true }).partial();
       const parsed = allowedFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
       const updated = await storage.updateCropEvent(parseInt(req.params.id), parsed.data);
@@ -302,7 +315,7 @@ ${farmerContext}
 1. पहले एक छोटा सा सारांश लिखो जो किसान को समझ आए
 2. फिर नई लाइन पर JSON ब्लॉक दो इस format में:
 \`\`\`json
-{"type":"crop_card_draft","cropName":"फसल का नाम","farmName":"खेत का नाम (वैकल्पिक)","variety":"किस्म (वैकल्पिक)","startDate":"YYYY-MM-DD","events":[{"eventType":"plantation|fertiliser|pesticide|watering","description":"विवरण","eventDate":"YYYY-MM-DD"}]}
+{"type":"crop_card_draft","cropName":"फसल का नाम","farmName":"खेत का नाम (वैकल्पिक)","variety":"किस्म (वैकल्पिक)","startDate":"YYYY-MM-DD","events":[{"eventType":"plantation|fertiliser|pesticide|watering|harvesting","description":"विवरण","eventDate":"YYYY-MM-DD"}]}
 \`\`\`
 
 जब किसान किसी मौजूदा फसल कार्ड में बदलाव करना चाहे (जैसे "मेरे गेहूँ कार्ड में खाद जोड़ दो", "आलू का कार्ड अपडेट करो"), तो:
@@ -310,7 +323,7 @@ ${farmerContext}
 2. एक छोटा सारांश लिखो
 3. फिर JSON ब्लॉक दो:
 \`\`\`json
-{"type":"crop_card_edit_draft","cardId":123,"updates":{"cropName":"नया नाम (वैकल्पिक)","farmName":"नया खेत (वैकल्पिक)","variety":"नई किस्म (वैकल्पिक)"},"addEvents":[{"eventType":"plantation|fertiliser|pesticide|watering","description":"विवरण","eventDate":"YYYY-MM-DD"}],"removeEventIds":[]}
+{"type":"crop_card_edit_draft","cardId":123,"updates":{"cropName":"नया नाम (वैकल्पिक)","farmName":"नया खेत (वैकल्पिक)","variety":"नई किस्म (वैकल्पिक)"},"addEvents":[{"eventType":"plantation|fertiliser|pesticide|watering|harvesting","description":"विवरण","eventDate":"YYYY-MM-DD"}],"removeEventIds":[]}
 \`\`\`
 - updates में केवल वो fields डालो जो बदलने हैं
 - addEvents में नई गतिविधियाँ जो जोड़नी हैं
@@ -321,7 +334,7 @@ ${farmerContext}
 - अगर किसान कोई तारीख नहीं बताए तो startDate आज (${today}) रखो।
 - अगर किसान "2 महीने पहले" या "3 हफ्ते पहले" बोले तो आज की तारीख से गणना करो।
 - अगर कोई recurring/बार-बार होने वाली गतिविधि हो (जैसे "हर 15 दिन में सिंचाई"), तो हर बार के लिए अलग-अलग entry बनाओ। कम से कम 3-4 महीने की अवधि के लिए entries बनाओ।
-- eventType केवल ये हो सकते हैं: plantation, fertiliser, pesticide, watering
+- eventType केवल ये हो सकते हैं: plantation, fertiliser, pesticide, watering, harvesting
 - जब किसान अपनी फसलों के बारे में पूछे, तो ऊपर दी गई जानकारी का उपयोग करो।
 
 जवाब का तरीका:
@@ -340,7 +353,7 @@ When a farmer asks to create a NEW crop card:
 1. First write a brief friendly summary in plain language
 2. Then on a new line, output the JSON block:
 \`\`\`json
-{"type":"crop_card_draft","cropName":"crop name","farmName":"farm/plot name (optional)","variety":"variety (optional)","startDate":"YYYY-MM-DD","events":[{"eventType":"plantation|fertiliser|pesticide|watering","description":"details","eventDate":"YYYY-MM-DD"}]}
+{"type":"crop_card_draft","cropName":"crop name","farmName":"farm/plot name (optional)","variety":"variety (optional)","startDate":"YYYY-MM-DD","events":[{"eventType":"plantation|fertiliser|pesticide|watering|harvesting","description":"details","eventDate":"YYYY-MM-DD"}]}
 \`\`\`
 
 When a farmer asks to EDIT an existing crop card (e.g., "add fertilizer to my wheat card", "update my potato card"), then:
@@ -348,7 +361,7 @@ When a farmer asks to EDIT an existing crop card (e.g., "add fertilizer to my wh
 2. Write a brief summary of changes
 3. Output JSON block:
 \`\`\`json
-{"type":"crop_card_edit_draft","cardId":123,"updates":{"cropName":"new name (optional)","farmName":"new farm (optional)","variety":"new variety (optional)"},"addEvents":[{"eventType":"plantation|fertiliser|pesticide|watering","description":"details","eventDate":"YYYY-MM-DD"}],"removeEventIds":[]}
+{"type":"crop_card_edit_draft","cardId":123,"updates":{"cropName":"new name (optional)","farmName":"new farm (optional)","variety":"new variety (optional)"},"addEvents":[{"eventType":"plantation|fertiliser|pesticide|watering|harvesting","description":"details","eventDate":"YYYY-MM-DD"}],"removeEventIds":[]}
 \`\`\`
 - In updates, only include fields that are changing
 - In addEvents, include new events to add
@@ -359,7 +372,7 @@ Important rules:
 - If no date is specified, use today (${today}) as the startDate.
 - If the farmer says "2 months ago" or "3 weeks back", calculate from today's date.
 - For recurring activities (e.g., "watering every 15 days"), create individual entries for EACH occurrence. Generate entries for at least 3-4 months.
-- eventType must be one of: plantation, fertiliser, pesticide, watering
+- eventType must be one of: plantation, fertiliser, pesticide, watering, harvesting
 - When the farmer asks about their crops, use the farmer data provided above to answer.
 
 Response style:

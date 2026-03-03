@@ -76,7 +76,9 @@ shared/
 - Responsive layout: sidebar navigation on desktop (md+), bottom navigation on mobile
 - Hindi default language with English toggle
 - Crop card management with expandable timeline
-- Event types: Plantation, Fertiliser, Pesticide, Watering (color-coded)
+- Event types: Plantation (green), Fertiliser (amber), Pesticide (red), Watering (blue), Harvesting (purple) — color-coded
+- Harvesting event auto-created on every new crop card (4 months after start date)
+- Harvesting events have optional "production per Bigha" field (in Quintal)
 - Edit and delete events with confirmation dialogs
 - Auto-suggestions for descriptions based on history
 - Krashu Mitra AI chatbot with voice input and TTS output (Hindi female voice, feminine persona)
@@ -95,7 +97,7 @@ shared/
 - `users` - Auth users (id, phoneNumber, pin, knownIps, email, firstName, lastName, farmerCode, isAdmin, mustChangePin)
 - `sessions` - Session storage (express-session with connect-pg-simple)
 - `crop_cards` - Farmer's crop cards (userId, cropName, farmName?, variety?, startDate, status)
-- `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted)
+- `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted, productionPerBigha)
 - `conversations` - Chat conversations
 - `messages` - Chat messages
 

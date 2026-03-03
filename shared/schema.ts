@@ -26,6 +26,7 @@ export const cropEvents = pgTable("crop_events", {
   description: text("description"),
   eventDate: date("event_date").notNull(),
   isCompleted: boolean("is_completed").notNull().default(false),
+  productionPerBigha: text("production_per_bigha"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

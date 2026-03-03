@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Check, Sprout, Droplets, Bug, Leaf, Trash2, Pencil, Circle } from "lucide-react";
+import { Check, Sprout, Droplets, Bug, Leaf, Wheat, Trash2, Pencil, Circle } from "lucide-react";
 import type { CropEvent } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -11,6 +11,7 @@ const eventIcons: Record<string, typeof Sprout> = {
   fertiliser: Leaf,
   pesticide: Bug,
   watering: Droplets,
+  harvesting: Wheat,
 };
 
 const eventBgColors: Record<string, string> = {
@@ -18,6 +19,7 @@ const eventBgColors: Record<string, string> = {
   fertiliser: "bg-amber-500",
   pesticide: "bg-red-500",
   watering: "bg-blue-500",
+  harvesting: "bg-purple-500",
 };
 
 const eventLightBg: Record<string, string> = {
@@ -25,6 +27,7 @@ const eventLightBg: Record<string, string> = {
   fertiliser: "bg-amber-50 dark:bg-amber-950/30",
   pesticide: "bg-red-50 dark:bg-red-950/30",
   watering: "bg-blue-50 dark:bg-blue-950/30",
+  harvesting: "bg-purple-50 dark:bg-purple-950/30",
 };
 
 const eventTypeLabels: Record<string, Record<string, string>> = {
@@ -32,6 +35,7 @@ const eventTypeLabels: Record<string, Record<string, string>> = {
   fertiliser: { hi: "खाद", en: "Fertiliser" },
   pesticide: { hi: "कीटनाशक", en: "Pesticide" },
   watering: { hi: "सिंचाई", en: "Watering" },
+  harvesting: { hi: "कटाई", en: "Harvesting" },
 };
 
 interface CropTimelineProps {
@@ -126,6 +130,11 @@ export function CropTimeline({ events, isLoading, onToggle, onDelete, onEdit }: 
                 {event.description && (
                   <p className={`text-sm mt-0.5 ${event.isCompleted ? "line-through text-muted-foreground" : "text-muted-foreground"}`}>
                     {event.description}
+                  </p>
+                )}
+                {event.eventType === "harvesting" && event.productionPerBigha && (
+                  <p className="text-xs mt-0.5 text-purple-600 dark:text-purple-400 font-medium" data-testid={`text-production-${event.id}`}>
+                    {language === "hi" ? `उपज: ${event.productionPerBigha} क्विंटल/बीघा` : `Yield: ${event.productionPerBigha} Quintal/Bigha`}
                   </p>
                 )}
 

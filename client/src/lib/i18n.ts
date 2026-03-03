@@ -27,6 +27,8 @@ const translations = {
   fertiliser: { hi: "खाद", en: "Fertiliser" },
   pesticide: { hi: "कीटनाशक", en: "Pesticide" },
   watering: { hi: "सिंचाई", en: "Watering" },
+  harvesting: { hi: "कटाई", en: "Harvesting" },
+  productionPerBigha: { hi: "उपज प्रति बीघा (क्विंटल)", en: "Production per Bigha (Quintal)" },
   description: { hi: "विवरण", en: "Description" },
   date: { hi: "तारीख", en: "Date" },
   save: { hi: "सहेजें", en: "Save" },

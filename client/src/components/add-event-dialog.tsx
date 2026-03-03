@@ -10,13 +10,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Sprout, Leaf, Bug, Droplets } from "lucide-react";
+import { Sprout, Leaf, Bug, Droplets, Wheat } from "lucide-react";
 import type { CropEvent } from "@shared/schema";
 
 const eventFormSchema = z.object({
   eventType: z.string().min(1, "Required"),
   description: z.string().optional(),
   eventDate: z.string().min(1, "Required"),
+  productionPerBigha: z.string().optional(),
 });
 
 type EventFormData = z.infer<typeof eventFormSchema>;
@@ -33,6 +34,7 @@ const eventTypes = [
   { value: "fertiliser", icon: Leaf, color: "text-amber-600" },
   { value: "pesticide", icon: Bug, color: "text-red-600" },
   { value: "watering", icon: Droplets, color: "text-blue-600" },
+  { value: "harvesting", icon: Wheat, color: "text-purple-600" },
 ];
 
 const commonDescriptions: Record<string, string[]> = {
@@ -40,6 +42,7 @@ const commonDescriptions: Record<string, string[]> = {
   pesticide: ["Chlorpyriphos / क्लोरपायरीफॉस", "Imidacloprid / इमिडाक्लोप्रिड", "Mancozeb / मैन्कोज़ेब", "Neem Oil / नीम तेल"],
   watering: ["Drip / ड्रिप", "Sprinkler / स्प्रिंकलर", "Flood / बाढ़ सिंचाई", "Furrow / नाली"],
   plantation: ["Direct / सीधी बुवाई", "Transplant / रोपाई", "Broadcasting / छिड़काव"],
+  harvesting: ["Manual / हाथ से", "Combine / कम्बाइन", "Thresher / थ्रेसर"],
 };
 
 export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: AddEventDialogProps) {
@@ -58,6 +61,7 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
       eventType: "",
       description: "",
       eventDate: new Date().toISOString().split("T")[0],
+      productionPerBigha: "",
     },
   });
 
@@ -67,12 +71,14 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
         eventType: editEvent.eventType,
         description: editEvent.description || "",
         eventDate: editEvent.eventDate,
+        productionPerBigha: editEvent.productionPerBigha || "",
       });
     } else if (open && !editEvent) {
       form.reset({
         eventType: "",
         description: "",
         eventDate: new Date().toISOString().split("T")[0],
+        productionPerBigha: "",
       });
     }
   }, [open, editEvent, form]);
@@ -216,6 +222,29 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
                 </FormItem>
               )}
             />
+
+            {selectedType === "harvesting" && (
+              <FormField
+                control={form.control}
+                name="productionPerBigha"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("productionPerBigha")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder={language === "hi" ? "जैसे: 2.5" : "e.g. 2.5"}
+                        data-testid="input-production-per-bigha"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <div className="flex gap-2 pt-2">
               <Button
