@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -10,7 +10,7 @@ import { Sprout, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 
-type AuthMode = "login" | "register" | "forgot";
+type AuthMode = "login" | "register" | "forgot" | "changePin";
 
 function PinInput({
   value,
@@ -85,9 +85,15 @@ export default function AuthPage() {
   const [confirmPin, setConfirmPin] = useState("");
   const [firstName, setFirstName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [oldPin, setOldPin] = useState("");
 
-  if (isAuthenticated) {
-    setLocation("/");
+  useEffect(() => {
+    if (isAuthenticated && mode !== "changePin") {
+      setLocation("/");
+    }
+  }, [isAuthenticated, mode, setLocation]);
+
+  if (isAuthenticated && mode !== "changePin") {
     return null;
   }
 
@@ -144,7 +150,42 @@ export default function AuthPage() {
           return;
         }
 
+        const loginData = await res.json();
+
+        if (loginData.mustChangePin) {
+          setMode("changePin");
+          setOldPin(pin);
+          setPin("");
+          setConfirmPin("");
+          setIsSubmitting(false);
+          return;
+        }
+
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        setLocation("/");
+      } else if (mode === "changePin") {
+        if (pin !== confirmPin) {
+          toast({ title: t("pinMismatch"), variant: "destructive" });
+          setIsSubmitting(false);
+          return;
+        }
+
+        const res = await fetch("/api/auth/change-pin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ oldPin, newPin: pin }),
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          toast({ title: t(data.message as any) || t("resetFailed"), variant: "destructive" });
+          setIsSubmitting(false);
+          return;
+        }
+
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        toast({ title: t("pinChanged") });
         setLocation("/");
       } else if (mode === "forgot") {
         if (pin !== confirmPin) {
@@ -179,10 +220,12 @@ export default function AuthPage() {
   };
 
   const isValid =
-    phone.length === 10 &&
-    pin.length === 4 &&
-    (mode === "login" || confirmPin.length === 4) &&
-    (mode !== "register" || firstName.trim().length > 0);
+    mode === "changePin"
+      ? pin.length === 4 && confirmPin.length === 4
+      : phone.length === 10 &&
+        pin.length === 4 &&
+        (mode === "login" || confirmPin.length === 4) &&
+        (mode !== "register" || firstName.trim().length > 0);
 
   return (
     <div
@@ -206,8 +249,16 @@ export default function AuthPage() {
               ? t("login")
               : mode === "register"
                 ? t("register")
-                : t("forgotPin")}
+                : mode === "changePin"
+                  ? t("changePinTitle")
+                  : t("forgotPin")}
           </h2>
+
+          {mode === "changePin" && (
+            <p className="text-sm text-center text-muted-foreground mb-4" data-testid="text-change-pin-message">
+              {t("changePinMessage")}
+            </p>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "register" && (
@@ -226,38 +277,40 @@ export default function AuthPage() {
               </div>
             )}
 
-            <div>
-              <Label htmlFor="phone" className="text-sm">
-                {t("phoneNumber")}
-              </Label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground font-medium shrink-0">
-                  +91
-                </span>
-                <Input
-                  id="phone"
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
-                  value={phone}
-                  onChange={(e) =>
-                    setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
-                  }
-                  placeholder="9876543210"
-                  data-testid="input-phone"
-                  autoComplete="tel-national"
-                />
+            {mode !== "changePin" && (
+              <div>
+                <Label htmlFor="phone" className="text-sm">
+                  {t("phoneNumber")}
+                </Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground font-medium shrink-0">
+                    +91
+                  </span>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                    }
+                    placeholder="9876543210"
+                    data-testid="input-phone"
+                    autoComplete="tel-national"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <div>
               <Label className="text-sm">
-                {mode === "forgot" ? t("newPin") : t("pin")}
+                {mode === "forgot" || mode === "changePin" ? t("newPin") : t("pin")}
               </Label>
               <PinInput value={pin} onChange={setPin} testId="input-pin" />
             </div>
 
-            {(mode === "register" || mode === "forgot") && (
+            {(mode === "register" || mode === "forgot" || mode === "changePin") && (
               <div>
                 <Label className="text-sm">{t("confirmPin")}</Label>
                 <PinInput
@@ -279,7 +332,9 @@ export default function AuthPage() {
                 ? t("login")
                 : mode === "register"
                   ? t("register")
-                  : t("resetPin")}
+                  : mode === "changePin"
+                    ? t("save")
+                    : t("resetPin")}
             </Button>
           </form>
 

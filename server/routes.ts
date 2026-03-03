@@ -1,10 +1,11 @@
-import type { Express } from "express";
+import type { Express, RequestHandler } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupPhoneAuth, isAuthenticated } from "./auth-phone";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
 import { insertCropCardSchema, insertCropEventSchema } from "@shared/schema";
+import bcrypt from "bcryptjs";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
@@ -159,6 +160,72 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete event" });
+    }
+  });
+
+  const isAdmin: RequestHandler = async (req: any, res, next) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const user = await storage.getUserById(req.session.userId);
+    if (!user?.isAdmin) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    next();
+  };
+
+  app.get("/api/admin/users", isAdmin, async (req: any, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const sanitized = allUsers.map(u => {
+        const { pin, knownIps, ...safe } = u;
+        return safe;
+      });
+      res.json(sanitized);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", isAdmin, async (req: any, res) => {
+    try {
+      const { firstName, lastName, phoneNumber, email } = req.body;
+      if (phoneNumber !== undefined && !/^\d{10}$/.test(phoneNumber)) {
+        return res.status(400).json({ message: "Invalid phone number (must be 10 digits)" });
+      }
+      if (email !== undefined && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ message: "Invalid email format" });
+      }
+      const data: any = {};
+      if (firstName !== undefined) data.firstName = firstName;
+      if (lastName !== undefined) data.lastName = lastName;
+      if (phoneNumber !== undefined) data.phoneNumber = phoneNumber;
+      if (email !== undefined) data.email = email || null;
+      const updated = await storage.updateUserAdmin(req.params.id, data);
+      if (!updated) return res.status(404).json({ message: "User not found" });
+      const { pin, knownIps, ...safe } = updated;
+      res.json(safe);
+    } catch (error: any) {
+      if (error?.code === "23505") {
+        return res.status(409).json({ message: "Duplicate phone or email" });
+      }
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.post("/api/admin/users/:id/reset-pin", isAdmin, async (req: any, res) => {
+    try {
+      const defaultPin = "0000";
+      const hashedPin = await bcrypt.hash(defaultPin, 10);
+      const updated = await storage.resetUserPin(req.params.id, hashedPin);
+      if (!updated) return res.status(404).json({ message: "User not found" });
+      const { pin, knownIps, ...safe } = updated;
+      res.json(safe);
+    } catch (error) {
+      console.error("Error resetting PIN:", error);
+      res.status(500).json({ message: "Failed to reset PIN" });
     }
   });
 

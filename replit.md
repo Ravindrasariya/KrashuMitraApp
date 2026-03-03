@@ -30,7 +30,8 @@ client/src/
     add-event-dialog.tsx     - Dialog to add/edit events on crop cards
   pages/
     home.tsx                 - Landing/home page
-    auth-page.tsx            - Phone/PIN login, register, forgot PIN page
+    auth-page.tsx            - Phone/PIN login, register, forgot PIN, forced PIN change page
+    admin-page.tsx           - Admin panel (user management, PIN reset)
     farm-management.tsx      - Crop card management (requires login)
     placeholder-page.tsx     - Placeholder for upcoming tabs
 
@@ -52,9 +53,16 @@ shared/
 - **Registration**: Phone number (10-digit Indian) + name + 4-digit PIN → bcrypt hash + session
 - **Login**: Phone number + PIN → verify bcrypt → session
 - **Forgot PIN**: Only allowed if request IP matches a previously used IP (knownIps array)
+- **Forced PIN Change**: If `mustChangePin` is true (set by admin reset), login redirects to PIN change screen
 - **Session**: express-session with connect-pg-simple (PostgreSQL session store)
-- **Middleware**: `isAuthenticated` checks `req.session.userId`
-- **Auth routes**: POST /api/auth/register, /api/auth/login, /api/auth/forgot-pin, /api/auth/logout, GET /api/auth/user
+- **Middleware**: `isAuthenticated` checks `req.session.userId`; `isAdmin` checks `user.isAdmin`
+- **Auth routes**: POST /api/auth/register, /api/auth/login, /api/auth/forgot-pin, /api/auth/change-pin, /api/auth/logout, GET /api/auth/user
+
+## Admin System
+- **Access**: Only users with `isAdmin: true` can access `/admin` page and admin API routes
+- **Features**: View all registered users as cards, edit user details, reset user PIN to default "0000"
+- **PIN Reset**: Sets user's PIN to "0000" and `mustChangePin: true`; user must set new PIN on next login
+- **Admin routes**: GET /api/admin/users, PATCH /api/admin/users/:id, POST /api/admin/users/:id/reset-pin
 
 ## Tabs
 1. **Home** - Landing page with feature cards
@@ -62,6 +70,7 @@ shared/
 3. **Marketplace** - Placeholder (coming soon)
 4. **Farm Management** - Crop card management with timeline (login required)
 5. **Farm Khata** - Placeholder (coming soon)
+6. **Admin** - User management panel (admin only, visible in sidebar)
 
 ## Key Features
 - Responsive layout: sidebar navigation on desktop (md+), bottom navigation on mobile
@@ -81,7 +90,7 @@ shared/
 - Farmer ID shown in chatbot header and sidebar profile
 
 ## Database Tables
-- `users` - Auth users (id, phoneNumber, pin, knownIps, email, firstName, lastName, farmerCode)
+- `users` - Auth users (id, phoneNumber, pin, knownIps, email, firstName, lastName, farmerCode, isAdmin, mustChangePin)
 - `sessions` - Session storage (express-session with connect-pg-simple)
 - `crop_cards` - Farmer's crop cards (userId, cropName, farmName?, variety?, startDate, status)
 - `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted)
@@ -104,4 +113,8 @@ shared/
 - `PATCH /api/crop-events/:id` - Update event
 - `DELETE /api/crop-events/:id` - Delete event
 - `POST /api/crop-events/:id/toggle` - Toggle event completion
+- `POST /api/auth/change-pin` - Change PIN (requires oldPin + newPin)
+- `GET /api/admin/users` - List all users (admin only)
+- `PATCH /api/admin/users/:id` - Edit user details (admin only)
+- `POST /api/admin/users/:id/reset-pin` - Reset PIN to 0000 (admin only)
 - `POST /api/krashuved/chat` - Chatbot (streams response, includes farmer context)

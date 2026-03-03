@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Home, Stethoscope, ShoppingBag, Sprout, BookOpen, Globe, LogOut, User } from "lucide-react";
+import { Home, Stethoscope, ShoppingBag, Sprout, BookOpen, Globe, LogOut, User, Shield } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
@@ -58,6 +58,23 @@ export function SidebarNav() {
             </Link>
           );
         })}
+
+        {user?.isAdmin && (
+          <Link href="/admin">
+            <button
+              aria-current={location === "/admin" ? "page" : undefined}
+              className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                location === "/admin"
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              data-testid="sidebar-nav-admin"
+            >
+              <Shield className={`w-5 h-5 ${location === "/admin" ? "stroke-[2.5px]" : ""}`} />
+              <span>{t("admin")}</span>
+            </button>
+          </Link>
+        )}
       </nav>
 
       <div className="px-3 pb-4 space-y-1 shrink-0">

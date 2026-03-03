@@ -13,6 +13,7 @@ import HomePage from "@/pages/home";
 import FarmManagementPage from "@/pages/farm-management";
 import AuthPage from "@/pages/auth-page";
 import PlaceholderPage from "@/pages/placeholder-page";
+import AdminPage from "@/pages/admin-page";
 
 function Router() {
   return (
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/farm-khata">
         <PlaceholderPage titleKey="farmKhata" />
       </Route>
+      <Route path="/admin" component={AdminPage} />
       <Route component={NotFound} />
     </Switch>
   );

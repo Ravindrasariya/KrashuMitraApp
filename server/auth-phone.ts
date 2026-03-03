@@ -112,10 +112,49 @@ export function setupPhoneAuth(app: Express) {
 
       req.session.userId = user.id;
       const safeUser = sanitizeUser(user);
+      if (user.mustChangePin) {
+        return res.json({ ...safeUser, mustChangePin: true });
+      }
       res.json(safeUser);
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "loginFailed" });
+    }
+  });
+
+  app.post("/api/auth/change-pin", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { oldPin, newPin } = req.body;
+
+      if (!oldPin || !newPin || !/^\d{4}$/.test(newPin)) {
+        return res.status(400).json({ message: "invalidPin" });
+      }
+
+      const user = await storage.getUserById(req.session.userId);
+      if (!user || !user.pin) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const pinMatch = await bcrypt.compare(oldPin, user.pin);
+      if (!pinMatch) {
+        return res.status(401).json({ message: "wrongCredentials" });
+      }
+
+      const hashedPin = await bcrypt.hash(newPin, 10);
+      await db
+        .update(users)
+        .set({ pin: hashedPin, mustChangePin: false, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+
+      const updatedUser = await storage.getUserById(user.id);
+      res.json(sanitizeUser(updatedUser!));
+    } catch (error) {
+      console.error("Change pin error:", error);
+      res.status(500).json({ message: "resetFailed" });
     }
   });
 

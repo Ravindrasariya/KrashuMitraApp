@@ -5,6 +5,9 @@ import { eq, desc, and, like, sql } from "drizzle-orm";
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
   ensureFarmerCode(userId: string): Promise<string>;
+  getAllUsers(): Promise<User[]>;
+  updateUserAdmin(id: string, data: Partial<Pick<User, "firstName" | "lastName" | "phoneNumber" | "email">>): Promise<User | undefined>;
+  resetUserPin(id: string, hashedPin: string): Promise<User | undefined>;
   getCropCardsByUser(userId: string): Promise<CropCard[]>;
   getCropCardsWithEvents(userId: string): Promise<Array<CropCard & { events: CropEvent[] }>>;
   getCropCard(id: number): Promise<CropCard | undefined>;
@@ -52,6 +55,20 @@ class DatabaseStorage implements IStorage {
       }
     }
     throw new Error("Failed to generate unique farmer code");
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async updateUserAdmin(id: string, data: Partial<Pick<User, "firstName" | "lastName" | "phoneNumber" | "email">>): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async resetUserPin(id: string, hashedPin: string): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ pin: hashedPin, mustChangePin: true, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
   }
 
   async getCropCardsByUser(userId: string): Promise<CropCard[]> {
