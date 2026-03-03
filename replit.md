@@ -87,9 +87,10 @@ shared/
 - Chatbot responds with short bullet-point answers (3-5 points) and suggests 1-2 follow-up questions
 - TTS uses slower rate (0.75) with natural pauses at sentence boundaries for better Hindi flow
 - Assistant messages have a "Listen again" speaker button to replay TTS
-- Chatbot generates inline images for visual topics (diseases, pests, growth stages) using gemini-2.5-flash-image via [IMG: prompt] markers
-- Image generation happens after text streaming completes; "Generating images..." loading indicator shown during generation
+- Chatbot shows inline images for visual topics (diseases, pests, growth stages) via [IMG: search keywords] markers — images pulled from Wikimedia Commons (free, no API key)
+- Image search happens after text streaming completes; "Generating images..." loading indicator shown during search
 - Images rendered inline in chat messages with rounded corners and full-width display
+- Markdown rendering: * and - bullets → • dots, ### headers → bold text, **bold** preserved, empty bullet lines cleaned
 - Chatbot is context-aware: knows farmer's existing crop cards and events
 - Chatbot can create new crop cards via conversation (crop_card_draft)
 - Chatbot can edit existing crop cards via conversation (crop_card_edit_draft)

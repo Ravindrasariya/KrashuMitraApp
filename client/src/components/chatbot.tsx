@@ -55,6 +55,8 @@ function stripJsonFromMessage(text: string): string {
   cleaned = cleaned.replace(/```\s*[\s\S]*?```/g, "").trim();
   cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"crop_card_(draft|edit_draft)"[\s\S]*\}/g, "").trim();
   cleaned = cleaned.replace(/\[IMG:\s*.+?\]/g, "").trim();
+  cleaned = cleaned.split("\n").filter(line => !/^\s*[*\-•]\s*$/.test(line)).join("\n");
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
   return cleaned;
 }
 

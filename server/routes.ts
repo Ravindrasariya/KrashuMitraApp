@@ -4,7 +4,6 @@ import { storage } from "./storage";
 import { setupPhoneAuth, isAuthenticated } from "./auth-phone";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
-import { generateImage } from "./replit_integrations/image/client";
 import { insertCropCardSchema, insertCropEventSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
@@ -352,11 +351,11 @@ ${farmerContext}
 - हमेशा ऐसे बोलो जैसे एक गाँव की अनुभवी किसान महिला बोल रही हो।
 
 चित्र सहायता (Image Support):
-- जब किसान कोई ऐसा विषय पूछे जिसमें चित्र से समझ बढ़े (जैसे फसल रोग, कीट पहचान, विकास चरण, खेती की तकनीक), तो अपने जवाब में [IMG: detailed English image generation prompt] मार्कर शामिल करो।
-- IMG मार्कर का text हमेशा अंग्रेज़ी में लिखो और विस्तृत हो (जैसे: [IMG: close-up photograph of wheat leaf rust disease showing orange-brown pustules on green wheat leaves])
+- जब किसान कोई ऐसा विषय पूछे जिसमें चित्र से समझ बढ़े (जैसे फसल रोग, कीट पहचान, विकास चरण, खेती की तकनीक), तो अपने जवाब में [IMG: English search keywords] मार्कर शामिल करो।
+- IMG मार्कर का text हमेशा अंग्रेज़ी में छोटे सर्च कीवर्ड हों (जैसे: [IMG: wheat leaf rust disease], [IMG: potato early blight], [IMG: rice stem borer pest])
+- IMG मार्कर हमेशा अपनी अलग लाइन पर रखो — कभी भी बुलेट पॉइंट (•, *, -) के अंदर IMG मार्कर मत रखो।
 - एक जवाब में अधिकतम 2 IMG मार्कर रखो।
-- IMG मार्कर केवल तब दो जब चित्र वाकई उपयोगी हो — साधारण सवालों (मौसम, तारीख, सामान्य सलाह) में IMG मत दो।
-- IMG मार्कर को जवाब के text के बीच में उचित स्थान पर रखो, जहाँ चित्र प्रासंगिक हो।
+- IMG मार्कर केवल तब दो जब चित्र वाकई उपयोगी हो — साधारण सवालों में IMG मत दो।
 
 अगर किसान सामान्य कृषि सवाल पूछे तो सादा हिंदी में जवाब दो।`
         : `You are Krashu Mitra, an agricultural expert AI assistant. You help farmers with crop management.
@@ -403,11 +402,11 @@ Strict language rules:
 - Always speak as an experienced, friendly village farming woman would.
 
 Image Support:
-- When the farmer asks about topics where images would help (e.g., crop diseases, pest identification, growth stages, farming techniques), include [IMG: detailed English image generation prompt] markers in your response.
-- The IMG marker text must be in English and descriptive (e.g., [IMG: close-up photograph of wheat leaf rust disease showing orange-brown pustules on green wheat leaves])
+- When the farmer asks about topics where images would help (e.g., crop diseases, pest identification, growth stages, farming techniques), include [IMG: English search keywords] markers in your response.
+- The IMG marker text must be short English search keywords (e.g., [IMG: wheat leaf rust disease], [IMG: potato early blight], [IMG: rice stem borer pest])
+- Always place IMG markers on their own separate line — NEVER put IMG markers inside bullet points (•, *, -).
 - Maximum 2 IMG markers per response.
-- Only include IMG markers when images genuinely add value — not for simple Q&A (weather, dates, general advice).
-- Place IMG markers at relevant positions within your text response, where the image would be most helpful.
+- Only include IMG markers when images genuinely add value — not for simple Q&A.
 
 For general agriculture questions, answer concisely and helpfully.`;
 
@@ -453,31 +452,40 @@ For general agriculture questions, answer concisely and helpfully.`;
       res.write(`data: ${JSON.stringify({ done: true, fullResponse, imagesPending: hasImages })}\n\n`);
 
       if (hasImages) {
-        const prompts = imgMatches.slice(0, 2).map(m => m[1].trim());
+        const queries = imgMatches.slice(0, 2).map(m => m[1].trim());
         const imageResults: string[] = [];
 
-        const generateWithRetry = async (prompt: string, retries = 2): Promise<string | null> => {
-          for (let attempt = 0; attempt <= retries; attempt++) {
-            try {
-              return await generateImage(prompt);
-            } catch (err: any) {
-              const is429 = err?.status === 429 || err?.message?.includes("429") || err?.message?.includes("RESOURCE_EXHAUSTED");
-              if (is429 && attempt < retries) {
-                const delay = (attempt + 1) * 3000;
-                console.log(`Image gen rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
-                await new Promise(r => setTimeout(r, delay));
-                continue;
-              }
-              console.error("Image generation failed for prompt:", prompt, err?.message || err);
-              return null;
-            }
+        const searchWikimediaImage = async (query: string): Promise<string | null> => {
+          try {
+            const params = new URLSearchParams({
+              action: "query",
+              generator: "search",
+              gsrsearch: query,
+              gsrnamespace: "6",
+              gsrlimit: "5",
+              prop: "imageinfo",
+              iiprop: "url|mime",
+              iiurlwidth: "500",
+              format: "json",
+              origin: "*",
+            });
+            const resp = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            const pages = data.query?.pages || {};
+            const imagePage = Object.values(pages).find((p: any) =>
+              p.imageinfo?.[0]?.mime?.startsWith("image/")
+            ) as any;
+            return imagePage?.imageinfo?.[0]?.thumburl || null;
+          } catch (err) {
+            console.error("Wikimedia image search failed:", err);
+            return null;
           }
-          return null;
         };
 
-        for (const prompt of prompts) {
-          const dataUrl = await generateWithRetry(prompt);
-          if (dataUrl) imageResults.push(dataUrl);
+        for (const query of queries) {
+          const url = await searchWikimediaImage(query);
+          if (url) imageResults.push(url);
         }
 
         if (imageResults.length > 0) {
