@@ -80,8 +80,10 @@ shared/
 - Edit and delete events with confirmation dialogs
 - Auto-suggestions for descriptions based on history
 - Krashu Mitra AI chatbot with voice input and TTS output (Hindi female voice, feminine persona)
+- Stop button (red square) to abort chatbot mid-response; partial text preserved, no blank bubbles
 - Voice input fills input box for review before sending (no auto-send)
 - Chatbot responds with short bullet-point answers (3-5 points) and suggests 1-2 follow-up questions
+- TTS uses slower rate (0.75) with natural pauses at sentence boundaries for better Hindi flow
 - Assistant messages have a "Listen again" speaker button to replay TTS
 - Chatbot is context-aware: knows farmer's existing crop cards and events
 - Chatbot can create new crop cards via conversation (crop_card_draft)

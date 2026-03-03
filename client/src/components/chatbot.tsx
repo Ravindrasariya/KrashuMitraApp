@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2 } from "lucide-react";
+import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2, Square } from "lucide-react";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -111,10 +111,12 @@ function cleanTextForSpeech(text: string): string {
   clean = clean.replace(/\*/g, "");
   clean = clean.replace(/`/g, "");
   clean = clean.replace(/🔎/g, "");
-  clean = clean.replace(/•/g, ",");
+  clean = clean.replace(/•/g, "");
   clean = clean.replace(/[#_~|>\[\]{}]/g, "");
-  clean = clean.replace(/\n{2,}/g, ". ");
-  clean = clean.replace(/\s{2,}/g, " ");
+  clean = clean.replace(/\n+/g, "। ");
+  clean = clean.replace(/([।.?!])\s*/g, "$1  ");
+  clean = clean.replace(/,\s*/g, ", ");
+  clean = clean.replace(/\s{3,}/g, "  ");
   return clean.trim();
 }
 
@@ -134,8 +136,8 @@ function speakText(text: string, lang: string) {
 
   const utterance = new SpeechSynthesisUtterance(cleanTextForSpeech(text));
   utterance.lang = lang === "hi" ? "hi-IN" : "en-IN";
-  utterance.rate = 0.9;
-  utterance.pitch = 1.1;
+  utterance.rate = 0.75;
+  utterance.pitch = 1.0;
 
   const voices = window.speechSynthesis.getVoices();
   const targetLang = lang === "hi" ? "hi" : "en";
@@ -166,6 +168,8 @@ export function Chatbot() {
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 768px)").matches);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
@@ -196,6 +200,21 @@ export function Chatbot() {
     }
   }, [messages]);
 
+  const stopStreaming = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (readerRef.current) {
+      readerRef.current.cancel().catch(() => {});
+      readerRef.current = null;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setIsStreaming(false);
+  }, []);
+
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
 
@@ -204,18 +223,23 @@ export function Chatbot() {
     setInput("");
     setIsStreaming(true);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const response = await fetch("/api/krashuved/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ message: text, language, history: messages.slice(-20) }),
+        signal: controller.signal,
       });
 
       if (!response.ok) throw new Error("Failed");
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No reader");
+      readerRef.current = reader;
 
       const decoder = new TextDecoder();
       let assistantContent = "";
@@ -260,12 +284,24 @@ export function Chatbot() {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.name === "AbortError") {
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated.length > 0 && updated[updated.length - 1].role === "assistant" && !updated[updated.length - 1].content.trim()) {
+            updated.pop();
+          }
+          return updated;
+        });
+        return;
+      }
       setMessages(prev => [...prev, {
         role: "assistant",
         content: language === "hi" ? "माफ करें, कुछ गड़बड़ हुई। कृपया दोबारा प्रयास करें।" : "Sorry, something went wrong. Please try again."
       }]);
     } finally {
+      abortControllerRef.current = null;
+      readerRef.current = null;
       setIsStreaming(false);
     }
   }, [isStreaming, language]);
@@ -574,19 +610,30 @@ export function Chatbot() {
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder={t("askKrashuved")}
-            onKeyDown={e => e.key === "Enter" && sendMessage(input)}
+            onKeyDown={e => e.key === "Enter" && !isStreaming && sendMessage(input)}
             disabled={isStreaming}
             className="flex-1"
             data-testid="input-chat"
           />
-          <Button
-            size="icon"
-            onClick={() => sendMessage(input)}
-            disabled={!input.trim() || isStreaming}
-            data-testid="button-send-chat"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
+          {isStreaming ? (
+            <Button
+              size="icon"
+              variant="destructive"
+              onClick={stopStreaming}
+              data-testid="button-stop-chat"
+            >
+              <Square className="w-4 h-4" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim()}
+              data-testid="button-send-chat"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          )}
         </div>
         {isListening && (
           <p className="text-xs text-center text-primary mt-1 animate-pulse">{t("listening")}</p>
