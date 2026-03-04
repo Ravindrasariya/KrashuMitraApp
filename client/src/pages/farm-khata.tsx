@@ -299,11 +299,11 @@ export default function FarmKhataPage() {
   };
 
   return (
-    <div className="px-4 py-4 pb-24 md:pb-8 max-w-3xl mx-auto" data-testid="page-farmKhata">
-      <div className="flex items-center justify-between mb-4">
+    <div className="px-4 py-4 pb-24 md:pb-8 max-w-3xl mx-auto overflow-hidden" data-testid="page-farmKhata">
+      <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
         <h1 className="text-xl font-bold" data-testid="text-page-title">{t("farmKhata")}</h1>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Switch
               checked={showArchived}
               onCheckedChange={setShowArchived}
@@ -411,8 +411,8 @@ export default function FarmKhataPage() {
                   data-testid={`button-expand-khata-${reg.id}`}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-sm truncate">{reg.title}</span>
+                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                      <span className="font-semibold text-sm truncate max-w-[140px]">{reg.title}</span>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${typeConfig?.badgeBg || "bg-muted text-muted-foreground"}`}>
                         {t(typeConfig?.labelKey || "cropCardKhata")}
                       </span>
@@ -426,7 +426,7 @@ export default function FarmKhataPage() {
                       <p className="text-xs text-muted-foreground truncate">{getCropCardLabel(reg.cropCardId)}</p>
                     )}
                     {reg.khataType === "batai" && reg.bataidarName && (
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
                         <span>{t("bataidar")}: {reg.bataidarName}</span>
                         {reg.bataidarContact && <span>📞 {reg.bataidarContact}</span>}
                         <span className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
@@ -474,19 +474,19 @@ export default function FarmKhataPage() {
                       </div>
                     )}
                     {reg.khataType === "panat" ? (
-                      <div className="flex gap-3 mt-1">
+                      <div className="flex gap-2 mt-1 flex-wrap">
                         <span className="text-xs text-blue-600 dark:text-blue-400">{t("totalAmount")}: ₹{(parseFloat(reg.panatTotalAmount || "0") || 0).toLocaleString("en-IN")}</span>
                         <span className="text-xs text-green-600">₹{paid.toLocaleString("en-IN")} {t("paid")}</span>
                         <span className="text-xs text-orange-600 font-semibold">{t("netBalance")}: ₹{((parseFloat(reg.panatTotalAmount || "0") || 0) - paid).toLocaleString("en-IN")}</span>
                       </div>
                     ) : (
-                      <div className="flex gap-3 mt-1">
+                      <div className="flex gap-2 mt-1 flex-wrap">
                         <span className="text-xs text-orange-600">₹{due.toLocaleString("en-IN")} {t("unpaid")}</span>
                         <span className="text-xs text-green-600">₹{paid.toLocaleString("en-IN")} {t("paid")}</span>
                       </div>
                     )}
                     {reg.khataType === "batai" && (
-                      <div className="flex gap-3 mt-0.5">
+                      <div className="flex gap-2 mt-0.5 flex-wrap">
                         <span className="text-xs text-purple-600 dark:text-purple-400">
                           {t("ownerExpense")}: ₹{(parseFloat(reg.totalOwnerExpense) || 0).toLocaleString("en-IN")}
                         </span>
@@ -496,8 +496,8 @@ export default function FarmKhataPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm font-bold">₹{total.toLocaleString("en-IN")}</span>
+                  <div className="flex items-center gap-1 shrink-0 ml-1">
+                    <span className="text-sm font-bold whitespace-nowrap">₹{total.toLocaleString("en-IN")}</span>
                     {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </div>
                 </div>
