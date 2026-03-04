@@ -102,7 +102,7 @@ shared/
   - **Batai Khata**: Sharecropping with BataiDar name/contact, batai ratio (Half/One Third), per-item expense allocation
   - **Panat Khata**: Land lease tracking with person name, rate/bigha, total bigha, payments, "Due" (बकाया) label
   - **Miscellaneous Khata**: Title-only khata with same expense items as crop card (no crop link/dates/production)
-  - **Rental Khata (किराया खाता)**: Farm machinery rental tracking — farmer name, contact, machinery type (9 options), farm/work name, charges per bigha/hour, bigha/hours, auto-calculated total charges (editable), paid/unpaid toggle, remarks. No expense items — all data on the register itself. Unpaid→Total Due, Paid→Total Paid.
+  - **Rental Khata (किराया खाता)**: One card per farmer with multiple rental items. Card stores farmer info (name, contact, village, opening balance, red flag). Each rental transaction is an item with: machinery type (9 options: harvester, pesticide spray, plantar, rotavator, seed drill, thresher, tractor, tractor trolley, others), farm work name, charges per bigha/hour, bigha/hours, auto-calculated total charges (editable), paid/unpaid toggle, remarks, date. Card title = "FarmerName, Village". Totals: unpaid items + opening balance → totalDue, paid items → totalPaid.
   - Filter by khata type, year, and month
   - Summary cards: Total Due (unpaid) and Total Paid
   - Expandable khata registers with add/edit/delete items
@@ -117,8 +117,8 @@ shared/
 - `sessions` - Session storage (express-session with connect-pg-simple)
 - `crop_cards` - Farmer's crop cards (uniqueId, userId, cropName, farmName?, variety?, startDate, status)
 - `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted, productionPerBigha, productionUnit)
-- `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, bataidarName?, bataidarContact?, bataiType?, bighaCount?, panatPersonName?, panatContact?, panatRatePerBigha?, panatTotalBigha?, panatTotalAmount?, panatRemarks?, rentalFarmerName?, rentalContact?, rentalMachinery?, rentalFarmWork?, rentalChargesPerBigha?, rentalChargesPerHour?, rentalHours?, rentalBigha?, rentalTotalCharges?, rentalIsPaid?, rentalRemarks?, isArchived, totalDue, totalPaid, totalOwnerExpense, totalBataidarExpense)
-- `khata_items` - Expense line items (khataRegisterId, date, expenseCategory, subType?, hours?, perBighaRate?, totalCost, remarks?, isPaid, expenseBornBy)
+- `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, bataidarName?, bataidarContact?, bataiType?, bighaCount?, panatPersonName?, panatContact?, panatRatePerBigha?, panatTotalBigha?, panatTotalAmount?, panatRemarks?, rentalFarmerName?, rentalContact?, rentalVillage?, rentalOpeningBalance?, rentalRedFlag?, rentalMachinery?[legacy], rentalFarmWork?[legacy], rentalChargesPerBigha?[legacy], rentalChargesPerHour?[legacy], rentalHours?[legacy], rentalBigha?[legacy], rentalTotalCharges?[legacy], rentalIsPaid?[legacy], rentalRemarks?[legacy], isArchived, totalDue, totalPaid, totalOwnerExpense, totalBataidarExpense)
+- `khata_items` - Expense line items (khataRegisterId, date, expenseCategory, subType?, hours?, perBighaRate?, totalCost, remarks?, isPaid, expenseBornBy, rentalMachinery?, rentalFarmWork?, rentalChargesPerBigha?, rentalChargesPerHour?, rentalHours?, rentalBigha?, rentalTotalCharges?, rentalRemarks?, rentalIsPaid?)
 - `global_unique_id_seq` - Shared sequence for uniqueId across crop_cards and khata_registers (starts at 100)
 - `conversations` - Chat conversations
 - `messages` - Chat messages

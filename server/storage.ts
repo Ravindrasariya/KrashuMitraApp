@@ -244,23 +244,38 @@ class DatabaseStorage implements IStorage {
     let totalOwnerExpense = 0;
     let totalBataidarExpense = 0;
     const isBatai = reg?.khataType === "batai";
+    const isRental = reg?.khataType === "rental";
     const ownerRatio = reg?.bataiType === "half" ? 0.5 : (reg?.bataiType === "one_third" ? 2/3 : 1);
     const bataidarRatio = 1 - ownerRatio;
-    for (const item of items) {
-      const cost = parseFloat(item.totalCost) || 0;
-      if (item.isPaid) {
-        totalPaid += cost;
-      } else {
-        totalDue += cost;
-      }
-      if (isBatai) {
-        if (item.expenseBornBy === "owner") {
-          totalOwnerExpense += cost;
-        } else if (item.expenseBornBy === "bataidar") {
-          totalBataidarExpense += cost;
+
+    if (isRental) {
+      const openingBal = parseFloat(reg?.rentalOpeningBalance || "0") || 0;
+      totalDue += openingBal;
+      for (const item of items) {
+        const charges = parseFloat(item.rentalTotalCharges || "0") || 0;
+        if (item.rentalIsPaid) {
+          totalPaid += charges;
         } else {
-          totalOwnerExpense += Math.round(cost * ownerRatio);
-          totalBataidarExpense += Math.round(cost * bataidarRatio);
+          totalDue += charges;
+        }
+      }
+    } else {
+      for (const item of items) {
+        const cost = parseFloat(item.totalCost) || 0;
+        if (item.isPaid) {
+          totalPaid += cost;
+        } else {
+          totalDue += cost;
+        }
+        if (isBatai) {
+          if (item.expenseBornBy === "owner") {
+            totalOwnerExpense += cost;
+          } else if (item.expenseBornBy === "bataidar") {
+            totalBataidarExpense += cost;
+          } else {
+            totalOwnerExpense += Math.round(cost * ownerRatio);
+            totalBataidarExpense += Math.round(cost * bataidarRatio);
+          }
         }
       }
     }
