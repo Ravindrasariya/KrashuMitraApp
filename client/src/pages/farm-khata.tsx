@@ -17,14 +17,14 @@ import { Plus, ChevronDown, ChevronUp, Trash2, Pencil, IndianRupee, Loader2, Arc
 import type { KhataRegister, KhataItem, CropCard, PanatPayment, LendenTransaction } from "@shared/schema";
 
 const KHATA_TYPES = [
-  { value: "all", labelKey: "allKhata" as const },
-  { value: "crop_card", labelKey: "cropCardKhata" as const },
-  { value: "batai", labelKey: "bataiKhata" as const },
-  { value: "panat", labelKey: "panatKhata" as const },
-  { value: "miscellaneous", labelKey: "miscKhata" as const },
-  { value: "rental", labelKey: "rentalKhata" as const },
-  { value: "machinery_expense", labelKey: "machineryExpenseKhata" as const },
-  { value: "lending_ledger", labelKey: "lendingLedger" as const },
+  { value: "all", labelKey: "allKhata" as const, dot: "", cardBg: "", cardBorder: "", badgeBg: "bg-muted text-muted-foreground" },
+  { value: "crop_card", labelKey: "cropCardKhata" as const, dot: "bg-green-400", cardBg: "bg-green-50/60 dark:bg-green-950/20", cardBorder: "border-l-4 border-l-green-400 dark:border-l-green-500", badgeBg: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400" },
+  { value: "batai", labelKey: "bataiKhata" as const, dot: "bg-purple-400", cardBg: "bg-purple-50/60 dark:bg-purple-950/20", cardBorder: "border-l-4 border-l-purple-400 dark:border-l-purple-500", badgeBg: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400" },
+  { value: "panat", labelKey: "panatKhata" as const, dot: "bg-blue-400", cardBg: "bg-blue-50/60 dark:bg-blue-950/20", cardBorder: "border-l-4 border-l-blue-400 dark:border-l-blue-500", badgeBg: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400" },
+  { value: "miscellaneous", labelKey: "miscKhata" as const, dot: "bg-amber-400", cardBg: "bg-amber-50/60 dark:bg-amber-950/20", cardBorder: "border-l-4 border-l-amber-400 dark:border-l-amber-500", badgeBg: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400" },
+  { value: "rental", labelKey: "rentalKhata" as const, dot: "bg-orange-400", cardBg: "bg-orange-50/60 dark:bg-orange-950/20", cardBorder: "border-l-4 border-l-orange-400 dark:border-l-orange-500", badgeBg: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400" },
+  { value: "machinery_expense", labelKey: "machineryExpenseKhata" as const, dot: "bg-slate-400", cardBg: "bg-slate-50/60 dark:bg-slate-900/20", cardBorder: "border-l-4 border-l-slate-400 dark:border-l-slate-500", badgeBg: "bg-slate-200 text-slate-700 dark:bg-slate-800/40 dark:text-slate-400" },
+  { value: "lending_ledger", labelKey: "lendingLedger" as const, dot: "bg-rose-400", cardBg: "bg-rose-50/60 dark:bg-rose-950/20", cardBorder: "border-l-4 border-l-rose-400 dark:border-l-rose-500", badgeBg: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400" },
 ];
 
 const MACHINERY_CATEGORIES = [
@@ -330,7 +330,12 @@ export default function FarmKhataPage() {
           </SelectTrigger>
           <SelectContent>
             {KHATA_TYPES.map(kt => (
-              <SelectItem key={kt.value} value={kt.value}>{t(kt.labelKey)}</SelectItem>
+              <SelectItem key={kt.value} value={kt.value}>
+                <span className="flex items-center gap-1.5">
+                  {kt.dot && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${kt.dot}`} />}
+                  {t(kt.labelKey)}
+                </span>
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -396,9 +401,10 @@ export default function FarmKhataPage() {
             const paid = parseFloat(reg.totalPaid) || 0;
             const panatDue = reg.khataType === "panat" ? Math.max(0, (parseFloat(reg.panatTotalAmount || "0") || 0) - paid) : 0;
             const total = reg.khataType === "panat" ? paid : (due + paid);
+            const typeConfig = KHATA_TYPES.find(k => k.value === reg.khataType);
 
             return (
-              <Card key={reg.id} className={reg.isArchived ? "opacity-60" : ""} data-testid={`card-khata-${reg.id}`}>
+              <Card key={reg.id} className={`${reg.isArchived ? "opacity-60" : ""} ${typeConfig?.cardBg || ""} ${typeConfig?.cardBorder || ""}`} data-testid={`card-khata-${reg.id}`}>
                 <div
                   className="p-3 cursor-pointer flex items-center justify-between"
                   onClick={() => setExpandedId(isExpanded ? null : reg.id)}
@@ -407,8 +413,8 @@ export default function FarmKhataPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-semibold text-sm truncate">{reg.title}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground whitespace-nowrap">
-                        {t(KHATA_TYPES.find(k => k.value === reg.khataType)?.labelKey || "cropCardKhata")}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${typeConfig?.badgeBg || "bg-muted text-muted-foreground"}`}>
+                        {t(typeConfig?.labelKey || "cropCardKhata")}
                       </span>
                       {reg.isArchived && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 whitespace-nowrap" data-testid={`badge-archived-${reg.id}`}>
@@ -1125,7 +1131,12 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
               </SelectTrigger>
               <SelectContent>
                 {KHATA_TYPES.filter(k => k.value !== "all").map(kt => (
-                  <SelectItem key={kt.value} value={kt.value}>{t(kt.labelKey)}</SelectItem>
+                  <SelectItem key={kt.value} value={kt.value}>
+                    <span className="flex items-center gap-1.5">
+                      {kt.dot && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${kt.dot}`} />}
+                      {t(kt.labelKey)}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
