@@ -31,6 +31,36 @@ export const cropEvents = pgTable("crop_events", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const khataRegisters = pgTable("khata_registers", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  khataType: text("khata_type").notNull().default("crop_card"),
+  cropCardId: integer("crop_card_id").references(() => cropCards.id),
+  title: text("title").notNull(),
+  plantationDate: date("plantation_date"),
+  harvestDate: date("harvest_date"),
+  production: text("production"),
+  productionUnit: text("production_unit"),
+  totalDue: text("total_due").notNull().default("0"),
+  totalPaid: text("total_paid").notNull().default("0"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const khataItems = pgTable("khata_items", {
+  id: serial("id").primaryKey(),
+  khataRegisterId: integer("khata_register_id").notNull().references(() => khataRegisters.id, { onDelete: "cascade" }),
+  date: date("date").notNull(),
+  expenseCategory: text("expense_category").notNull(),
+  subType: text("sub_type"),
+  hours: text("hours"),
+  perBighaRate: text("per_bigha_rate"),
+  totalCost: text("total_cost").notNull().default("0"),
+  remarks: text("remarks"),
+  isPaid: boolean("is_paid").notNull().default(false),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const insertCropCardSchema = createInsertSchema(cropCards).omit({
   id: true,
   createdAt: true,
@@ -41,7 +71,22 @@ export const insertCropEventSchema = createInsertSchema(cropEvents).omit({
   createdAt: true,
 });
 
+export const insertKhataRegisterSchema = createInsertSchema(khataRegisters).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertKhataItemSchema = createInsertSchema(khataItems).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type CropCard = typeof cropCards.$inferSelect;
 export type InsertCropCard = z.infer<typeof insertCropCardSchema>;
 export type CropEvent = typeof cropEvents.$inferSelect;
 export type InsertCropEvent = z.infer<typeof insertCropEventSchema>;
+export type KhataRegister = typeof khataRegisters.$inferSelect;
+export type InsertKhataRegister = z.infer<typeof insertKhataRegisterSchema>;
+export type KhataItem = typeof khataItems.$inferSelect;
+export type InsertKhataItem = z.infer<typeof insertKhataItemSchema>;

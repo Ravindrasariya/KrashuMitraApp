@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent } from "@shared/schema";
-import { eq, desc, and, like, sql } from "drizzle-orm";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem } from "@shared/schema";
+import { eq, desc, and, like, sql, ilike } from "drizzle-orm";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -21,6 +21,17 @@ export interface IStorage {
   deleteCropEvent(id: number): Promise<void>;
   toggleCropEventComplete(id: number): Promise<CropEvent | undefined>;
   getSuggestions(userId: string): Promise<string[]>;
+  getKhataRegisters(userId: string, filters?: { khataType?: string; year?: number; month?: number }): Promise<KhataRegister[]>;
+  getKhataRegister(id: number): Promise<KhataRegister | undefined>;
+  createKhataRegister(data: InsertKhataRegister): Promise<KhataRegister>;
+  updateKhataRegister(id: number, data: Partial<InsertKhataRegister>): Promise<KhataRegister | undefined>;
+  deleteKhataRegister(id: number): Promise<void>;
+  getKhataItems(registerId: number): Promise<KhataItem[]>;
+  createKhataItem(data: InsertKhataItem): Promise<KhataItem>;
+  updateKhataItem(id: number, data: Partial<InsertKhataItem>): Promise<KhataItem | undefined>;
+  deleteKhataItem(id: number): Promise<void>;
+  getKhataItem(id: number): Promise<KhataItem | undefined>;
+  recalculateKhataTotals(registerId: number): Promise<void>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -144,6 +155,89 @@ class DatabaseStorage implements IStorage {
       .filter(e => cardIds.includes(e.cropCardId) && e.description)
       .map(e => e.description as string);
     return [...new Set(descriptions)];
+  }
+
+  async getKhataRegisters(userId: string, filters?: { khataType?: string; year?: number; month?: number }): Promise<KhataRegister[]> {
+    const conditions = [eq(khataRegisters.userId, userId)];
+    if (filters?.khataType) {
+      conditions.push(eq(khataRegisters.khataType, filters.khataType));
+    }
+    let results = await db.select().from(khataRegisters).where(and(...conditions)).orderBy(desc(khataRegisters.updatedAt));
+    if (filters?.year) {
+      results = results.filter(r => {
+        const d = r.updatedAt || r.createdAt;
+        return d.getFullYear() === filters.year;
+      });
+    }
+    if (filters?.month) {
+      results = results.filter(r => {
+        const d = r.updatedAt || r.createdAt;
+        return d.getMonth() + 1 === filters.month;
+      });
+    }
+    return results;
+  }
+
+  async getKhataRegister(id: number): Promise<KhataRegister | undefined> {
+    const [reg] = await db.select().from(khataRegisters).where(eq(khataRegisters.id, id));
+    return reg;
+  }
+
+  async createKhataRegister(data: InsertKhataRegister): Promise<KhataRegister> {
+    const [created] = await db.insert(khataRegisters).values(data).returning();
+    return created;
+  }
+
+  async updateKhataRegister(id: number, data: Partial<InsertKhataRegister>): Promise<KhataRegister | undefined> {
+    const [updated] = await db.update(khataRegisters).set({ ...data, updatedAt: new Date() }).where(eq(khataRegisters.id, id)).returning();
+    return updated;
+  }
+
+  async deleteKhataRegister(id: number): Promise<void> {
+    await db.delete(khataItems).where(eq(khataItems.khataRegisterId, id));
+    await db.delete(khataRegisters).where(eq(khataRegisters.id, id));
+  }
+
+  async getKhataItems(registerId: number): Promise<KhataItem[]> {
+    return db.select().from(khataItems).where(eq(khataItems.khataRegisterId, registerId)).orderBy(desc(khataItems.date));
+  }
+
+  async getKhataItem(id: number): Promise<KhataItem | undefined> {
+    const [item] = await db.select().from(khataItems).where(eq(khataItems.id, id));
+    return item;
+  }
+
+  async createKhataItem(data: InsertKhataItem): Promise<KhataItem> {
+    const [created] = await db.insert(khataItems).values(data).returning();
+    return created;
+  }
+
+  async updateKhataItem(id: number, data: Partial<InsertKhataItem>): Promise<KhataItem | undefined> {
+    const [updated] = await db.update(khataItems).set(data).where(eq(khataItems.id, id)).returning();
+    return updated;
+  }
+
+  async deleteKhataItem(id: number): Promise<void> {
+    await db.delete(khataItems).where(eq(khataItems.id, id));
+  }
+
+  async recalculateKhataTotals(registerId: number): Promise<void> {
+    const items = await this.getKhataItems(registerId);
+    let totalDue = 0;
+    let totalPaid = 0;
+    for (const item of items) {
+      const cost = parseFloat(item.totalCost) || 0;
+      if (item.isPaid) {
+        totalPaid += cost;
+      } else {
+        totalDue += cost;
+      }
+    }
+    await db.update(khataRegisters).set({
+      totalDue: totalDue.toString(),
+      totalPaid: totalPaid.toString(),
+      updatedAt: new Date(),
+    }).where(eq(khataRegisters.id, registerId));
   }
 }
 

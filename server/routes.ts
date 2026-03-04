@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { setupPhoneAuth, isAuthenticated } from "./auth-phone";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
-import { insertCropCardSchema, insertCropEventSchema } from "@shared/schema";
+import { insertCropCardSchema, insertCropEventSchema, insertKhataRegisterSchema, insertKhataItemSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
 const ai = new GoogleGenAI({
@@ -173,6 +173,119 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete event" });
+    }
+  });
+
+  app.get("/api/khata", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const filters: { khataType?: string; year?: number; month?: number } = {};
+      if (req.query.type && req.query.type !== "all") filters.khataType = req.query.type;
+      if (req.query.year && req.query.year !== "all") filters.year = parseInt(req.query.year);
+      if (req.query.month && req.query.month !== "all") filters.month = parseInt(req.query.month);
+      const registers = await storage.getKhataRegisters(userId, filters);
+      res.json(registers);
+    } catch (error) {
+      console.error("Error fetching khata registers:", error);
+      res.status(500).json({ message: "Failed to fetch khata registers" });
+    }
+  });
+
+  app.get("/api/khata/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const reg = await storage.getKhataRegister(parseInt(req.params.id));
+      if (!reg) return res.status(404).json({ message: "Not found" });
+      if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const items = await storage.getKhataItems(reg.id);
+      res.json({ ...reg, items });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch khata" });
+    }
+  });
+
+  app.post("/api/khata", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const data = insertKhataRegisterSchema.parse({ ...req.body, userId });
+      const reg = await storage.createKhataRegister(data);
+      res.status(201).json(reg);
+    } catch (error) {
+      console.error("Error creating khata:", error);
+      res.status(400).json({ message: "Invalid data" });
+    }
+  });
+
+  app.patch("/api/khata/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const reg = await storage.getKhataRegister(parseInt(req.params.id));
+      if (!reg) return res.status(404).json({ message: "Not found" });
+      if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const allowedFields = insertKhataRegisterSchema.pick({ title: true, plantationDate: true, harvestDate: true, production: true, productionUnit: true }).partial();
+      const parsed = allowedFields.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
+      const updated = await storage.updateKhataRegister(parseInt(req.params.id), parsed.data);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update khata" });
+    }
+  });
+
+  app.delete("/api/khata/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const reg = await storage.getKhataRegister(parseInt(req.params.id));
+      if (!reg) return res.status(404).json({ message: "Not found" });
+      if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      await storage.deleteKhataRegister(parseInt(req.params.id));
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete khata" });
+    }
+  });
+
+  app.post("/api/khata/:id/items", isAuthenticated, async (req: any, res) => {
+    try {
+      const reg = await storage.getKhataRegister(parseInt(req.params.id));
+      if (!reg) return res.status(404).json({ message: "Not found" });
+      if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const data = insertKhataItemSchema.parse({ ...req.body, khataRegisterId: parseInt(req.params.id) });
+      const item = await storage.createKhataItem(data);
+      await storage.recalculateKhataTotals(parseInt(req.params.id));
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Error creating khata item:", error);
+      res.status(400).json({ message: "Invalid data" });
+    }
+  });
+
+  app.patch("/api/khata/items/:itemId", isAuthenticated, async (req: any, res) => {
+    try {
+      const item = await storage.getKhataItem(parseInt(req.params.itemId));
+      if (!item) return res.status(404).json({ message: "Not found" });
+      const reg = await storage.getKhataRegister(item.khataRegisterId);
+      if (!reg || reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const allowedItemFields = insertKhataItemSchema.pick({ date: true, expenseCategory: true, subType: true, hours: true, perBighaRate: true, totalCost: true, remarks: true, isPaid: true }).partial();
+      const parsed = allowedItemFields.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
+      const updated = await storage.updateKhataItem(parseInt(req.params.itemId), parsed.data);
+      await storage.recalculateKhataTotals(item.khataRegisterId);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update item" });
+    }
+  });
+
+  app.delete("/api/khata/items/:itemId", isAuthenticated, async (req: any, res) => {
+    try {
+      const item = await storage.getKhataItem(parseInt(req.params.itemId));
+      if (!item) return res.status(404).json({ message: "Not found" });
+      const reg = await storage.getKhataRegister(item.khataRegisterId);
+      if (!reg || reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const registerId = item.khataRegisterId;
+      await storage.deleteKhataItem(parseInt(req.params.itemId));
+      await storage.recalculateKhataTotals(registerId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete item" });
     }
   });
 

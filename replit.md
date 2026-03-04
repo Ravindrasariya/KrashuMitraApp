@@ -97,12 +97,22 @@ shared/
 - Chatbot can edit existing crop cards via conversation (crop_card_edit_draft)
 - Each farmer gets a unique Farmer ID in FMYYYYMMDD{seq} format
 - Farmer ID shown in chatbot header and sidebar profile
+- Farm Khata (expense ledger) with Crop Card Khata type (others coming soon)
+  - Filter by khata type, year, and month
+  - Summary cards: Total Due (unpaid) and Total Paid
+  - Expandable khata registers with add/edit/delete items
+  - New Khata can link to existing crop cards (auto-populates dates)
+  - 8 expense categories with sub-type dropdowns: Farm Preparation, Seed Cost, Plantation, Fertiliser, Pesticide, Manual Weed, Watering Labour, Harvest
+  - Each item tracks date, category, sub-type, hours, rate, total cost, remarks, paid/unpaid
+  - Totals auto-recalculate on item add/edit/delete
 
 ## Database Tables
 - `users` - Auth users (id, phoneNumber, pin, knownIps, email, firstName, lastName, farmerCode, isAdmin, mustChangePin)
 - `sessions` - Session storage (express-session with connect-pg-simple)
 - `crop_cards` - Farmer's crop cards (userId, cropName, farmName?, variety?, startDate, status)
 - `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted, productionPerBigha, productionUnit)
+- `khata_registers` - Farm expense registers (userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, totalDue, totalPaid)
+- `khata_items` - Expense line items (khataRegisterId, date, expenseCategory, subType?, hours?, perBighaRate?, totalCost, remarks?, isPaid)
 - `conversations` - Chat conversations
 - `messages` - Chat messages
 
@@ -127,3 +137,11 @@ shared/
 - `PATCH /api/admin/users/:id` - Edit user details (admin only)
 - `POST /api/admin/users/:id/reset-pin` - Reset PIN to 0000 (admin only)
 - `POST /api/krashuved/chat` - Chatbot (streams response, includes farmer context + conversation history)
+- `GET /api/khata` - List khata registers (with type/year/month filters)
+- `GET /api/khata/:id` - Get single khata with items
+- `POST /api/khata` - Create khata register
+- `PATCH /api/khata/:id` - Update khata register
+- `DELETE /api/khata/:id` - Delete khata register
+- `POST /api/khata/:id/items` - Add expense item
+- `PATCH /api/khata/items/:itemId` - Update expense item
+- `DELETE /api/khata/items/:itemId` - Delete expense item
