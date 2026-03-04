@@ -11,7 +11,7 @@ const translations = {
   farmManagement: { hi: "फसल प्रबंधन", en: "Farm Management" },
   farmKhata: { hi: "फार्म खाता", en: "Farm Khata" },
   navMarket: { hi: "बाज़ार", en: "Market" },
-  navCrops: { hi: "फसलें", en: "Crops" },
+  navCrops: { hi: "फसल कार्ड", en: "Crop Card" },
   navKhata: { hi: "खाता", en: "Khata" },
   admin: { hi: "एडमिन", en: "Admin" },
   login: { hi: "लॉगिन", en: "Login" },
