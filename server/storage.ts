@@ -234,8 +234,14 @@ class DatabaseStorage implements IStorage {
 
   async recalculateKhataTotals(registerId: number): Promise<void> {
     const items = await this.getKhataItems(registerId);
+    const reg = await this.getKhataRegister(registerId);
     let totalDue = 0;
     let totalPaid = 0;
+    let totalOwnerExpense = 0;
+    let totalBataidarExpense = 0;
+    const isBatai = reg?.khataType === "batai";
+    const ownerRatio = reg?.bataiType === "half" ? 0.5 : (reg?.bataiType === "one_third" ? 2/3 : 1);
+    const bataidarRatio = 1 - ownerRatio;
     for (const item of items) {
       const cost = parseFloat(item.totalCost) || 0;
       if (item.isPaid) {
@@ -243,10 +249,22 @@ class DatabaseStorage implements IStorage {
       } else {
         totalDue += cost;
       }
+      if (isBatai) {
+        if (item.expenseBornBy === "owner") {
+          totalOwnerExpense += cost;
+        } else if (item.expenseBornBy === "bataidar") {
+          totalBataidarExpense += cost;
+        } else {
+          totalOwnerExpense += Math.round(cost * ownerRatio);
+          totalBataidarExpense += Math.round(cost * bataidarRatio);
+        }
+      }
     }
     await db.update(khataRegisters).set({
       totalDue: totalDue.toString(),
       totalPaid: totalPaid.toString(),
+      totalOwnerExpense: totalOwnerExpense.toString(),
+      totalBataidarExpense: totalBataidarExpense.toString(),
       updatedAt: new Date(),
     }).where(eq(khataRegisters.id, registerId));
   }

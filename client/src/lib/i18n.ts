@@ -206,6 +206,17 @@ const translations = {
   unarchiveConfirm: { hi: "क्या आप इस खाते को वापस लाना चाहते हैं?", en: "Are you sure you want to unarchive this khata?" },
   khataArchived: { hi: "खाता संग्रहित किया गया!", en: "Khata archived!" },
   khataUnarchived: { hi: "खाता वापस लाया गया!", en: "Khata unarchived!" },
+  bataidarName: { hi: "बटाईदार का नाम", en: "BataiDar Name" },
+  bataidarContact: { hi: "बटाईदार का फ़ोन", en: "BataiDar Contact" },
+  bataiTypeLbl: { hi: "बटाई का प्रकार", en: "Batai Type" },
+  oneThird: { hi: "तिहाई (1/3)", en: "One Third (1/3)" },
+  halfBatai: { hi: "आधी (1/2)", en: "Half (1/2)" },
+  expenseBornBy: { hi: "खर्च किसका", en: "Expense Borne By" },
+  bataidar: { hi: "बटाईदार", en: "BataiDar" },
+  farmOwner: { hi: "मालिक", en: "Farm Owner" },
+  asPerBataiRatio: { hi: "बटाई अनुपात", en: "As Per Batai Ratio" },
+  ownerExpense: { hi: "मालिक खर्च", en: "Owner Expense" },
+  bataidarExpense: { hi: "बटाईदार खर्च", en: "BataiDar Expense" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

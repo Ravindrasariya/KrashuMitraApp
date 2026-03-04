@@ -107,14 +107,16 @@ shared/
   - Totals auto-recalculate on item add/edit/delete
   - Archive/unarchive khata registers (hidden by default, toggle to show)
   - Global unique integer IDs (shared sequence across crop_cards and khata_registers)
+  - Batai Khata: sharecropping expense tracking with BataiDar name/contact, batai ratio (Half/One Third)
+  - Per-item expense allocation (Farm Owner / BataiDar / As Per Batai Ratio) with auto-calculated split totals
 
 ## Database Tables
 - `users` - Auth users (id, phoneNumber, pin, knownIps, email, firstName, lastName, farmerCode, isAdmin, mustChangePin)
 - `sessions` - Session storage (express-session with connect-pg-simple)
 - `crop_cards` - Farmer's crop cards (uniqueId, userId, cropName, farmName?, variety?, startDate, status)
 - `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted, productionPerBigha, productionUnit)
-- `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, isArchived, totalDue, totalPaid)
-- `khata_items` - Expense line items (khataRegisterId, date, expenseCategory, subType?, hours?, perBighaRate?, totalCost, remarks?, isPaid)
+- `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, bataidarName?, bataidarContact?, bataiType?, isArchived, totalDue, totalPaid, totalOwnerExpense, totalBataidarExpense)
+- `khata_items` - Expense line items (khataRegisterId, date, expenseCategory, subType?, hours?, perBighaRate?, totalCost, remarks?, isPaid, expenseBornBy)
 - `global_unique_id_seq` - Shared sequence for uniqueId across crop_cards and khata_registers (starts at 100)
 - `conversations` - Chat conversations
 - `messages` - Chat messages

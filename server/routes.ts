@@ -221,11 +221,17 @@ export async function registerRoutes(
       const reg = await storage.getKhataRegister(parseInt(req.params.id));
       if (!reg) return res.status(404).json({ message: "Not found" });
       if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
-      const allowedFields = insertKhataRegisterSchema.pick({ title: true, plantationDate: true, harvestDate: true, production: true, productionUnit: true }).partial();
+      const allowedFields = insertKhataRegisterSchema.pick({ title: true, plantationDate: true, harvestDate: true, production: true, productionUnit: true, bataidarName: true, bataidarContact: true, bataiType: true }).partial();
       const parsed = allowedFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
       const updated = await storage.updateKhataRegister(parseInt(req.params.id), parsed.data);
-      res.json(updated);
+      if (parsed.data.bataiType && parsed.data.bataiType !== reg.bataiType) {
+        await storage.recalculateKhataTotals(parseInt(req.params.id));
+      }
+      const final = parsed.data.bataiType && parsed.data.bataiType !== reg.bataiType
+        ? await storage.getKhataRegister(parseInt(req.params.id))
+        : updated;
+      res.json(final);
     } catch (error) {
       res.status(500).json({ message: "Failed to update khata" });
     }
@@ -276,7 +282,7 @@ export async function registerRoutes(
       if (!item) return res.status(404).json({ message: "Not found" });
       const reg = await storage.getKhataRegister(item.khataRegisterId);
       if (!reg || reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
-      const allowedItemFields = insertKhataItemSchema.pick({ date: true, expenseCategory: true, subType: true, hours: true, perBighaRate: true, totalCost: true, remarks: true, isPaid: true }).partial();
+      const allowedItemFields = insertKhataItemSchema.pick({ date: true, expenseCategory: true, subType: true, hours: true, perBighaRate: true, totalCost: true, remarks: true, isPaid: true, expenseBornBy: true }).partial();
       const parsed = allowedItemFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
       const updated = await storage.updateKhataItem(parseInt(req.params.itemId), parsed.data);

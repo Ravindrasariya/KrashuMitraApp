@@ -43,9 +43,14 @@ export const khataRegisters = pgTable("khata_registers", {
   harvestDate: date("harvest_date"),
   production: text("production"),
   productionUnit: text("production_unit"),
+  bataidarName: text("bataidar_name"),
+  bataidarContact: text("bataidar_contact"),
+  bataiType: text("batai_type"),
   isArchived: boolean("is_archived").notNull().default(false),
   totalDue: text("total_due").notNull().default("0"),
   totalPaid: text("total_paid").notNull().default("0"),
+  totalOwnerExpense: text("total_owner_expense").notNull().default("0"),
+  totalBataidarExpense: text("total_bataidar_expense").notNull().default("0"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -61,6 +66,7 @@ export const khataItems = pgTable("khata_items", {
   totalCost: text("total_cost").notNull().default("0"),
   remarks: text("remarks"),
   isPaid: boolean("is_paid").notNull().default(false),
+  expenseBornBy: text("expense_born_by").notNull().default("batai_ratio"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

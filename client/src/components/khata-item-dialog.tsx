@@ -84,11 +84,13 @@ interface KhataItemDialogProps {
   onSave: (data: any) => void;
   editItem?: KhataItem | null;
   isPending: boolean;
+  khataType?: string;
 }
 
-export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPending }: KhataItemDialogProps) {
+export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPending, khataType }: KhataItemDialogProps) {
   const { t } = useTranslation();
   const today = new Date().toISOString().split("T")[0];
+  const isBatai = khataType === "batai";
 
   const [date, setDate] = useState(today);
   const [expenseCategory, setExpenseCategory] = useState("");
@@ -98,6 +100,7 @@ export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPendin
   const [totalCost, setTotalCost] = useState("");
   const [remarks, setRemarks] = useState("");
   const [isPaid, setIsPaid] = useState(false);
+  const [expenseBornBy, setExpenseBornBy] = useState("batai_ratio");
 
   useEffect(() => {
     if (editItem) {
@@ -109,6 +112,7 @@ export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPendin
       setTotalCost(editItem.totalCost);
       setRemarks(editItem.remarks || "");
       setIsPaid(editItem.isPaid);
+      setExpenseBornBy(editItem.expenseBornBy || "batai_ratio");
     } else {
       setDate(today);
       setExpenseCategory("");
@@ -118,6 +122,7 @@ export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPendin
       setTotalCost("");
       setRemarks("");
       setIsPaid(false);
+      setExpenseBornBy("batai_ratio");
     }
   }, [editItem, open]);
 
@@ -139,6 +144,7 @@ export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPendin
       totalCost,
       remarks: remarks || null,
       isPaid,
+      ...(isBatai ? { expenseBornBy } : {}),
     });
   };
 
@@ -240,6 +246,22 @@ export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPendin
               data-testid="input-remarks"
             />
           </div>
+
+          {isBatai && (
+            <div>
+              <Label>{t("expenseBornBy")}</Label>
+              <Select value={expenseBornBy} onValueChange={setExpenseBornBy}>
+                <SelectTrigger data-testid="select-expense-born-by">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="batai_ratio">{t("asPerBataiRatio")}</SelectItem>
+                  <SelectItem value="owner">{t("farmOwner")}</SelectItem>
+                  <SelectItem value="bataidar">{t("bataidar")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <Switch

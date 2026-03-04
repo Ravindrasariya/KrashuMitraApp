@@ -327,10 +327,29 @@ export default function FarmKhataPage() {
                     {reg.cropCardId && (
                       <p className="text-xs text-muted-foreground truncate">{getCropCardLabel(reg.cropCardId)}</p>
                     )}
+                    {reg.khataType === "batai" && reg.bataidarName && (
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                        <span>{t("bataidar")}: {reg.bataidarName}</span>
+                        {reg.bataidarContact && <span>📞 {reg.bataidarContact}</span>}
+                        <span className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                          {reg.bataiType === "half" ? t("halfBatai") : t("oneThird")}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex gap-3 mt-1">
                       <span className="text-xs text-orange-600">₹{due.toLocaleString("en-IN")} {t("unpaid")}</span>
                       <span className="text-xs text-green-600">₹{paid.toLocaleString("en-IN")} {t("paid")}</span>
                     </div>
+                    {reg.khataType === "batai" && (
+                      <div className="flex gap-3 mt-0.5">
+                        <span className="text-xs text-purple-600 dark:text-purple-400">
+                          {t("ownerExpense")}: ₹{(parseFloat(reg.totalOwnerExpense) || 0).toLocaleString("en-IN")}
+                        </span>
+                        <span className="text-xs text-indigo-600 dark:text-indigo-400">
+                          {t("bataidarExpense")}: ₹{(parseFloat(reg.totalBataidarExpense) || 0).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-sm font-bold">₹{total.toLocaleString("en-IN")}</span>
@@ -409,6 +428,11 @@ export default function FarmKhataPage() {
                                   <span className={`text-[10px] px-1 py-0.5 rounded ${item.isPaid ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"}`}>
                                     {item.isPaid ? t("paid") : t("unpaid")}
                                   </span>
+                                  {reg.khataType === "batai" && (
+                                    <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                                      {item.expenseBornBy === "owner" ? t("farmOwner") : item.expenseBornBy === "bataidar" ? t("bataidar") : t("asPerBataiRatio")}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
                                   <span>{item.date}</span>
@@ -482,6 +506,7 @@ export default function FarmKhataPage() {
         onSave={handleItemSave}
         editItem={editingItem}
         isPending={createItemMut.isPending || updateItemMut.isPending}
+        khataType={registers.find(r => r.id === activeRegisterId)?.khataType}
       />
 
       <AlertDialog open={deleteKhataId !== null} onOpenChange={(v) => { if (!v) setDeleteKhataId(null); }}>
@@ -562,9 +587,14 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
   const [harvestDate, setHarvestDate] = useState("");
   const [production, setProduction] = useState("");
   const [productionUnit, setProductionUnit] = useState("quintal");
+  const [bataidarName, setBataidarName] = useState("");
+  const [bataidarContact, setBataidarContact] = useState("");
+  const [bataiType, setBataiType] = useState("half");
 
   const isCropCard = khataType === "crop_card";
-  const selectedCard = cropCards.find(c => c.id.toString() === selectedCardId);
+  const isBatai = khataType === "batai";
+  const showCropFields = isCropCard || isBatai;
+  const isOtherType = !showCropFields;
 
   const handleCardSelect = (val: string) => {
     setSelectedCardId(val);
@@ -583,7 +613,8 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
   };
 
   const handleSave = () => {
-    if (!title || (isCropCard && !plantationDate)) return;
+    if (!title || (showCropFields && !plantationDate)) return;
+    if (isBatai && (!bataidarName || !bataiType)) return;
     const data: any = {
       khataType,
       title,
@@ -592,18 +623,18 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
       production: production || null,
       productionUnit: productionUnit || null,
     };
-    if (isCropCard && selectedCardId && selectedCardId !== "none") {
+    if (showCropFields && selectedCardId && selectedCardId !== "none") {
       data.cropCardId = parseInt(selectedCardId);
     }
+    if (isBatai) {
+      data.bataidarName = bataidarName;
+      data.bataidarContact = bataidarContact || null;
+      data.bataiType = bataiType;
+    }
     onSave(data);
-    setTitle("");
-    setSelectedCardId("");
-    setPlantationDate("");
-    setHarvestDate("");
-    setProduction("");
+    setTitle(""); setSelectedCardId(""); setPlantationDate(""); setHarvestDate(""); setProduction("");
+    setBataidarName(""); setBataidarContact(""); setBataiType("half");
   };
-
-  const isOtherType = !isCropCard;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -631,7 +662,43 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
             <p className="text-sm text-muted-foreground text-center py-2">{t("comingSoon")}</p>
           )}
 
-          {isCropCard && (
+          {isBatai && (
+            <>
+              <div>
+                <Label>{t("bataidarName")} *</Label>
+                <Input
+                  value={bataidarName}
+                  onChange={e => setBataidarName(e.target.value)}
+                  placeholder={t("bataidarName")}
+                  data-testid="input-bataidar-name"
+                />
+              </div>
+              <div>
+                <Label>{t("bataidarContact")}</Label>
+                <Input
+                  type="tel"
+                  value={bataidarContact}
+                  onChange={e => setBataidarContact(e.target.value)}
+                  placeholder={t("bataidarContact")}
+                  data-testid="input-bataidar-contact"
+                />
+              </div>
+              <div>
+                <Label>{t("bataiTypeLbl")} *</Label>
+                <Select value={bataiType} onValueChange={setBataiType}>
+                  <SelectTrigger data-testid="select-batai-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="half">{t("halfBatai")}</SelectItem>
+                    <SelectItem value="one_third">{t("oneThird")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+
+          {showCropFields && (
             <>
               <div>
                 <Label>{t("selectCropCard")}</Label>
@@ -714,7 +781,7 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!title || (isCropCard && !plantationDate) || isOtherType || isPending}
+              disabled={!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType || isPending}
               className="flex-1"
               data-testid="button-create-khata"
             >
@@ -740,14 +807,42 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const [harvestDate, setHarvestDate] = useState(khata.harvestDate || "");
   const [production, setProduction] = useState(khata.production || "");
   const [productionUnit, setProductionUnit] = useState(khata.productionUnit || "quintal");
+  const [bataidarName, setBataidarName] = useState(khata.bataidarName || "");
+  const [bataidarContact, setBataidarContact] = useState(khata.bataidarContact || "");
+  const [bataiType, setBataiType] = useState(khata.bataiType || "half");
+  const isBatai = khata.khataType === "batai";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("editKhata")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {isBatai && (
+            <>
+              <div>
+                <Label>{t("bataidarName")} *</Label>
+                <Input value={bataidarName} onChange={e => setBataidarName(e.target.value)} data-testid="input-edit-bataidar-name" />
+              </div>
+              <div>
+                <Label>{t("bataidarContact")}</Label>
+                <Input type="tel" value={bataidarContact} onChange={e => setBataidarContact(e.target.value)} data-testid="input-edit-bataidar-contact" />
+              </div>
+              <div>
+                <Label>{t("bataiTypeLbl")} *</Label>
+                <Select value={bataiType} onValueChange={setBataiType}>
+                  <SelectTrigger data-testid="select-edit-batai-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="half">{t("halfBatai")}</SelectItem>
+                    <SelectItem value="one_third">{t("oneThird")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
           <div>
             <Label>{t("khataTitle")}</Label>
             <Input value={title} onChange={e => setTitle(e.target.value)} data-testid="input-edit-khata-title" />
@@ -784,8 +879,15 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
               {t("cancel")}
             </Button>
             <Button
-              onClick={() => onSave({ title, plantationDate: plantationDate || null, harvestDate: harvestDate || null, production: production || null, productionUnit: productionUnit || null })}
-              disabled={!title || isPending}
+              onClick={() => onSave({
+                title,
+                plantationDate: plantationDate || null,
+                harvestDate: harvestDate || null,
+                production: production || null,
+                productionUnit: productionUnit || null,
+                ...(isBatai ? { bataidarName, bataidarContact: bataidarContact || null, bataiType } : {}),
+              })}
+              disabled={!title || (isBatai && !bataidarName) || isPending}
               className="flex-1"
               data-testid="button-save-edit-khata"
             >
