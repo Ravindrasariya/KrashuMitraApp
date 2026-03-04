@@ -199,7 +199,12 @@ export async function registerRoutes(
       if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const items = await storage.getKhataItems(reg.id);
       const panatPaymentsList = reg.khataType === "panat" ? await storage.getPanatPayments(reg.id) : [];
-      res.json({ ...reg, items, panatPayments: panatPaymentsList });
+      let lendenTxns: any[] = [];
+      if (reg.khataType === "lending_ledger") {
+        await storage.accrueInterestForRegister(reg.id);
+        lendenTxns = await storage.getLendenTransactions(reg.id);
+      }
+      res.json({ ...reg, items, panatPayments: panatPaymentsList, lendenTransactions: lendenTxns });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch khata" });
     }
@@ -222,7 +227,7 @@ export async function registerRoutes(
       const reg = await storage.getKhataRegister(parseInt(req.params.id));
       if (!reg) return res.status(404).json({ message: "Not found" });
       if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
-      const allowedFields = insertKhataRegisterSchema.pick({ title: true, plantationDate: true, harvestDate: true, production: true, productionUnit: true, bataidarName: true, bataidarContact: true, bataiType: true, bighaCount: true, panatPersonName: true, panatContact: true, panatRatePerBigha: true, panatTotalBigha: true, panatTotalAmount: true, panatRemarks: true, rentalFarmerName: true, rentalContact: true, rentalVillage: true, rentalOpeningBalance: true, rentalRedFlag: true, machineryCategory: true, machineryName: true, machineryHp: true, machineryPurchaseYear: true }).partial();
+      const allowedFields = insertKhataRegisterSchema.pick({ title: true, plantationDate: true, harvestDate: true, production: true, productionUnit: true, bataidarName: true, bataidarContact: true, bataiType: true, bighaCount: true, panatPersonName: true, panatContact: true, panatRatePerBigha: true, panatTotalBigha: true, panatTotalAmount: true, panatRemarks: true, rentalFarmerName: true, rentalContact: true, rentalVillage: true, rentalOpeningBalance: true, rentalRedFlag: true, machineryCategory: true, machineryName: true, machineryHp: true, machineryPurchaseYear: true, lendenPersonName: true, lendenContact: true, lendenVillage: true, lendenType: true, lendenRedFlag: true }).partial();
       const parsed = allowedFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
       const updated = await storage.updateKhataRegister(parseInt(req.params.id), parsed.data);
@@ -351,6 +356,60 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete panat payment" });
+    }
+  });
+
+  app.post("/api/khata/:id/lenden", isAuthenticated, async (req: any, res) => {
+    try {
+      const reg = await storage.getKhataRegister(parseInt(req.params.id));
+      if (!reg) return res.status(404).json({ message: "Not found" });
+      if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      if (reg.khataType !== "lending_ledger") return res.status(400).json({ message: "Not a lending ledger" });
+
+      const { transactionType, date, principalAmount, interestRateMonthly, paymentAmount, remarks } = req.body;
+
+      if (transactionType === "borrowing") {
+        if (!date || !principalAmount || !interestRateMonthly) return res.status(400).json({ message: "Missing fields" });
+        const txn = await storage.createLendenBorrowing({
+          khataRegisterId: parseInt(req.params.id),
+          date,
+          principalAmount: principalAmount.toString(),
+          interestRateMonthly: interestRateMonthly.toString(),
+          remarks: remarks || undefined,
+        });
+        await storage.recalculateLendenTotals(parseInt(req.params.id));
+        res.status(201).json(txn);
+      } else if (transactionType === "payment") {
+        if (!date || !paymentAmount) return res.status(400).json({ message: "Missing fields" });
+        const txn = await storage.createLendenPayment(
+          parseInt(req.params.id),
+          date,
+          parseFloat(paymentAmount),
+          remarks || undefined,
+        );
+        await storage.recalculateLendenTotals(parseInt(req.params.id));
+        res.status(201).json(txn);
+      } else {
+        return res.status(400).json({ message: "Invalid transaction type" });
+      }
+    } catch (error) {
+      console.error("Error creating lenden transaction:", error);
+      res.status(400).json({ message: "Invalid data" });
+    }
+  });
+
+  app.delete("/api/khata/lenden/:transactionId", isAuthenticated, async (req: any, res) => {
+    try {
+      const txn = await storage.getLendenTransaction(parseInt(req.params.transactionId));
+      if (!txn) return res.status(404).json({ message: "Not found" });
+      const reg = await storage.getKhataRegister(txn.khataRegisterId);
+      if (!reg || reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const registerId = txn.khataRegisterId;
+      await storage.deleteLendenTransaction(parseInt(req.params.transactionId));
+      await storage.recalculateLendenTotals(registerId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete lenden transaction" });
     }
   });
 

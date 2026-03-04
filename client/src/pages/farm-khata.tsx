@@ -14,7 +14,7 @@ import { KhataItemDialog, SUB_TYPES } from "@/components/khata-item-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, ChevronDown, ChevronUp, Trash2, Pencil, IndianRupee, Loader2, Archive, ArchiveRestore, Banknote } from "lucide-react";
-import type { KhataRegister, KhataItem, CropCard, PanatPayment } from "@shared/schema";
+import type { KhataRegister, KhataItem, CropCard, PanatPayment, LendenTransaction } from "@shared/schema";
 
 const KHATA_TYPES = [
   { value: "all", labelKey: "allKhata" as const },
@@ -24,6 +24,7 @@ const KHATA_TYPES = [
   { value: "miscellaneous", labelKey: "miscKhata" as const },
   { value: "rental", labelKey: "rentalKhata" as const },
   { value: "machinery_expense", labelKey: "machineryExpenseKhata" as const },
+  { value: "lending_ledger", labelKey: "lendingLedger" as const },
 ];
 
 const MACHINERY_CATEGORIES = [
@@ -101,6 +102,9 @@ export default function FarmKhataPage() {
   const [panatPaymentOpen, setPanatPaymentOpen] = useState(false);
   const [panatPaymentRegisterId, setPanatPaymentRegisterId] = useState<number | null>(null);
   const [deletePaymentId, setDeletePaymentId] = useState<number | null>(null);
+  const [lendenDialogOpen, setLendenDialogOpen] = useState(false);
+  const [lendenRegisterId, setLendenRegisterId] = useState<number | null>(null);
+  const [deleteLendenId, setDeleteLendenId] = useState<number | null>(null);
 
   const queryParams = new URLSearchParams();
   if (typeFilter !== "all") queryParams.set("type", typeFilter);
@@ -239,6 +243,29 @@ export default function FarmKhataPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/khata"] });
       setDeletePaymentId(null);
       toast({ title: t("paymentDeleted") });
+    },
+  });
+
+  const createLendenMut = useMutation({
+    mutationFn: async ({ registerId, data }: { registerId: number; data: any }) => {
+      const res = await apiRequest("POST", `/api/khata/${registerId}/lenden`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/khata"] });
+      setLendenDialogOpen(false);
+      toast({ title: t("transactionAdded") });
+    },
+  });
+
+  const deleteLendenMut = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/khata/lenden/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/khata"] });
+      setDeleteLendenId(null);
+      toast({ title: t("transactionDeleted") });
     },
   });
 
@@ -427,6 +454,19 @@ export default function FarmKhataPage() {
                         {reg.machineryPurchaseYear && <span>📅 {reg.machineryPurchaseYear}</span>}
                       </div>
                     )}
+                    {reg.khataType === "lending_ledger" && (
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                        {reg.lendenContact && <span>📞 {reg.lendenContact}</span>}
+                        {reg.lendenType && (
+                          <span className={`text-[10px] px-1 py-0.5 rounded font-semibold ${reg.lendenType === "credit" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}>
+                            {reg.lendenType === "credit" ? t("creditType") : t("debitType")}
+                          </span>
+                        )}
+                        {reg.lendenRedFlag && (
+                          <span className="text-[10px] px-1 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-semibold">🚩 {t("redFlag")}</span>
+                        )}
+                      </div>
+                    )}
                     {reg.khataType === "panat" ? (
                       <div className="flex gap-3 mt-1">
                         <span className="text-xs text-blue-600 dark:text-blue-400">{t("totalAmount")}: ₹{(parseFloat(reg.panatTotalAmount || "0") || 0).toLocaleString("en-IN")}</span>
@@ -459,7 +499,7 @@ export default function FarmKhataPage() {
                 {isExpanded && (
                   <div className="border-t px-3 pb-3">
                     <div className="flex gap-2 py-2 flex-wrap">
-                      {reg.khataType !== "panat" && (
+                      {reg.khataType !== "panat" && reg.khataType !== "lending_ledger" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -468,6 +508,17 @@ export default function FarmKhataPage() {
                         >
                           <Plus className="w-3 h-3 mr-1" />
                           {t("addItem")}
+                        </Button>
+                      )}
+                      {reg.khataType === "lending_ledger" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); setLendenRegisterId(reg.id); setLendenDialogOpen(true); }}
+                          data-testid={`button-add-transaction-${reg.id}`}
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          {t("addTransaction")}
                         </Button>
                       )}
                       {reg.khataType === "panat" && (
@@ -510,7 +561,86 @@ export default function FarmKhataPage() {
                       </Button>
                     </div>
 
-                    {reg.khataType === "panat" ? null : expandedData.isLoading ? (
+                    {reg.khataType === "lending_ledger" ? (() => {
+                      const lendenTxns: LendenTransaction[] = (expandedData.data as any)?.lendenTransactions || [];
+                      const borrowings = lendenTxns.filter(t => t.transactionType === "borrowing");
+                      const payments = lendenTxns.filter(t => t.transactionType === "payment");
+                      return (
+                        <div className="mt-2">
+                          {expandedData.isLoading ? (
+                            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin" /></div>
+                          ) : lendenTxns.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-3 text-center">{t("noKhata")}</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {borrowings.map(txn => (
+                                <div key={txn.id} className="bg-muted/50 rounded-md p-2.5 text-sm" data-testid={`lenden-txn-${txn.id}`}>
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-semibold">{t("borrowing")}</span>
+                                        <span className="text-xs">{txn.date}</span>
+                                        <span className="text-xs text-muted-foreground">{txn.interestRateMonthly}% {t("perMonth")}</span>
+                                      </div>
+                                      <div className="flex gap-3 mt-1 text-xs flex-wrap">
+                                        <span>{t("principalAmount")}: ₹{parseFloat(txn.principalAmount || "0").toLocaleString("en-IN")}</span>
+                                        <span className="text-orange-600">{t("remainingPrincipal")}: ₹{parseFloat(txn.remainingPrincipal || "0").toLocaleString("en-IN")}</span>
+                                        <span className="text-red-600">{t("accruedInterest")}: ₹{parseFloat(txn.accruedInterest || "0").toLocaleString("en-IN")}</span>
+                                      </div>
+                                      {txn.remarks && <p className="text-xs text-muted-foreground mt-1">{txn.remarks}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-1 ml-2 shrink-0">
+                                      <span className="font-bold text-sm">₹{parseFloat(txn.principalAmount || "0").toLocaleString("en-IN")}</span>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteLendenId(txn.id)} data-testid={`button-delete-lenden-${txn.id}`}>
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              {payments.map(txn => (
+                                <div key={txn.id} className="bg-green-50/50 dark:bg-green-950/20 rounded-md p-2.5 text-sm" data-testid={`lenden-txn-${txn.id}`}>
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-semibold">{t("paymentType")}</span>
+                                        <span className="text-xs">{txn.date}</span>
+                                      </div>
+                                      <div className="flex gap-3 mt-1 text-xs flex-wrap">
+                                        <span className="text-green-600 font-semibold">₹{parseFloat(txn.paymentAmount || "0").toLocaleString("en-IN")}</span>
+                                        {txn.appliedToInterest && parseFloat(txn.appliedToInterest) > 0 && (
+                                          <span>{t("appliedToInterest")}: ₹{parseFloat(txn.appliedToInterest).toLocaleString("en-IN")}</span>
+                                        )}
+                                        {txn.appliedToPrincipal && parseFloat(txn.appliedToPrincipal) > 0 && (
+                                          <span>{t("appliedToPrincipal")}: ₹{parseFloat(txn.appliedToPrincipal).toLocaleString("en-IN")}</span>
+                                        )}
+                                      </div>
+                                      {txn.remarks && <p className="text-xs text-muted-foreground mt-1">{txn.remarks}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-1 ml-2 shrink-0">
+                                      <span className="font-bold text-sm text-green-600">₹{parseFloat(txn.paymentAmount || "0").toLocaleString("en-IN")}</span>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteLendenId(txn.id)} data-testid={`button-delete-lenden-${txn.id}`}>
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex justify-between mt-3 pt-2 border-t text-sm font-semibold">
+                            <span>{t("totalDueWithInterest")}</span>
+                            <span className="text-orange-600">₹{due.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span>{t("totalPaid")}</span>
+                            <span className="text-green-600">₹{paid.toLocaleString("en-IN")}</span>
+                          </div>
+                        </div>
+                      );
+                    })() : null}
+
+                    {reg.khataType === "panat" || reg.khataType === "lending_ledger" ? null : expandedData.isLoading ? (
                       <div className="flex justify-center py-4">
                         <Loader2 className="w-5 h-5 animate-spin" />
                       </div>
@@ -767,6 +897,34 @@ export default function FarmKhataPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <LendenTransactionDialog
+        open={lendenDialogOpen}
+        onOpenChange={setLendenDialogOpen}
+        register={registers.find(r => r.id === lendenRegisterId) || null}
+        expandedData={expandedData.data as any}
+        onSave={(data) => lendenRegisterId && createLendenMut.mutate({ registerId: lendenRegisterId, data })}
+        isPending={createLendenMut.isPending}
+      />
+
+      <AlertDialog open={deleteLendenId !== null} onOpenChange={(v) => { if (!v) setDeleteLendenId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("delete")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("deleteTransactionConfirm")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-lenden">{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteLendenId && deleteLendenMut.mutate(deleteLendenId)}
+              className="bg-destructive text-destructive-foreground"
+              data-testid="button-confirm-delete-lenden"
+            >
+              {t("delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={archiveKhataId !== null} onOpenChange={(v) => { if (!v) setArchiveKhataId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -830,14 +988,21 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
   const [mechHp, setMechHp] = useState("");
   const [mechPurchaseYear, setMechPurchaseYear] = useState("");
 
+  const [lendenPersonName, setLendenPersonName] = useState("");
+  const [lendenContact, setLendenContact] = useState("");
+  const [lendenVillage, setLendenVillage] = useState("");
+  const [lendenType, setLendenType] = useState("credit");
+  const [lendenRedFlag, setLendenRedFlag] = useState(false);
+
   const isCropCard = khataType === "crop_card";
   const isBatai = khataType === "batai";
   const isPanat = khataType === "panat";
   const isMisc = khataType === "miscellaneous";
   const isRental = khataType === "rental";
   const isMachineryExpense = khataType === "machinery_expense";
+  const isLendingLedger = khataType === "lending_ledger";
   const showCropFields = isCropCard || isBatai;
-  const isOtherType = !showCropFields && !isPanat && !isMisc && !isRental && !isMachineryExpense;
+  const isOtherType = !showCropFields && !isPanat && !isMisc && !isRental && !isMachineryExpense && !isLendingLedger;
 
   const handleCardSelect = (val: string) => {
     setSelectedCardId(val);
@@ -903,6 +1068,21 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
         machineryPurchaseYear: mechPurchaseYear || null,
       });
       setMechCategory(""); setMechName(""); setMechHp(""); setMechPurchaseYear("");
+      return;
+    }
+    if (isLendingLedger) {
+      if (!lendenPersonName || !lendenType) return;
+      const titleStr = lendenVillage ? `${lendenPersonName}, ${lendenVillage}` : lendenPersonName;
+      onSave({
+        khataType: "lending_ledger",
+        title: titleStr,
+        lendenPersonName,
+        lendenContact: lendenContact || null,
+        lendenVillage: lendenVillage || null,
+        lendenType,
+        lendenRedFlag,
+      });
+      setLendenPersonName(""); setLendenContact(""); setLendenVillage(""); setLendenType("credit"); setLendenRedFlag(false);
       return;
     }
     if (!title || (showCropFields && !plantationDate)) return;
@@ -1022,6 +1202,41 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
                   <Label>{t("machineryPurchaseYear")}</Label>
                   <Input type="number" min="1980" max="2099" value={mechPurchaseYear} onChange={e => setMechPurchaseYear(e.target.value)} placeholder="e.g. 2020" data-testid="input-machinery-purchase-year" />
                 </div>
+              </div>
+            </>
+          )}
+
+          {isLendingLedger && (
+            <>
+              <div>
+                <Label>{t("lendenPersonName")} *</Label>
+                <Input value={lendenPersonName} onChange={e => setLendenPersonName(e.target.value)} placeholder={t("lendenPersonName")} data-testid="input-lenden-person-name" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("lendenContact")}</Label>
+                  <Input type="tel" value={lendenContact} onChange={e => setLendenContact(e.target.value)} placeholder={t("lendenContact")} data-testid="input-lenden-contact" />
+                </div>
+                <div>
+                  <Label>{t("lendenVillage")}</Label>
+                  <Input value={lendenVillage} onChange={e => setLendenVillage(e.target.value)} placeholder={t("lendenVillage")} data-testid="input-lenden-village" />
+                </div>
+              </div>
+              <div>
+                <Label>{t("lendenType")} *</Label>
+                <Select value={lendenType} onValueChange={setLendenType}>
+                  <SelectTrigger data-testid="select-lenden-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="credit">{t("creditType")}</SelectItem>
+                    <SelectItem value="debit">{t("debitType")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>{t("redFlag")}</Label>
+                <Switch checked={lendenRedFlag} onCheckedChange={setLendenRedFlag} data-testid="switch-lenden-red-flag" />
               </div>
             </>
           )}
@@ -1182,7 +1397,7 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? !rentalFarmerName : isMachineryExpense ? !mechCategory : (isMisc ? !title : (!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType))) || isPending}
+              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? !rentalFarmerName : isMachineryExpense ? !mechCategory : isLendingLedger ? !lendenPersonName : (isMisc ? !title : (!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType))) || isPending}
               className="flex-1"
               data-testid="button-create-khata"
             >
@@ -1217,6 +1432,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const isMisc = khata.khataType === "miscellaneous";
   const isRental = khata.khataType === "rental";
   const isMachineryExpense = khata.khataType === "machinery_expense";
+  const isLendingLedger = khata.khataType === "lending_ledger";
 
   const [panatPersonName, setPanatPersonName] = useState(khata.panatPersonName || "");
   const [panatContact, setPanatContact] = useState(khata.panatContact || "");
@@ -1235,6 +1451,12 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const [editMechName, setEditMechName] = useState(khata.machineryName || "");
   const [editMechHp, setEditMechHp] = useState(khata.machineryHp || "");
   const [editMechPurchaseYear, setEditMechPurchaseYear] = useState(khata.machineryPurchaseYear || "");
+
+  const [editLendenPersonName, setEditLendenPersonName] = useState(khata.lendenPersonName || "");
+  const [editLendenContact, setEditLendenContact] = useState(khata.lendenContact || "");
+  const [editLendenVillage, setEditLendenVillage] = useState(khata.lendenVillage || "");
+  const [editLendenType, setEditLendenType] = useState(khata.lendenType || "credit");
+  const [editLendenRedFlag, setEditLendenRedFlag] = useState(khata.lendenRedFlag || false);
 
   const handleEditSave = () => {
     if (isPanat) {
@@ -1274,6 +1496,19 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
         machineryName: editMechName || null,
         machineryHp: editMechHp || null,
         machineryPurchaseYear: editMechPurchaseYear || null,
+      });
+      return;
+    }
+    if (isLendingLedger) {
+      if (!editLendenPersonName) return;
+      const titleStr = editLendenVillage ? `${editLendenPersonName}, ${editLendenVillage}` : editLendenPersonName;
+      onSave({
+        title: titleStr,
+        lendenPersonName: editLendenPersonName,
+        lendenContact: editLendenContact || null,
+        lendenVillage: editLendenVillage || null,
+        lendenType: editLendenType,
+        lendenRedFlag: editLendenRedFlag,
       });
       return;
     }
@@ -1381,6 +1616,40 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
               </div>
             </>
           )}
+          {isLendingLedger && (
+            <>
+              <div>
+                <Label>{t("lendenPersonName")} *</Label>
+                <Input value={editLendenPersonName} onChange={e => setEditLendenPersonName(e.target.value)} data-testid="input-edit-lenden-person-name" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("lendenContact")}</Label>
+                  <Input type="tel" value={editLendenContact} onChange={e => setEditLendenContact(e.target.value)} data-testid="input-edit-lenden-contact" />
+                </div>
+                <div>
+                  <Label>{t("lendenVillage")}</Label>
+                  <Input value={editLendenVillage} onChange={e => setEditLendenVillage(e.target.value)} data-testid="input-edit-lenden-village" />
+                </div>
+              </div>
+              <div>
+                <Label>{t("lendenType")} *</Label>
+                <Select value={editLendenType} onValueChange={setEditLendenType}>
+                  <SelectTrigger data-testid="select-edit-lenden-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="credit">{t("creditType")}</SelectItem>
+                    <SelectItem value="debit">{t("debitType")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>{t("redFlag")}</Label>
+                <Switch checked={editLendenRedFlag} onCheckedChange={setEditLendenRedFlag} data-testid="switch-edit-lenden-red-flag" />
+              </div>
+            </>
+          )}
           {isBatai && (
             <>
               <div>
@@ -1411,13 +1680,13 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
               </div>
             </>
           )}
-          {!isPanat && !isRental && !isMachineryExpense && (
+          {!isPanat && !isRental && !isMachineryExpense && !isLendingLedger && (
             <div>
               <Label>{t("khataTitle")}</Label>
               <Input value={title} onChange={e => setTitle(e.target.value)} data-testid="input-edit-khata-title" />
             </div>
           )}
-          {!isPanat && !isMisc && !isRental && !isMachineryExpense && (
+          {!isPanat && !isMisc && !isRental && !isMachineryExpense && !isLendingLedger && (
             <>
               <div>
                 <Label>{t("plantationDate")}</Label>
@@ -1454,7 +1723,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
             </Button>
             <Button
               onClick={handleEditSave}
-              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? !editRentalFarmerName : isMachineryExpense ? !editMechCategory : (!title || (isBatai && !bataidarName))) || isPending}
+              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? !editRentalFarmerName : isMachineryExpense ? !editMechCategory : isLendingLedger ? !editLendenPersonName : (!title || (isBatai && !bataidarName))) || isPending}
               className="flex-1"
               data-testid="button-save-edit-khata"
             >
@@ -1548,6 +1817,117 @@ function PanatPaymentDialog({ open, onOpenChange, register, existingPayments, on
               {t("cancel")}
             </Button>
             <Button onClick={handleSave} disabled={!amount || !date || isPending} className="flex-1" data-testid="button-save-payment">
+              {isPending ? t("loading") : t("save")}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LendenTransactionDialog({ open, onOpenChange, register, expandedData, onSave, isPending }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  register: KhataRegister | null;
+  expandedData: any;
+  onSave: (data: any) => void;
+  isPending: boolean;
+}) {
+  const { t } = useTranslation();
+  const today = new Date().toISOString().split("T")[0];
+  const [txnType, setTxnType] = useState<"borrowing" | "payment">("borrowing");
+  const [date, setDate] = useState(today);
+  const [principalAmount, setPrincipalAmount] = useState("");
+  const [interestRate, setInterestRate] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [remarks, setRemarks] = useState("");
+
+  const lendenTxns: LendenTransaction[] = expandedData?.lendenTransactions || [];
+  const outstandingBalance = lendenTxns
+    .filter((tx: LendenTransaction) => tx.transactionType === "borrowing")
+    .reduce((sum: number, tx: LendenTransaction) => sum + (parseFloat(tx.remainingPrincipal || "0") || 0) + (parseFloat(tx.accruedInterest || "0") || 0), 0);
+
+  const handleSave = () => {
+    if (txnType === "borrowing") {
+      if (!date || !principalAmount || !interestRate) return;
+      onSave({ transactionType: "borrowing", date, principalAmount, interestRateMonthly: interestRate, remarks: remarks || null });
+    } else {
+      if (!date || !paymentAmount) return;
+      onSave({ transactionType: "payment", date, paymentAmount, remarks: remarks || null });
+    }
+    setDate(today); setPrincipalAmount(""); setInterestRate(""); setPaymentAmount(""); setRemarks("");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t("addTransaction")}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>{t("selectTransactionType")}</Label>
+            <Select value={txnType} onValueChange={(v) => setTxnType(v as "borrowing" | "payment")}>
+              <SelectTrigger data-testid="select-lenden-txn-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="borrowing">{t("borrowing")}</SelectItem>
+                <SelectItem value="payment">{t("paymentType")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {txnType === "payment" && outstandingBalance > 0 && (
+            <div className="bg-muted/50 rounded-md p-3 text-sm">
+              <div className="flex justify-between">
+                <span>{t("outstandingBalance")}</span>
+                <span className="font-bold text-orange-600">₹{outstandingBalance.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <Label>{t("date")} *</Label>
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} data-testid="input-lenden-date" />
+          </div>
+
+          {txnType === "borrowing" && (
+            <>
+              <div>
+                <Label>{t("principalAmount")} (₹) *</Label>
+                <Input type="number" min="0" value={principalAmount} onChange={e => setPrincipalAmount(e.target.value)} placeholder="₹0" data-testid="input-lenden-principal" />
+              </div>
+              <div>
+                <Label>{t("interestRateMonthly")} *</Label>
+                <Input type="number" min="0" step="0.1" value={interestRate} onChange={e => setInterestRate(e.target.value)} placeholder="e.g. 2" data-testid="input-lenden-interest-rate" />
+              </div>
+            </>
+          )}
+
+          {txnType === "payment" && (
+            <div>
+              <Label>{t("amount")} (₹) *</Label>
+              <Input type="number" min="0" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="₹0" data-testid="input-lenden-payment-amount" />
+            </div>
+          )}
+
+          <div>
+            <Label>{t("remarks")}</Label>
+            <Input value={remarks} onChange={e => setRemarks(e.target.value)} placeholder={t("remarks")} data-testid="input-lenden-remarks" />
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1" data-testid="button-cancel-lenden">
+              {t("cancel")}
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={(txnType === "borrowing" ? (!date || !principalAmount || !interestRate) : (!date || !paymentAmount)) || isPending}
+              className="flex-1"
+              data-testid="button-save-lenden"
+            >
               {isPending ? t("loading") : t("save")}
             </Button>
           </div>

@@ -2,6 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import cron from "node-cron";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -98,6 +100,17 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+
+      cron.schedule('30 18 * * *', async () => {
+        try {
+          log("Running midnight IST lenden interest accrual...", "cron");
+          await storage.accrueInterestAllLenden();
+          log("Lenden interest accrual complete", "cron");
+        } catch (error) {
+          console.error("Cron lenden accrual error:", error);
+        }
+      });
+      log("Lenden interest accrual cron scheduled (midnight IST)");
     },
   );
 })();

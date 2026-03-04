@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment } from "@shared/schema";
-import { eq, desc, and, like, sql, ilike } from "drizzle-orm";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction } from "@shared/schema";
+import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -37,6 +37,14 @@ export interface IStorage {
   createPanatPayment(data: InsertPanatPayment): Promise<PanatPayment>;
   deletePanatPayment(id: number): Promise<void>;
   getPanatPayment(id: number): Promise<PanatPayment | undefined>;
+  getLendenTransactions(registerId: number): Promise<LendenTransaction[]>;
+  getLendenTransaction(id: number): Promise<LendenTransaction | undefined>;
+  createLendenBorrowing(data: { khataRegisterId: number; date: string; principalAmount: string; interestRateMonthly: string; remarks?: string }): Promise<LendenTransaction>;
+  createLendenPayment(registerId: number, paymentDate: string, amount: number, remarks?: string): Promise<LendenTransaction>;
+  deleteLendenTransaction(id: number): Promise<void>;
+  recalculateLendenTotals(registerId: number): Promise<void>;
+  accrueInterestForRegister(registerId: number): Promise<void>;
+  accrueInterestAllLenden(): Promise<void>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -304,6 +312,192 @@ class DatabaseStorage implements IStorage {
 
   async deletePanatPayment(id: number): Promise<void> {
     await db.delete(panatPayments).where(eq(panatPayments.id, id));
+  }
+
+  async getLendenTransactions(registerId: number): Promise<LendenTransaction[]> {
+    return db.select().from(lendenTransactions).where(eq(lendenTransactions.khataRegisterId, registerId)).orderBy(asc(lendenTransactions.date), asc(lendenTransactions.id));
+  }
+
+  async getLendenTransaction(id: number): Promise<LendenTransaction | undefined> {
+    const [txn] = await db.select().from(lendenTransactions).where(eq(lendenTransactions.id, id));
+    return txn;
+  }
+
+  async createLendenBorrowing(data: { khataRegisterId: number; date: string; principalAmount: string; interestRateMonthly: string; remarks?: string }): Promise<LendenTransaction> {
+    const [created] = await db.insert(lendenTransactions).values({
+      khataRegisterId: data.khataRegisterId,
+      transactionType: "borrowing",
+      date: data.date,
+      principalAmount: data.principalAmount,
+      interestRateMonthly: data.interestRateMonthly,
+      remainingPrincipal: data.principalAmount,
+      accruedInterest: "0",
+      lastAccrualDate: data.date,
+      borrowingDate: data.date,
+      remarks: data.remarks || null,
+    }).returning();
+    return created;
+  }
+
+  private calculateInterestForBorrowing(borrowing: LendenTransaction, upToDate: Date): { interest: number; shouldCompound: boolean } {
+    const remainingP = parseFloat(borrowing.remainingPrincipal || "0") || 0;
+    if (remainingP <= 0) return { interest: 0, shouldCompound: false };
+
+    const lastAccrual = new Date(borrowing.lastAccrualDate || borrowing.borrowingDate || borrowing.date);
+    const diffMs = upToDate.getTime() - lastAccrual.getTime();
+    const days = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+    if (days <= 0) return { interest: 0, shouldCompound: false };
+
+    const monthlyRate = parseFloat(borrowing.interestRateMonthly || "0") || 0;
+    const annualRate = monthlyRate * 12 / 100;
+    const interestForPeriod = remainingP * annualRate * days / 365;
+
+    const borrowDate = new Date(borrowing.borrowingDate || borrowing.date);
+    const totalDays = Math.floor((upToDate.getTime() - borrowDate.getTime()) / (1000 * 60 * 60 * 24));
+    const shouldCompound = totalDays >= 365;
+
+    return { interest: Math.round(interestForPeriod * 100) / 100, shouldCompound };
+  }
+
+  async createLendenPayment(registerId: number, paymentDate: string, amount: number, remarks?: string): Promise<LendenTransaction> {
+    const borrowings = await db.select().from(lendenTransactions)
+      .where(and(eq(lendenTransactions.khataRegisterId, registerId), eq(lendenTransactions.transactionType, "borrowing")))
+      .orderBy(asc(lendenTransactions.date), asc(lendenTransactions.id));
+
+    let remaining = amount;
+    let totalAppliedInterest = 0;
+    let totalAppliedPrincipal = 0;
+    let targetBorrowingId: number | null = null;
+    const payDate = new Date(paymentDate + "T00:00:00Z");
+
+    for (const b of borrowings) {
+      const rp = parseFloat(b.remainingPrincipal || "0") || 0;
+      if (rp <= 0 && (parseFloat(b.accruedInterest || "0") || 0) <= 0) continue;
+      if (remaining <= 0) break;
+
+      const { interest } = this.calculateInterestForBorrowing(b, payDate);
+      let currentInterest = (parseFloat(b.accruedInterest || "0") || 0) + interest;
+      let currentPrincipal = rp;
+
+      if (!targetBorrowingId) targetBorrowingId = b.id;
+
+      let appliedInterest = 0;
+      let appliedPrincipal = 0;
+
+      if (remaining >= currentInterest) {
+        appliedInterest = currentInterest;
+        remaining -= currentInterest;
+        currentInterest = 0;
+      } else {
+        appliedInterest = remaining;
+        currentInterest -= remaining;
+        remaining = 0;
+      }
+
+      if (remaining > 0 && currentPrincipal > 0) {
+        if (remaining >= currentPrincipal) {
+          appliedPrincipal = currentPrincipal;
+          remaining -= currentPrincipal;
+          currentPrincipal = 0;
+        } else {
+          appliedPrincipal = remaining;
+          currentPrincipal -= remaining;
+          remaining = 0;
+        }
+      }
+
+      totalAppliedInterest += appliedInterest;
+      totalAppliedPrincipal += appliedPrincipal;
+
+      await db.update(lendenTransactions).set({
+        remainingPrincipal: currentPrincipal.toFixed(2),
+        accruedInterest: currentInterest.toFixed(2),
+        lastAccrualDate: paymentDate,
+      }).where(eq(lendenTransactions.id, b.id));
+    }
+
+    const [payment] = await db.insert(lendenTransactions).values({
+      khataRegisterId: registerId,
+      transactionType: "payment",
+      date: paymentDate,
+      paymentAmount: amount.toString(),
+      appliedToInterest: totalAppliedInterest.toFixed(2),
+      appliedToPrincipal: totalAppliedPrincipal.toFixed(2),
+      targetBorrowingId,
+      remarks: remarks || null,
+    }).returning();
+
+    return payment;
+  }
+
+  async deleteLendenTransaction(id: number): Promise<void> {
+    await db.delete(lendenTransactions).where(eq(lendenTransactions.id, id));
+  }
+
+  async recalculateLendenTotals(registerId: number): Promise<void> {
+    const txns = await this.getLendenTransactions(registerId);
+    let totalDue = 0;
+    let totalPaid = 0;
+
+    for (const t of txns) {
+      if (t.transactionType === "borrowing") {
+        const rp = parseFloat(t.remainingPrincipal || "0") || 0;
+        const ai = parseFloat(t.accruedInterest || "0") || 0;
+        totalDue += rp + ai;
+      } else if (t.transactionType === "payment") {
+        totalPaid += parseFloat(t.paymentAmount || "0") || 0;
+      }
+    }
+
+    await db.update(khataRegisters).set({
+      totalDue: totalDue.toFixed(2),
+      totalPaid: totalPaid.toFixed(2),
+      updatedAt: new Date(),
+    }).where(eq(khataRegisters.id, registerId));
+  }
+
+  async accrueInterestForRegister(registerId: number): Promise<void> {
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    const borrowings = await db.select().from(lendenTransactions)
+      .where(and(eq(lendenTransactions.khataRegisterId, registerId), eq(lendenTransactions.transactionType, "borrowing")));
+
+    for (const b of borrowings) {
+      let rp = parseFloat(b.remainingPrincipal || "0") || 0;
+      if (rp <= 0) continue;
+
+      const { interest, shouldCompound } = this.calculateInterestForBorrowing(b, today);
+      let currentInterest = (parseFloat(b.accruedInterest || "0") || 0) + interest;
+
+      if (shouldCompound && currentInterest > 0) {
+        rp += currentInterest;
+        currentInterest = 0;
+        await db.update(lendenTransactions).set({
+          remainingPrincipal: rp.toFixed(2),
+          accruedInterest: "0",
+          lastAccrualDate: todayStr,
+          borrowingDate: todayStr,
+        }).where(eq(lendenTransactions.id, b.id));
+      } else {
+        await db.update(lendenTransactions).set({
+          accruedInterest: currentInterest.toFixed(2),
+          lastAccrualDate: todayStr,
+        }).where(eq(lendenTransactions.id, b.id));
+      }
+    }
+
+    await this.recalculateLendenTotals(registerId);
+  }
+
+  async accrueInterestAllLenden(): Promise<void> {
+    const registers = await db.select().from(khataRegisters).where(eq(khataRegisters.khataType, "lending_ledger"));
+    for (const reg of registers) {
+      try {
+        await this.accrueInterestForRegister(reg.id);
+      } catch (e) {
+        console.error(`Failed to accrue interest for register ${reg.id}:`, e);
+      }
+    }
   }
 }
 

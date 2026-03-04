@@ -71,6 +71,11 @@ export const khataRegisters = pgTable("khata_registers", {
   machineryName: text("machinery_name"),
   machineryHp: text("machinery_hp"),
   machineryPurchaseYear: text("machinery_purchase_year"),
+  lendenPersonName: text("lenden_person_name"),
+  lendenContact: text("lenden_contact"),
+  lendenVillage: text("lenden_village"),
+  lendenType: text("lenden_type"),
+  lendenRedFlag: boolean("lenden_red_flag").default(false),
   isArchived: boolean("is_archived").notNull().default(false),
   totalDue: text("total_due").notNull().default("0"),
   totalPaid: text("total_paid").notNull().default("0"),
@@ -114,6 +119,25 @@ export const panatPayments = pgTable("panat_payments", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const lendenTransactions = pgTable("lenden_transactions", {
+  id: serial("id").primaryKey(),
+  khataRegisterId: integer("khata_register_id").notNull().references(() => khataRegisters.id, { onDelete: "cascade" }),
+  transactionType: text("transaction_type").notNull(),
+  date: date("date").notNull(),
+  principalAmount: text("principal_amount"),
+  interestRateMonthly: text("interest_rate_monthly"),
+  remainingPrincipal: text("remaining_principal"),
+  accruedInterest: text("accrued_interest"),
+  lastAccrualDate: date("last_accrual_date"),
+  borrowingDate: date("borrowing_date"),
+  paymentAmount: text("payment_amount"),
+  appliedToInterest: text("applied_to_interest"),
+  appliedToPrincipal: text("applied_to_principal"),
+  targetBorrowingId: integer("target_borrowing_id"),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const insertCropCardSchema = createInsertSchema(cropCards).omit({
   id: true,
   uniqueId: true,
@@ -142,6 +166,11 @@ export const insertPanatPaymentSchema = createInsertSchema(panatPayments).omit({
   createdAt: true,
 });
 
+export const insertLendenTransactionSchema = createInsertSchema(lendenTransactions).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type CropCard = typeof cropCards.$inferSelect;
 export type InsertCropCard = z.infer<typeof insertCropCardSchema>;
 export type CropEvent = typeof cropEvents.$inferSelect;
@@ -152,3 +181,5 @@ export type KhataItem = typeof khataItems.$inferSelect;
 export type InsertKhataItem = z.infer<typeof insertKhataItemSchema>;
 export type PanatPayment = typeof panatPayments.$inferSelect;
 export type InsertPanatPayment = z.infer<typeof insertPanatPaymentSchema>;
+export type LendenTransaction = typeof lendenTransactions.$inferSelect;
+export type InsertLendenTransaction = z.infer<typeof insertLendenTransactionSchema>;
