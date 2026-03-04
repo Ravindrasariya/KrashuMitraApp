@@ -230,7 +230,7 @@ const translations = {
   paymentMode: { hi: "भुगतान का तरीका", en: "Payment Mode" },
   cash: { hi: "नकद", en: "Cash" },
   account: { hi: "खाते में", en: "Account" },
-  netBalance: { hi: "शेष राशि", en: "Net Balance" },
+  netBalance: { hi: "बकाया", en: "Due" },
   payments: { hi: "भुगतान", en: "Payments" },
   paymentRemarks: { hi: "टिप्पणी", en: "Remarks" },
   paymentAdded: { hi: "भुगतान जोड़ा गया!", en: "Payment added!" },

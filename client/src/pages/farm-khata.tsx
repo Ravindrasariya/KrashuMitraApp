@@ -214,7 +214,14 @@ export default function FarmKhataPage() {
     },
   });
 
-  const totalDue = registers.reduce((sum, r) => sum + (parseFloat(r.totalDue) || 0), 0);
+  const totalDue = registers.reduce((sum, r) => {
+    if (r.khataType === "panat") {
+      const panatTotal = parseFloat(r.panatTotalAmount || "0") || 0;
+      const panatPaid = parseFloat(r.totalPaid) || 0;
+      return sum + Math.max(0, panatTotal - panatPaid);
+    }
+    return sum + (parseFloat(r.totalDue) || 0);
+  }, 0);
   const totalPaid = registers.reduce((sum, r) => sum + (parseFloat(r.totalPaid) || 0), 0);
 
   const currentYear = new Date().getFullYear();
@@ -330,7 +337,8 @@ export default function FarmKhataPage() {
             const items = isExpanded ? (expandedData.data?.items || []) : [];
             const due = parseFloat(reg.totalDue) || 0;
             const paid = parseFloat(reg.totalPaid) || 0;
-            const total = due + paid;
+            const panatDue = reg.khataType === "panat" ? Math.max(0, (parseFloat(reg.panatTotalAmount || "0") || 0) - paid) : 0;
+            const total = reg.khataType === "panat" ? paid : (due + paid);
 
             return (
               <Card key={reg.id} className={reg.isArchived ? "opacity-60" : ""} data-testid={`card-khata-${reg.id}`}>
