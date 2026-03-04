@@ -21,7 +21,8 @@ export interface IStorage {
   deleteCropEvent(id: number): Promise<void>;
   toggleCropEventComplete(id: number): Promise<CropEvent | undefined>;
   getSuggestions(userId: string): Promise<string[]>;
-  getKhataRegisters(userId: string, filters?: { khataType?: string; year?: number; month?: number }): Promise<KhataRegister[]>;
+  getKhataRegisters(userId: string, filters?: { khataType?: string; year?: number; month?: number; showArchived?: boolean }): Promise<KhataRegister[]>;
+  archiveKhataRegister(id: number): Promise<KhataRegister | undefined>;
   getKhataRegister(id: number): Promise<KhataRegister | undefined>;
   createKhataRegister(data: InsertKhataRegister): Promise<KhataRegister>;
   updateKhataRegister(id: number, data: Partial<InsertKhataRegister>): Promise<KhataRegister | undefined>;
@@ -157,10 +158,13 @@ class DatabaseStorage implements IStorage {
     return [...new Set(descriptions)];
   }
 
-  async getKhataRegisters(userId: string, filters?: { khataType?: string; year?: number; month?: number }): Promise<KhataRegister[]> {
+  async getKhataRegisters(userId: string, filters?: { khataType?: string; year?: number; month?: number; showArchived?: boolean }): Promise<KhataRegister[]> {
     const conditions = [eq(khataRegisters.userId, userId)];
     if (filters?.khataType) {
       conditions.push(eq(khataRegisters.khataType, filters.khataType));
+    }
+    if (!filters?.showArchived) {
+      conditions.push(eq(khataRegisters.isArchived, false));
     }
     let results = await db.select().from(khataRegisters).where(and(...conditions)).orderBy(desc(khataRegisters.updatedAt));
     if (filters?.year) {
@@ -176,6 +180,13 @@ class DatabaseStorage implements IStorage {
       });
     }
     return results;
+  }
+
+  async archiveKhataRegister(id: number): Promise<KhataRegister | undefined> {
+    const reg = await this.getKhataRegister(id);
+    if (!reg) return undefined;
+    const [updated] = await db.update(khataRegisters).set({ isArchived: !reg.isArchived, updatedAt: new Date() }).where(eq(khataRegisters.id, id)).returning();
+    return updated;
   }
 
   async getKhataRegister(id: number): Promise<KhataRegister | undefined> {

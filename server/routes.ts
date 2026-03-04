@@ -179,10 +179,11 @@ export async function registerRoutes(
   app.get("/api/khata", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
-      const filters: { khataType?: string; year?: number; month?: number } = {};
+      const filters: { khataType?: string; year?: number; month?: number; showArchived?: boolean } = {};
       if (req.query.type && req.query.type !== "all") filters.khataType = req.query.type;
       if (req.query.year && req.query.year !== "all") filters.year = parseInt(req.query.year);
       if (req.query.month && req.query.month !== "all") filters.month = parseInt(req.query.month);
+      if (req.query.showArchived === "true") filters.showArchived = true;
       const registers = await storage.getKhataRegisters(userId, filters);
       res.json(registers);
     } catch (error) {
@@ -239,6 +240,18 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete khata" });
+    }
+  });
+
+  app.post("/api/khata/:id/archive", isAuthenticated, async (req: any, res) => {
+    try {
+      const reg = await storage.getKhataRegister(parseInt(req.params.id));
+      if (!reg) return res.status(404).json({ message: "Not found" });
+      if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const updated = await storage.archiveKhataRegister(parseInt(req.params.id));
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to archive khata" });
     }
   });
 

@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { KhataItemDialog, SUB_TYPES } from "@/components/khata-item-dialog";
-import { Plus, ChevronDown, ChevronUp, Trash2, Pencil, IndianRupee, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, ChevronDown, ChevronUp, Trash2, Pencil, IndianRupee, Loader2, Archive, ArchiveRestore } from "lucide-react";
 import type { KhataRegister, KhataItem, CropCard } from "@shared/schema";
 
 const KHATA_TYPES = [
@@ -56,11 +57,13 @@ export default function FarmKhataPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
+  const [showArchived, setShowArchived] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [newKhataOpen, setNewKhataOpen] = useState(false);
   const [editKhataOpen, setEditKhataOpen] = useState(false);
   const [editingKhata, setEditingKhata] = useState<KhataRegister | null>(null);
   const [deleteKhataId, setDeleteKhataId] = useState<number | null>(null);
+  const [archiveKhataId, setArchiveKhataId] = useState<number | null>(null);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<KhataItem | null>(null);
   const [activeRegisterId, setActiveRegisterId] = useState<number | null>(null);
@@ -71,6 +74,7 @@ export default function FarmKhataPage() {
   if (typeFilter !== "all") queryParams.set("type", typeFilter);
   if (yearFilter !== "all") queryParams.set("year", yearFilter);
   if (monthFilter !== "all") queryParams.set("month", monthFilter);
+  if (showArchived) queryParams.set("showArchived", "true");
   const queryString = queryParams.toString();
 
   const { data: registers = [], isLoading } = useQuery<KhataRegister[]>({
@@ -130,6 +134,19 @@ export default function FarmKhataPage() {
       setDeleteKhataId(null);
       setExpandedId(null);
       toast({ title: t("khataDeleted") });
+    },
+  });
+
+  const archiveKhataMut = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/khata/${id}/archive`);
+      return res.json();
+    },
+    onSuccess: (data: KhataRegister) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/khata"] });
+      setArchiveKhataId(null);
+      setExpandedId(null);
+      toast({ title: data.isArchived ? t("khataArchived") : t("khataUnarchived") });
     },
   });
 
@@ -202,6 +219,15 @@ export default function FarmKhataPage() {
           <Plus className="w-4 h-4 mr-1" />
           {t("newKhata")}
         </Button>
+      </div>
+
+      <div className="flex items-center gap-2 mb-3">
+        <Switch
+          checked={showArchived}
+          onCheckedChange={setShowArchived}
+          data-testid="switch-show-archived"
+        />
+        <span className="text-xs text-muted-foreground">{t("showArchived")}</span>
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-4">
@@ -278,7 +304,7 @@ export default function FarmKhataPage() {
             const total = due + paid;
 
             return (
-              <Card key={reg.id} data-testid={`card-khata-${reg.id}`}>
+              <Card key={reg.id} className={reg.isArchived ? "opacity-60" : ""} data-testid={`card-khata-${reg.id}`}>
                 <div
                   className="p-3 cursor-pointer flex items-center justify-between"
                   onClick={() => setExpandedId(isExpanded ? null : reg.id)}
@@ -290,6 +316,11 @@ export default function FarmKhataPage() {
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground whitespace-nowrap">
                         {t(KHATA_TYPES.find(k => k.value === reg.khataType)?.labelKey || "cropCardKhata")}
                       </span>
+                      {reg.isArchived && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 whitespace-nowrap" data-testid={`badge-archived-${reg.id}`}>
+                          {t("archived")}
+                        </span>
+                      )}
                     </div>
                     {reg.cropCardId && (
                       <p className="text-xs text-muted-foreground truncate">{getCropCardLabel(reg.cropCardId)}</p>
@@ -325,6 +356,15 @@ export default function FarmKhataPage() {
                       >
                         <Pencil className="w-3 h-3 mr-1" />
                         {t("edit")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => { e.stopPropagation(); setArchiveKhataId(reg.id); }}
+                        data-testid={`button-archive-khata-${reg.id}`}
+                      >
+                        {reg.isArchived ? <ArchiveRestore className="w-3 h-3 mr-1" /> : <Archive className="w-3 h-3 mr-1" />}
+                        {reg.isArchived ? t("unarchive") : t("archive")}
                       </Button>
                       <Button
                         size="sm"
@@ -475,6 +515,28 @@ export default function FarmKhataPage() {
               data-testid="button-confirm-delete-item"
             >
               {t("delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={archiveKhataId !== null} onOpenChange={(v) => { if (!v) setArchiveKhataId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {registers.find(r => r.id === archiveKhataId)?.isArchived ? t("unarchive") : t("archive")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {registers.find(r => r.id === archiveKhataId)?.isArchived ? t("unarchiveConfirm") : t("archiveConfirm")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-archive">{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => archiveKhataId && archiveKhataMut.mutate(archiveKhataId)}
+              data-testid="button-confirm-archive"
+            >
+              {registers.find(r => r.id === archiveKhataId)?.isArchived ? t("unarchive") : t("archive")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

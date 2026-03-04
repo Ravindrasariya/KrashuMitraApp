@@ -10,6 +10,7 @@ import { users } from "./models/auth";
 
 export const cropCards = pgTable("crop_cards", {
   id: serial("id").primaryKey(),
+  uniqueId: integer("unique_id").default(sql`nextval('global_unique_id_seq')`),
   userId: varchar("user_id").notNull().references(() => users.id),
   cropName: text("crop_name").notNull(),
   farmName: text("farm_name"),
@@ -33,6 +34,7 @@ export const cropEvents = pgTable("crop_events", {
 
 export const khataRegisters = pgTable("khata_registers", {
   id: serial("id").primaryKey(),
+  uniqueId: integer("unique_id").default(sql`nextval('global_unique_id_seq')`),
   userId: varchar("user_id").notNull().references(() => users.id),
   khataType: text("khata_type").notNull().default("crop_card"),
   cropCardId: integer("crop_card_id").references(() => cropCards.id),
@@ -41,6 +43,7 @@ export const khataRegisters = pgTable("khata_registers", {
   harvestDate: date("harvest_date"),
   production: text("production"),
   productionUnit: text("production_unit"),
+  isArchived: boolean("is_archived").notNull().default(false),
   totalDue: text("total_due").notNull().default("0"),
   totalPaid: text("total_paid").notNull().default("0"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -63,6 +66,7 @@ export const khataItems = pgTable("khata_items", {
 
 export const insertCropCardSchema = createInsertSchema(cropCards).omit({
   id: true,
+  uniqueId: true,
   createdAt: true,
 });
 
@@ -73,6 +77,7 @@ export const insertCropEventSchema = createInsertSchema(cropEvents).omit({
 
 export const insertKhataRegisterSchema = createInsertSchema(khataRegisters).omit({
   id: true,
+  uniqueId: true,
   createdAt: true,
   updatedAt: true,
 });

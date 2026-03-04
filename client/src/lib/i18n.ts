@@ -198,6 +198,14 @@ const translations = {
   deleteItemConfirm: { hi: "क्या आप वाकई यह आइटम हटाना चाहते हैं?", en: "Are you sure you want to delete this item?" },
   editKhata: { hi: "खाता संपादित करें", en: "Edit Khata" },
   totalExpense: { hi: "कुल खर्च", en: "Total Expense" },
+  archive: { hi: "संग्रहित करें", en: "Archive" },
+  unarchive: { hi: "वापस लाएं", en: "Unarchive" },
+  archived: { hi: "संग्रहित", en: "Archived" },
+  showArchived: { hi: "संग्रहित दिखाएं", en: "Show Archived" },
+  archiveConfirm: { hi: "क्या आप वाकई इस खाते को संग्रहित करना चाहते हैं?", en: "Are you sure you want to archive this khata?" },
+  unarchiveConfirm: { hi: "क्या आप इस खाते को वापस लाना चाहते हैं?", en: "Are you sure you want to unarchive this khata?" },
+  khataArchived: { hi: "खाता संग्रहित किया गया!", en: "Khata archived!" },
+  khataUnarchived: { hi: "खाता वापस लाया गया!", en: "Khata unarchived!" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

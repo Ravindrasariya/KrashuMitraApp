@@ -69,7 +69,7 @@ shared/
 2. **Digital Clinic** - Placeholder (coming soon)
 3. **Marketplace** - Placeholder (coming soon)
 4. **Farm Management** - Crop card management with timeline (login required)
-5. **Farm Khata** - Placeholder (coming soon)
+5. **Farm Khata** - Expense ledger with archive support
 6. **Admin** - User management panel (admin only, visible in sidebar)
 
 ## Key Features
@@ -105,14 +105,17 @@ shared/
   - 8 expense categories with sub-type dropdowns: Farm Preparation, Seed Cost, Plantation, Fertiliser, Pesticide, Manual Weed, Watering Labour, Harvest
   - Each item tracks date, category, sub-type, hours, rate, total cost, remarks, paid/unpaid
   - Totals auto-recalculate on item add/edit/delete
+  - Archive/unarchive khata registers (hidden by default, toggle to show)
+  - Global unique integer IDs (shared sequence across crop_cards and khata_registers)
 
 ## Database Tables
 - `users` - Auth users (id, phoneNumber, pin, knownIps, email, firstName, lastName, farmerCode, isAdmin, mustChangePin)
 - `sessions` - Session storage (express-session with connect-pg-simple)
-- `crop_cards` - Farmer's crop cards (userId, cropName, farmName?, variety?, startDate, status)
+- `crop_cards` - Farmer's crop cards (uniqueId, userId, cropName, farmName?, variety?, startDate, status)
 - `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted, productionPerBigha, productionUnit)
-- `khata_registers` - Farm expense registers (userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, totalDue, totalPaid)
+- `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, isArchived, totalDue, totalPaid)
 - `khata_items` - Expense line items (khataRegisterId, date, expenseCategory, subType?, hours?, perBighaRate?, totalCost, remarks?, isPaid)
+- `global_unique_id_seq` - Shared sequence for uniqueId across crop_cards and khata_registers (starts at 100)
 - `conversations` - Chat conversations
 - `messages` - Chat messages
 
@@ -142,6 +145,7 @@ shared/
 - `POST /api/khata` - Create khata register
 - `PATCH /api/khata/:id` - Update khata register
 - `DELETE /api/khata/:id` - Delete khata register
+- `POST /api/khata/:id/archive` - Toggle archive/unarchive khata register
 - `POST /api/khata/:id/items` - Add expense item
 - `PATCH /api/khata/items/:itemId` - Update expense item
 - `DELETE /api/khata/items/:itemId` - Delete expense item
