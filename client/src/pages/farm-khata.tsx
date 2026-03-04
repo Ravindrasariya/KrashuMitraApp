@@ -211,23 +211,25 @@ export default function FarmKhataPage() {
     <div className="px-4 py-4 pb-24 md:pb-8 max-w-3xl mx-auto" data-testid="page-farmKhata">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold" data-testid="text-page-title">{t("farmKhata")}</h1>
-        <Button
-          size="sm"
-          onClick={() => setNewKhataOpen(true)}
-          data-testid="button-new-khata"
-        >
-          <Plus className="w-4 h-4 mr-1" />
-          {t("newKhata")}
-        </Button>
-      </div>
-
-      <div className="flex items-center gap-2 mb-3">
-        <Switch
-          checked={showArchived}
-          onCheckedChange={setShowArchived}
-          data-testid="switch-show-archived"
-        />
-        <span className="text-xs text-muted-foreground">{t("showArchived")}</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <Switch
+              checked={showArchived}
+              onCheckedChange={setShowArchived}
+              data-testid="switch-show-archived"
+              className="scale-75"
+            />
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">{t("showArchived")}</span>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setNewKhataOpen(true)}
+            data-testid="button-new-khata"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            {t("newKhata")}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-4">
