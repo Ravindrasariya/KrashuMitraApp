@@ -25,6 +25,18 @@ const KHATA_TYPES = [
   { value: "rental", labelKey: "rentalKhata" as const },
 ];
 
+const MACHINERY_OPTIONS = [
+  { value: "harvester", labelKey: "machineryHarvester" as const },
+  { value: "pesticide_spray", labelKey: "machineryPesticideSpray" as const },
+  { value: "plantar", labelKey: "machineryPlantar" as const },
+  { value: "rotavator", labelKey: "machineryRotavator" as const },
+  { value: "seed_drill", labelKey: "machinerySeedDrill" as const },
+  { value: "thresher", labelKey: "machineryThresher" as const },
+  { value: "tractor", labelKey: "machineryTractor" as const },
+  { value: "tractor_trolley", labelKey: "machineryTractorTrolley" as const },
+  { value: "others", labelKey: "machineryOthers" as const },
+];
+
 const MONTHS: { value: string; labelKey: TranslationKey }[] = [
   { value: "all", labelKey: "allMonths" },
   { value: "1", labelKey: "january" },
@@ -220,9 +232,17 @@ export default function FarmKhataPage() {
       const panatPaid = parseFloat(r.totalPaid) || 0;
       return sum + Math.max(0, panatTotal - panatPaid);
     }
+    if (r.khataType === "rental") {
+      return sum + (r.rentalIsPaid ? 0 : (parseFloat(r.rentalTotalCharges || "0") || 0));
+    }
     return sum + (parseFloat(r.totalDue) || 0);
   }, 0);
-  const totalPaid = registers.reduce((sum, r) => sum + (parseFloat(r.totalPaid) || 0), 0);
+  const totalPaid = registers.reduce((sum, r) => {
+    if (r.khataType === "rental") {
+      return sum + (r.rentalIsPaid ? (parseFloat(r.rentalTotalCharges || "0") || 0) : 0);
+    }
+    return sum + (parseFloat(r.totalPaid) || 0);
+  }, 0);
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -338,7 +358,8 @@ export default function FarmKhataPage() {
             const due = parseFloat(reg.totalDue) || 0;
             const paid = parseFloat(reg.totalPaid) || 0;
             const panatDue = reg.khataType === "panat" ? Math.max(0, (parseFloat(reg.panatTotalAmount || "0") || 0) - paid) : 0;
-            const total = reg.khataType === "panat" ? paid : (due + paid);
+            const rentalTotal = parseFloat(reg.rentalTotalCharges || "0") || 0;
+            const total = reg.khataType === "panat" ? paid : reg.khataType === "rental" ? rentalTotal : (due + paid);
 
             return (
               <Card key={reg.id} className={reg.isArchived ? "opacity-60" : ""} data-testid={`card-khata-${reg.id}`}>
@@ -379,11 +400,30 @@ export default function FarmKhataPage() {
                         {reg.panatRatePerBigha && <span>@₹{reg.panatRatePerBigha}/{t("bighaCount")}</span>}
                       </div>
                     )}
+                    {reg.khataType === "rental" && reg.rentalFarmerName && (
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                        <span>{reg.rentalFarmerName}</span>
+                        {reg.rentalContact && <span>📞 {reg.rentalContact}</span>}
+                        {reg.rentalMachinery && (
+                          <span className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                            {t(MACHINERY_OPTIONS.find(m => m.value === reg.rentalMachinery)?.labelKey || "machineryOthers")}
+                          </span>
+                        )}
+                        {reg.rentalFarmWork && <span>• {reg.rentalFarmWork}</span>}
+                      </div>
+                    )}
                     {reg.khataType === "panat" ? (
                       <div className="flex gap-3 mt-1">
                         <span className="text-xs text-blue-600 dark:text-blue-400">{t("totalAmount")}: ₹{(parseFloat(reg.panatTotalAmount || "0") || 0).toLocaleString("en-IN")}</span>
                         <span className="text-xs text-green-600">₹{paid.toLocaleString("en-IN")} {t("paid")}</span>
                         <span className="text-xs text-orange-600 font-semibold">{t("netBalance")}: ₹{((parseFloat(reg.panatTotalAmount || "0") || 0) - paid).toLocaleString("en-IN")}</span>
+                      </div>
+                    ) : reg.khataType === "rental" ? (
+                      <div className="flex gap-3 mt-1">
+                        <span className="text-xs text-blue-600 dark:text-blue-400">{t("rentalTotalCharges")}: ₹{(parseFloat(reg.rentalTotalCharges || "0") || 0).toLocaleString("en-IN")}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${reg.rentalIsPaid ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"}`}>
+                          {reg.rentalIsPaid ? t("paid") : t("unpaid")}
+                        </span>
                       </div>
                     ) : (
                       <div className="flex gap-3 mt-1">
@@ -411,7 +451,7 @@ export default function FarmKhataPage() {
                 {isExpanded && (
                   <div className="border-t px-3 pb-3">
                     <div className="flex gap-2 py-2 flex-wrap">
-                      {reg.khataType !== "panat" && (
+                      {reg.khataType !== "panat" && reg.khataType !== "rental" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -462,7 +502,43 @@ export default function FarmKhataPage() {
                       </Button>
                     </div>
 
-                    {reg.khataType === "panat" ? null : expandedData.isLoading ? (
+                    {reg.khataType === "rental" && (
+                      <div className="bg-muted/50 rounded-md p-3 text-sm space-y-2 mt-1">
+                        {reg.rentalChargesPerBigha && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">{t("chargesPerBigha")}</span>
+                            <span>₹{parseFloat(reg.rentalChargesPerBigha).toLocaleString("en-IN")}</span>
+                          </div>
+                        )}
+                        {reg.rentalChargesPerHour && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">{t("chargesPerHour")}</span>
+                            <span>₹{parseFloat(reg.rentalChargesPerHour).toLocaleString("en-IN")}</span>
+                          </div>
+                        )}
+                        {reg.rentalBigha && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">{t("rentalBigha")}</span>
+                            <span>{reg.rentalBigha}</span>
+                          </div>
+                        )}
+                        {reg.rentalHours && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">{t("rentalHours")}</span>
+                            <span>{reg.rentalHours}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between border-t pt-1 font-semibold">
+                          <span>{t("rentalTotalCharges")}</span>
+                          <span>₹{(parseFloat(reg.rentalTotalCharges || "0") || 0).toLocaleString("en-IN")}</span>
+                        </div>
+                        {reg.rentalRemarks && (
+                          <div className="text-muted-foreground italic mt-1">{reg.rentalRemarks}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {reg.khataType === "panat" || reg.khataType === "rental" ? null : expandedData.isLoading ? (
                       <div className="flex justify-center py-4">
                         <Loader2 className="w-5 h-5 animate-spin" />
                       </div>
@@ -745,12 +821,25 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
   const [panatTotalAmount, setPanatTotalAmount] = useState("");
   const [panatRemarks, setPanatRemarks] = useState("");
 
+  const [rentalFarmerName, setRentalFarmerName] = useState("");
+  const [rentalContact, setRentalContact] = useState("");
+  const [rentalMachinery, setRentalMachinery] = useState("");
+  const [rentalFarmWork, setRentalFarmWork] = useState("");
+  const [rentalChargesPerBigha, setRentalChargesPerBigha] = useState("");
+  const [rentalChargesPerHour, setRentalChargesPerHour] = useState("");
+  const [rentalHours, setRentalHours] = useState("");
+  const [rentalBighaVal, setRentalBighaVal] = useState("");
+  const [rentalTotalCharges, setRentalTotalCharges] = useState("");
+  const [rentalIsPaid, setRentalIsPaid] = useState(false);
+  const [rentalRemarks, setRentalRemarks] = useState("");
+
   const isCropCard = khataType === "crop_card";
   const isBatai = khataType === "batai";
   const isPanat = khataType === "panat";
   const isMisc = khataType === "miscellaneous";
+  const isRental = khataType === "rental";
   const showCropFields = isCropCard || isBatai;
-  const isOtherType = !showCropFields && !isPanat && !isMisc;
+  const isOtherType = !showCropFields && !isPanat && !isMisc && !isRental;
 
   const handleCardSelect = (val: string) => {
     setSelectedCardId(val);
@@ -770,6 +859,14 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
 
   const computedPanatTotal = (parseFloat(panatRatePerBigha) || 0) * (parseFloat(panatTotalBigha) || 0);
 
+  const computedRentalTotal = (() => {
+    const bighaCharges = (parseFloat(rentalChargesPerBigha) || 0) * (parseFloat(rentalBighaVal) || 0);
+    const hourCharges = (parseFloat(rentalChargesPerHour) || 0) * (parseFloat(rentalHours) || 0);
+    return bighaCharges + hourCharges;
+  })();
+
+  const effectiveRentalTotal = rentalTotalCharges !== "" ? rentalTotalCharges : (computedRentalTotal > 0 ? computedRentalTotal.toString() : "");
+
   const handleSave = () => {
     if (isPanat) {
       if (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) return;
@@ -785,6 +882,29 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
         panatRemarks: panatRemarks || null,
       });
       setPanatPersonName(""); setPanatContact(""); setPanatRatePerBigha(""); setPanatTotalBigha(""); setPanatTotalAmount(""); setPanatRemarks("");
+      return;
+    }
+    if (isRental) {
+      if (!rentalFarmerName || !rentalMachinery) return;
+      const finalTotal = effectiveRentalTotal || computedRentalTotal.toString();
+      onSave({
+        khataType: "rental",
+        title: rentalFarmWork || rentalFarmerName,
+        rentalFarmerName,
+        rentalContact: rentalContact || null,
+        rentalMachinery,
+        rentalFarmWork: rentalFarmWork || null,
+        rentalChargesPerBigha: rentalChargesPerBigha || null,
+        rentalChargesPerHour: rentalChargesPerHour || null,
+        rentalHours: rentalHours || null,
+        rentalBigha: rentalBighaVal || null,
+        rentalTotalCharges: finalTotal,
+        rentalIsPaid,
+        rentalRemarks: rentalRemarks || null,
+      });
+      setRentalFarmerName(""); setRentalContact(""); setRentalMachinery(""); setRentalFarmWork("");
+      setRentalChargesPerBigha(""); setRentalChargesPerHour(""); setRentalHours(""); setRentalBighaVal("");
+      setRentalTotalCharges(""); setRentalIsPaid(false); setRentalRemarks("");
       return;
     }
     if (!title || (showCropFields && !plantationDate)) return;
@@ -847,6 +967,77 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
                 data-testid="input-misc-khata-title"
               />
             </div>
+          )}
+
+          {isRental && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("rentalFarmerName")} *</Label>
+                  <Input value={rentalFarmerName} onChange={e => setRentalFarmerName(e.target.value)} placeholder={t("rentalFarmerName")} data-testid="input-rental-farmer-name" />
+                </div>
+                <div>
+                  <Label>{t("rentalContact")}</Label>
+                  <Input type="tel" value={rentalContact} onChange={e => setRentalContact(e.target.value)} placeholder={t("rentalContact")} data-testid="input-rental-contact" />
+                </div>
+              </div>
+              <div>
+                <Label>{t("rentalMachinery")} *</Label>
+                <Select value={rentalMachinery} onValueChange={setRentalMachinery}>
+                  <SelectTrigger data-testid="select-rental-machinery">
+                    <SelectValue placeholder={t("selectMachinery")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MACHINERY_OPTIONS.map(m => (
+                      <SelectItem key={m.value} value={m.value}>{t(m.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t("rentalFarmWork")}</Label>
+                <Input value={rentalFarmWork} onChange={e => setRentalFarmWork(e.target.value)} placeholder={t("rentalFarmWork")} data-testid="input-rental-farm-work" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("chargesPerBigha")}</Label>
+                  <Input type="number" min="0" value={rentalChargesPerBigha} onChange={e => { setRentalChargesPerBigha(e.target.value); setRentalTotalCharges(""); }} placeholder="₹0" data-testid="input-rental-charges-bigha" />
+                </div>
+                <div>
+                  <Label>{t("chargesPerHour")}</Label>
+                  <Input type="number" min="0" value={rentalChargesPerHour} onChange={e => { setRentalChargesPerHour(e.target.value); setRentalTotalCharges(""); }} placeholder="₹0" data-testid="input-rental-charges-hour" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("rentalBigha")}</Label>
+                  <Input type="number" step="0.5" min="0" value={rentalBighaVal} onChange={e => { setRentalBighaVal(e.target.value); setRentalTotalCharges(""); }} placeholder="0" data-testid="input-rental-bigha" />
+                </div>
+                <div>
+                  <Label>{t("rentalHours")}</Label>
+                  <Input type="number" step="0.5" min="0" value={rentalHours} onChange={e => { setRentalHours(e.target.value); setRentalTotalCharges(""); }} placeholder="0" data-testid="input-rental-hours" />
+                </div>
+              </div>
+              <div>
+                <Label>{t("rentalTotalCharges")}</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={effectiveRentalTotal}
+                  onChange={e => setRentalTotalCharges(e.target.value)}
+                  placeholder="₹0"
+                  data-testid="input-rental-total-charges"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>{t("paid")}</Label>
+                <Switch checked={rentalIsPaid} onCheckedChange={setRentalIsPaid} data-testid="switch-rental-paid" />
+              </div>
+              <div>
+                <Label>{t("rentalRemarks")}</Label>
+                <Textarea value={rentalRemarks} onChange={e => setRentalRemarks(e.target.value)} placeholder={t("rentalRemarks")} rows={2} data-testid="input-rental-remarks" />
+              </div>
+            </>
           )}
 
           {isPanat && (
@@ -1005,7 +1196,7 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : (isMisc ? !title : (!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType))) || isPending}
+              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? (!rentalFarmerName || !rentalMachinery) : (isMisc ? !title : (!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType))) || isPending}
               className="flex-1"
               data-testid="button-create-khata"
             >
@@ -1038,6 +1229,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const isBatai = khata.khataType === "batai";
   const isPanat = khata.khataType === "panat";
   const isMisc = khata.khataType === "miscellaneous";
+  const isRental = khata.khataType === "rental";
 
   const [panatPersonName, setPanatPersonName] = useState(khata.panatPersonName || "");
   const [panatContact, setPanatContact] = useState(khata.panatContact || "");
@@ -1045,6 +1237,25 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const [panatTotalBigha, setPanatTotalBigha] = useState(khata.panatTotalBigha || "");
   const [panatRemarks, setPanatRemarks] = useState(khata.panatRemarks || "");
   const computedPanatTotal = (parseFloat(panatRatePerBigha) || 0) * (parseFloat(panatTotalBigha) || 0);
+
+  const [editRentalFarmerName, setEditRentalFarmerName] = useState(khata.rentalFarmerName || "");
+  const [editRentalContact, setEditRentalContact] = useState(khata.rentalContact || "");
+  const [editRentalMachinery, setEditRentalMachinery] = useState(khata.rentalMachinery || "");
+  const [editRentalFarmWork, setEditRentalFarmWork] = useState(khata.rentalFarmWork || "");
+  const [editRentalChargesPerBigha, setEditRentalChargesPerBigha] = useState(khata.rentalChargesPerBigha || "");
+  const [editRentalChargesPerHour, setEditRentalChargesPerHour] = useState(khata.rentalChargesPerHour || "");
+  const [editRentalHours, setEditRentalHours] = useState(khata.rentalHours || "");
+  const [editRentalBigha, setEditRentalBigha] = useState(khata.rentalBigha || "");
+  const [editRentalTotalCharges, setEditRentalTotalCharges] = useState(khata.rentalTotalCharges || "");
+  const [editRentalIsPaid, setEditRentalIsPaid] = useState(khata.rentalIsPaid || false);
+  const [editRentalRemarks, setEditRentalRemarks] = useState(khata.rentalRemarks || "");
+
+  const editComputedRentalTotal = (() => {
+    const b = (parseFloat(editRentalChargesPerBigha) || 0) * (parseFloat(editRentalBigha) || 0);
+    const h = (parseFloat(editRentalChargesPerHour) || 0) * (parseFloat(editRentalHours) || 0);
+    return b + h;
+  })();
+  const editEffectiveRentalTotal = editRentalTotalCharges !== "" ? editRentalTotalCharges : (editComputedRentalTotal > 0 ? editComputedRentalTotal.toString() : "");
 
   const handleEditSave = () => {
     if (isPanat) {
@@ -1057,6 +1268,25 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
         panatTotalBigha,
         panatTotalAmount: computedPanatTotal.toString(),
         panatRemarks: panatRemarks || null,
+      });
+      return;
+    }
+    if (isRental) {
+      if (!editRentalFarmerName || !editRentalMachinery) return;
+      const finalTotal = editEffectiveRentalTotal || editComputedRentalTotal.toString();
+      onSave({
+        title: editRentalFarmWork || editRentalFarmerName,
+        rentalFarmerName: editRentalFarmerName,
+        rentalContact: editRentalContact || null,
+        rentalMachinery: editRentalMachinery,
+        rentalFarmWork: editRentalFarmWork || null,
+        rentalChargesPerBigha: editRentalChargesPerBigha || null,
+        rentalChargesPerHour: editRentalChargesPerHour || null,
+        rentalHours: editRentalHours || null,
+        rentalBigha: editRentalBigha || null,
+        rentalTotalCharges: finalTotal,
+        rentalIsPaid: editRentalIsPaid,
+        rentalRemarks: editRentalRemarks || null,
       });
       return;
     }
@@ -1107,6 +1337,69 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
               </div>
             </>
           )}
+          {isRental && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("rentalFarmerName")} *</Label>
+                  <Input value={editRentalFarmerName} onChange={e => setEditRentalFarmerName(e.target.value)} data-testid="input-edit-rental-farmer-name" />
+                </div>
+                <div>
+                  <Label>{t("rentalContact")}</Label>
+                  <Input type="tel" value={editRentalContact} onChange={e => setEditRentalContact(e.target.value)} data-testid="input-edit-rental-contact" />
+                </div>
+              </div>
+              <div>
+                <Label>{t("rentalMachinery")} *</Label>
+                <Select value={editRentalMachinery} onValueChange={setEditRentalMachinery}>
+                  <SelectTrigger data-testid="select-edit-rental-machinery">
+                    <SelectValue placeholder={t("selectMachinery")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MACHINERY_OPTIONS.map(m => (
+                      <SelectItem key={m.value} value={m.value}>{t(m.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t("rentalFarmWork")}</Label>
+                <Input value={editRentalFarmWork} onChange={e => setEditRentalFarmWork(e.target.value)} data-testid="input-edit-rental-farm-work" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("chargesPerBigha")}</Label>
+                  <Input type="number" min="0" value={editRentalChargesPerBigha} onChange={e => { setEditRentalChargesPerBigha(e.target.value); setEditRentalTotalCharges(""); }} data-testid="input-edit-rental-charges-bigha" />
+                </div>
+                <div>
+                  <Label>{t("chargesPerHour")}</Label>
+                  <Input type="number" min="0" value={editRentalChargesPerHour} onChange={e => { setEditRentalChargesPerHour(e.target.value); setEditRentalTotalCharges(""); }} data-testid="input-edit-rental-charges-hour" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("rentalBigha")}</Label>
+                  <Input type="number" step="0.5" min="0" value={editRentalBigha} onChange={e => { setEditRentalBigha(e.target.value); setEditRentalTotalCharges(""); }} data-testid="input-edit-rental-bigha" />
+                </div>
+                <div>
+                  <Label>{t("rentalHours")}</Label>
+                  <Input type="number" step="0.5" min="0" value={editRentalHours} onChange={e => { setEditRentalHours(e.target.value); setEditRentalTotalCharges(""); }} data-testid="input-edit-rental-hours" />
+                </div>
+              </div>
+              <div>
+                <Label>{t("rentalTotalCharges")}</Label>
+                <Input type="number" min="0" value={editEffectiveRentalTotal} onChange={e => setEditRentalTotalCharges(e.target.value)} data-testid="input-edit-rental-total-charges" />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>{t("paid")}</Label>
+                <Switch checked={editRentalIsPaid} onCheckedChange={setEditRentalIsPaid} data-testid="switch-edit-rental-paid" />
+              </div>
+              <div>
+                <Label>{t("rentalRemarks")}</Label>
+                <Textarea value={editRentalRemarks} onChange={e => setEditRentalRemarks(e.target.value)} rows={2} data-testid="input-edit-rental-remarks" />
+              </div>
+            </>
+          )}
           {isBatai && (
             <>
               <div>
@@ -1137,13 +1430,13 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
               </div>
             </>
           )}
-          {!isPanat && (
+          {!isPanat && !isRental && (
             <div>
               <Label>{t("khataTitle")}</Label>
               <Input value={title} onChange={e => setTitle(e.target.value)} data-testid="input-edit-khata-title" />
             </div>
           )}
-          {!isPanat && !isMisc && (
+          {!isPanat && !isMisc && !isRental && (
             <>
               <div>
                 <Label>{t("plantationDate")}</Label>
@@ -1180,7 +1473,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
             </Button>
             <Button
               onClick={handleEditSave}
-              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : (!title || (isBatai && !bataidarName))) || isPending}
+              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? (!editRentalFarmerName || !editRentalMachinery) : (!title || (isBatai && !bataidarName))) || isPending}
               className="flex-1"
               data-testid="button-save-edit-khata"
             >

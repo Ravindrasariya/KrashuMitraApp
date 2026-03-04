@@ -97,25 +97,27 @@ shared/
 - Chatbot can edit existing crop cards via conversation (crop_card_edit_draft)
 - Each farmer gets a unique Farmer ID in FMYYYYMMDD{seq} format
 - Farmer ID shown in chatbot header and sidebar profile
-- Farm Khata (expense ledger) with Crop Card Khata type (others coming soon)
+- Farm Khata (expense ledger) with 5 khata types:
+  - **Crop Card Khata**: Links to crop cards, tracks expenses with 8 categories
+  - **Batai Khata**: Sharecropping with BataiDar name/contact, batai ratio (Half/One Third), per-item expense allocation
+  - **Panat Khata**: Land lease tracking with person name, rate/bigha, total bigha, payments, "Due" (बकाया) label
+  - **Miscellaneous Khata**: Title-only khata with same expense items as crop card (no crop link/dates/production)
+  - **Rental Khata (किराया खाता)**: Farm machinery rental tracking — farmer name, contact, machinery type (9 options), farm/work name, charges per bigha/hour, bigha/hours, auto-calculated total charges (editable), paid/unpaid toggle, remarks. No expense items — all data on the register itself. Unpaid→Total Due, Paid→Total Paid.
   - Filter by khata type, year, and month
   - Summary cards: Total Due (unpaid) and Total Paid
   - Expandable khata registers with add/edit/delete items
-  - New Khata can link to existing crop cards (auto-populates dates)
   - 8 expense categories with sub-type dropdowns: Farm Preparation, Seed Cost, Plantation, Fertiliser, Pesticide, Manual Weed, Watering Labour, Harvest
   - Each item tracks date, category, sub-type, hours, rate, total cost, remarks, paid/unpaid
   - Totals auto-recalculate on item add/edit/delete
   - Archive/unarchive khata registers (hidden by default, toggle to show)
   - Global unique integer IDs (shared sequence across crop_cards and khata_registers)
-  - Batai Khata: sharecropping expense tracking with BataiDar name/contact, batai ratio (Half/One Third)
-  - Per-item expense allocation (Farm Owner / BataiDar / As Per Batai Ratio) with auto-calculated split totals
 
 ## Database Tables
 - `users` - Auth users (id, phoneNumber, pin, knownIps, email, firstName, lastName, farmerCode, isAdmin, mustChangePin)
 - `sessions` - Session storage (express-session with connect-pg-simple)
 - `crop_cards` - Farmer's crop cards (uniqueId, userId, cropName, farmName?, variety?, startDate, status)
 - `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted, productionPerBigha, productionUnit)
-- `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, bataidarName?, bataidarContact?, bataiType?, bighaCount?, isArchived, totalDue, totalPaid, totalOwnerExpense, totalBataidarExpense)
+- `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, bataidarName?, bataidarContact?, bataiType?, bighaCount?, panatPersonName?, panatContact?, panatRatePerBigha?, panatTotalBigha?, panatTotalAmount?, panatRemarks?, rentalFarmerName?, rentalContact?, rentalMachinery?, rentalFarmWork?, rentalChargesPerBigha?, rentalChargesPerHour?, rentalHours?, rentalBigha?, rentalTotalCharges?, rentalIsPaid?, rentalRemarks?, isArchived, totalDue, totalPaid, totalOwnerExpense, totalBataidarExpense)
 - `khata_items` - Expense line items (khataRegisterId, date, expenseCategory, subType?, hours?, perBighaRate?, totalCost, remarks?, isPaid, expenseBornBy)
 - `global_unique_id_seq` - Shared sequence for uniqueId across crop_cards and khata_registers (starts at 100)
 - `conversations` - Chat conversations
