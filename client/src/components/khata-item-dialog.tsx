@@ -105,6 +105,7 @@ export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPendin
   const today = new Date().toISOString().split("T")[0];
   const isBatai = khataType === "batai";
   const isRental = khataType === "rental";
+  const isMachineryExpense = khataType === "machinery_expense";
 
   const [date, setDate] = useState(today);
   const [expenseCategory, setExpenseCategory] = useState("");
@@ -205,6 +206,17 @@ export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPendin
       });
       return;
     }
+    if (isMachineryExpense) {
+      if (!expenseCategory || !totalCost) return;
+      onSave({
+        date,
+        expenseCategory,
+        totalCost,
+        remarks: remarks || null,
+        isPaid,
+      });
+      return;
+    }
     if (!expenseCategory || !totalCost) return;
     onSave({
       date,
@@ -289,6 +301,34 @@ export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPendin
               <div>
                 <Label>{t("rentalRemarks")}</Label>
                 <Textarea value={rentalRemarks} onChange={e => setRentalRemarks(e.target.value)} placeholder={t("rentalRemarks")} rows={2} data-testid="input-rental-item-remarks" />
+              </div>
+            </>
+          ) : isMachineryExpense ? (
+            <>
+              <div>
+                <Label>{t("expenseCategory")} *</Label>
+                <Select value={expenseCategory} onValueChange={setExpenseCategory}>
+                  <SelectTrigger data-testid="select-machinery-expense-category">
+                    <SelectValue placeholder={t("selectCategory")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fuel">{t("fuel")}</SelectItem>
+                    <SelectItem value="maintenance">{t("maintenance")}</SelectItem>
+                    <SelectItem value="others">{t("others")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t("totalCost")} *</Label>
+                <Input type="number" min="0" value={totalCost} onChange={e => setTotalCost(e.target.value)} placeholder="₹" data-testid="input-machinery-expense-amount" />
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={isPaid} onCheckedChange={setIsPaid} data-testid="switch-machinery-expense-paid" />
+                <Label>{isPaid ? t("paid") : t("unpaid")}</Label>
+              </div>
+              <div>
+                <Label>{t("remarks")}</Label>
+                <Input value={remarks} onChange={e => setRemarks(e.target.value)} placeholder={t("remarks")} data-testid="input-machinery-expense-remarks" />
               </div>
             </>
           ) : (

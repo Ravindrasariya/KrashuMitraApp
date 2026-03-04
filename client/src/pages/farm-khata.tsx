@@ -23,6 +23,19 @@ const KHATA_TYPES = [
   { value: "panat", labelKey: "panatKhata" as const },
   { value: "miscellaneous", labelKey: "miscKhata" as const },
   { value: "rental", labelKey: "rentalKhata" as const },
+  { value: "machinery_expense", labelKey: "machineryExpenseKhata" as const },
+];
+
+const MACHINERY_CATEGORIES = [
+  { value: "tractor", labelKey: "categoryTractor" as const },
+  { value: "harvester", labelKey: "categoryHarvester" as const },
+  { value: "thresher", labelKey: "categoryThresher" as const },
+];
+
+const MACHINERY_EXPENSE_CATEGORIES = [
+  { value: "fuel", labelKey: "fuel" as const },
+  { value: "maintenance", labelKey: "maintenance" as const },
+  { value: "others", labelKey: "others" as const },
 ];
 
 const MACHINERY_OPTIONS = [
@@ -62,6 +75,9 @@ const CATEGORY_LABELS: Record<string, TranslationKey> = {
   manual_weed: "manualWeed",
   watering_labour: "wateringLabour",
   harvest: "harvest",
+  fuel: "fuel",
+  maintenance: "maintenance",
+  others: "others",
 };
 
 export default function FarmKhataPage() {
@@ -402,6 +418,13 @@ export default function FarmKhataPage() {
                         {reg.rentalOpeningBalance && parseFloat(reg.rentalOpeningBalance) > 0 && (
                           <span className="text-orange-600">{t("openingBalance")}: ₹{parseFloat(reg.rentalOpeningBalance).toLocaleString("en-IN")}</span>
                         )}
+                      </div>
+                    )}
+                    {reg.khataType === "machinery_expense" && (
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                        {reg.machineryName && <span>{reg.machineryName}</span>}
+                        {reg.machineryHp && <span>{reg.machineryHp} HP</span>}
+                        {reg.machineryPurchaseYear && <span>📅 {reg.machineryPurchaseYear}</span>}
                       </div>
                     )}
                     {reg.khataType === "panat" ? (
@@ -802,13 +825,19 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
   const [rentalOpeningBalance, setRentalOpeningBalance] = useState("");
   const [rentalRedFlag, setRentalRedFlag] = useState(false);
 
+  const [mechCategory, setMechCategory] = useState("");
+  const [mechName, setMechName] = useState("");
+  const [mechHp, setMechHp] = useState("");
+  const [mechPurchaseYear, setMechPurchaseYear] = useState("");
+
   const isCropCard = khataType === "crop_card";
   const isBatai = khataType === "batai";
   const isPanat = khataType === "panat";
   const isMisc = khataType === "miscellaneous";
   const isRental = khataType === "rental";
+  const isMachineryExpense = khataType === "machinery_expense";
   const showCropFields = isCropCard || isBatai;
-  const isOtherType = !showCropFields && !isPanat && !isMisc && !isRental;
+  const isOtherType = !showCropFields && !isPanat && !isMisc && !isRental && !isMachineryExpense;
 
   const handleCardSelect = (val: string) => {
     setSelectedCardId(val);
@@ -858,6 +887,22 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
         rentalRedFlag: rentalRedFlag,
       });
       setRentalFarmerName(""); setRentalContact(""); setRentalVillage(""); setRentalOpeningBalance(""); setRentalRedFlag(false);
+      return;
+    }
+    if (isMachineryExpense) {
+      if (!mechCategory) return;
+      const catLabel = MACHINERY_CATEGORIES.find(c => c.value === mechCategory)?.labelKey;
+      const catName = catLabel ? t(catLabel) : mechCategory;
+      const titleStr = mechName ? `${catName} - ${mechName}` : catName;
+      onSave({
+        khataType: "machinery_expense",
+        title: titleStr,
+        machineryCategory: mechCategory,
+        machineryName: mechName || null,
+        machineryHp: mechHp || null,
+        machineryPurchaseYear: mechPurchaseYear || null,
+      });
+      setMechCategory(""); setMechName(""); setMechHp(""); setMechPurchaseYear("");
       return;
     }
     if (!title || (showCropFields && !plantationDate)) return;
@@ -945,6 +990,38 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
               <div className="flex items-center justify-between">
                 <Label>{t("redFlag")}</Label>
                 <Switch checked={rentalRedFlag} onCheckedChange={setRentalRedFlag} data-testid="switch-rental-red-flag" />
+              </div>
+            </>
+          )}
+
+          {isMachineryExpense && (
+            <>
+              <div>
+                <Label>{t("machineryCategory")} *</Label>
+                <Select value={mechCategory} onValueChange={setMechCategory}>
+                  <SelectTrigger data-testid="select-machinery-category">
+                    <SelectValue placeholder={t("selectCategory")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MACHINERY_CATEGORIES.map(c => (
+                      <SelectItem key={c.value} value={c.value}>{t(c.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t("machineryName")}</Label>
+                <Input value={mechName} onChange={e => setMechName(e.target.value)} placeholder="e.g. Mahindra 475" data-testid="input-machinery-name" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("machineryHP")}</Label>
+                  <Input type="number" min="0" value={mechHp} onChange={e => setMechHp(e.target.value)} placeholder="e.g. 45" data-testid="input-machinery-hp" />
+                </div>
+                <div>
+                  <Label>{t("machineryPurchaseYear")}</Label>
+                  <Input type="number" min="1980" max="2099" value={mechPurchaseYear} onChange={e => setMechPurchaseYear(e.target.value)} placeholder="e.g. 2020" data-testid="input-machinery-purchase-year" />
+                </div>
               </div>
             </>
           )}
@@ -1105,7 +1182,7 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? !rentalFarmerName : (isMisc ? !title : (!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType))) || isPending}
+              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? !rentalFarmerName : isMachineryExpense ? !mechCategory : (isMisc ? !title : (!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType))) || isPending}
               className="flex-1"
               data-testid="button-create-khata"
             >
@@ -1139,6 +1216,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const isPanat = khata.khataType === "panat";
   const isMisc = khata.khataType === "miscellaneous";
   const isRental = khata.khataType === "rental";
+  const isMachineryExpense = khata.khataType === "machinery_expense";
 
   const [panatPersonName, setPanatPersonName] = useState(khata.panatPersonName || "");
   const [panatContact, setPanatContact] = useState(khata.panatContact || "");
@@ -1152,6 +1230,11 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const [editRentalVillage, setEditRentalVillage] = useState(khata.rentalVillage || "");
   const [editRentalOpeningBalance, setEditRentalOpeningBalance] = useState(khata.rentalOpeningBalance || "");
   const [editRentalRedFlag, setEditRentalRedFlag] = useState(khata.rentalRedFlag || false);
+
+  const [editMechCategory, setEditMechCategory] = useState(khata.machineryCategory || "");
+  const [editMechName, setEditMechName] = useState(khata.machineryName || "");
+  const [editMechHp, setEditMechHp] = useState(khata.machineryHp || "");
+  const [editMechPurchaseYear, setEditMechPurchaseYear] = useState(khata.machineryPurchaseYear || "");
 
   const handleEditSave = () => {
     if (isPanat) {
@@ -1177,6 +1260,20 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
         rentalVillage: editRentalVillage || null,
         rentalOpeningBalance: editRentalOpeningBalance || null,
         rentalRedFlag: editRentalRedFlag,
+      });
+      return;
+    }
+    if (isMachineryExpense) {
+      if (!editMechCategory) return;
+      const catLabel = MACHINERY_CATEGORIES.find(c => c.value === editMechCategory)?.labelKey;
+      const catName = catLabel ? t(catLabel) : editMechCategory;
+      const titleStr = editMechName ? `${catName} - ${editMechName}` : catName;
+      onSave({
+        title: titleStr,
+        machineryCategory: editMechCategory,
+        machineryName: editMechName || null,
+        machineryHp: editMechHp || null,
+        machineryPurchaseYear: editMechPurchaseYear || null,
       });
       return;
     }
@@ -1253,6 +1350,37 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
               </div>
             </>
           )}
+          {isMachineryExpense && (
+            <>
+              <div>
+                <Label>{t("machineryCategory")} *</Label>
+                <Select value={editMechCategory} onValueChange={setEditMechCategory}>
+                  <SelectTrigger data-testid="select-edit-machinery-category">
+                    <SelectValue placeholder={t("selectCategory")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MACHINERY_CATEGORIES.map(c => (
+                      <SelectItem key={c.value} value={c.value}>{t(c.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t("machineryName")}</Label>
+                <Input value={editMechName} onChange={e => setEditMechName(e.target.value)} placeholder="e.g. Mahindra 475" data-testid="input-edit-machinery-name" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("machineryHP")}</Label>
+                  <Input type="number" min="0" value={editMechHp} onChange={e => setEditMechHp(e.target.value)} placeholder="e.g. 45" data-testid="input-edit-machinery-hp" />
+                </div>
+                <div>
+                  <Label>{t("machineryPurchaseYear")}</Label>
+                  <Input type="number" min="1980" max="2099" value={editMechPurchaseYear} onChange={e => setEditMechPurchaseYear(e.target.value)} placeholder="e.g. 2020" data-testid="input-edit-machinery-purchase-year" />
+                </div>
+              </div>
+            </>
+          )}
           {isBatai && (
             <>
               <div>
@@ -1283,13 +1411,13 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
               </div>
             </>
           )}
-          {!isPanat && !isRental && (
+          {!isPanat && !isRental && !isMachineryExpense && (
             <div>
               <Label>{t("khataTitle")}</Label>
               <Input value={title} onChange={e => setTitle(e.target.value)} data-testid="input-edit-khata-title" />
             </div>
           )}
-          {!isPanat && !isMisc && !isRental && (
+          {!isPanat && !isMisc && !isRental && !isMachineryExpense && (
             <>
               <div>
                 <Label>{t("plantationDate")}</Label>
@@ -1326,7 +1454,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
             </Button>
             <Button
               onClick={handleEditSave}
-              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? !editRentalFarmerName : (!title || (isBatai && !bataidarName))) || isPending}
+              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : isRental ? !editRentalFarmerName : isMachineryExpense ? !editMechCategory : (!title || (isBatai && !bataidarName))) || isPending}
               className="flex-1"
               data-testid="button-save-edit-khata"
             >
