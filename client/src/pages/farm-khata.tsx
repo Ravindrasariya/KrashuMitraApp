@@ -748,8 +748,9 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
   const isCropCard = khataType === "crop_card";
   const isBatai = khataType === "batai";
   const isPanat = khataType === "panat";
+  const isMisc = khataType === "miscellaneous";
   const showCropFields = isCropCard || isBatai;
-  const isOtherType = !showCropFields && !isPanat;
+  const isOtherType = !showCropFields && !isPanat && !isMisc;
 
   const handleCardSelect = (val: string) => {
     setSelectedCardId(val);
@@ -834,6 +835,18 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
 
           {isOtherType && (
             <p className="text-sm text-muted-foreground text-center py-2">{t("comingSoon")}</p>
+          )}
+
+          {isMisc && (
+            <div>
+              <Label>{t("khataTitle")} *</Label>
+              <Input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder={t("khataTitle")}
+                data-testid="input-misc-khata-title"
+              />
+            </div>
           )}
 
           {isPanat && (
@@ -992,7 +1005,7 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : (!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType)) || isPending}
+              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : (isMisc ? !title : (!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType))) || isPending}
               className="flex-1"
               data-testid="button-create-khata"
             >
@@ -1024,6 +1037,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const [bighaCount, setBighaCount] = useState(khata.bighaCount || "");
   const isBatai = khata.khataType === "batai";
   const isPanat = khata.khataType === "panat";
+  const isMisc = khata.khataType === "miscellaneous";
 
   const [panatPersonName, setPanatPersonName] = useState(khata.panatPersonName || "");
   const [panatContact, setPanatContact] = useState(khata.panatContact || "");
@@ -1124,11 +1138,13 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
             </>
           )}
           {!isPanat && (
+            <div>
+              <Label>{t("khataTitle")}</Label>
+              <Input value={title} onChange={e => setTitle(e.target.value)} data-testid="input-edit-khata-title" />
+            </div>
+          )}
+          {!isPanat && !isMisc && (
             <>
-              <div>
-                <Label>{t("khataTitle")}</Label>
-                <Input value={title} onChange={e => setTitle(e.target.value)} data-testid="input-edit-khata-title" />
-              </div>
               <div>
                 <Label>{t("plantationDate")}</Label>
                 <Input type="date" value={plantationDate} onChange={e => setPlantationDate(e.target.value)} data-testid="input-edit-plantation-date" />
