@@ -1,0 +1,76 @@
+
+Plan
+Objective
+Fix two chatbot UX issues:
+
+Images appear at the bottom of the message after follow-up questions — they should appear right after the relevant text, before the 🔎 suggestions
+Chat input is a single-line fixed-height <Input> — it should be an auto-growing <textarea> that expands as the user types
+Tasks
+T001: Fix Image Placement — Show Images Before Follow-up Suggestions
+Blocked By: []
+Status: COMPLETED (previous session)
+Details:
+Message content is split at the first line starting with 🔎 into mainText and suggestText
+Render order: main text then images then follow-up suggestions (with subtle border separator)
+Files: client/src/components/chatbot.tsx
+Acceptance: Images appear after the answer text but before the 🔎 suggestion lines
+T002: Make Chat Input Auto-Growing Textarea
+Blocked By: []
+Status: COMPLETED (previous session)
+Details:
+Replaced <Input> with <textarea> that auto-grows from 1 row up to 4 rows (96px max)
+Enter sends, Shift+Enter adds newline
+useEffect on input state syncs height for both typed and programmatic changes (voice input)
+Height resets on send via both Enter key and Send button
+Files: client/src/components/chatbot.tsx
+Acceptance: Input box expands to show all typed text, up to 4 lines, and shrinks back when cleared
+Notes
+Both tasks were implemented and verified in the previous session. No further changes needed.
+
+Agent
+Chtbot:
+
+Chatbot can not use any technical words related with computer science like JSON as displayed in 2nd pic
+
+Abstract are coming in headers or instead of bullet points, puc 1
+
+Image generation is not working
+
+Start building
+Chatbot:
+
+still bullet point response are not fixed yet. pic 1
+Pic generation is getting failed. can we do this instead of generation can it pull an image from internet and directly show
+Start building
+Chatbot : now images are coming. But
+
+1l Placement of images and headers are not correct
+2. mobile view, input box just consider one small input row. Ideally it shall show all the text and input cell width shall be flexible and increases as input size increase
+
+Start building
+Farm Khata Feature:
+
+On top we will have fiters with drop down All, Crop Card Khata, Batai Khata, Panat/Watering Labour Khata, Miscellaneous khata, Rental khata
+Other filtesr of year, month, date - by default All year and all months and dates
+Sorted by latest date created and modified (whichever is latest)
+Summary cards at the top, showing Total Due, paid based on the filtesr applied
+We will have expandable view of every Khata register, with edit, delete (with warning) and add Item button for each card
+On top right side a button to create "New Khata" with all the options which we listed above in the drop downs
+Crop Card Khata will have following input fields :
+0) Date - of the latest entry/modification made
+
+Ability to select the card #, which in turn led to auto populating plantation date and harvest date, with production. If no card # selecetd then user will provide plantation date (mandatory ), harvest date and production are optional
+
+Add Item Button, which will led to a new row
+a) Auto-populated date by user gets ability to change the date incalendar view
+b) Expense type
+i) Farm preparation. 2nd cell shall show the following drop down to select Cultivator, Plow, Rotavator, Dhal/Pata Creation and others as 2nd option ), 3rd- hour took (non-mandatory), 4th Per Bigh/hour cost and 5th Total Cost, 6th remarks
+ii) See Cost , 2nd cell - Raw seed cost, Seed Transportation cost, seed treatment , 3rd cell Cost, 4th remarks
+iii)Plantation , 2nd cell - Tractor, labor in drop down, 3rd row- Per Bigha/hour rate, 4th -Total cost , remarks
+iv) Fertilisers , 2nd row- Show major fertilisers in drop down with others. 3rd row, rate per bag, 4th Total Cost , remarks
+v) Pesticides, 2nd row Herbicide, pesticide, Isnecticide, others, cost, remarks
+vi) Manual weed remover, Total Cost , remarks
+vii)Watering Labour Charges -2nd row per Bigha - Total - Remarks
+vii) Harvest, 2nd row Tractor, Hivester, Transport Charges, Labour Charges, Cold Store Charges, 3rd row - Total Cost, Remarks
+
+prepare this so far. for other type of khata I will tell you later
