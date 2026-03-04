@@ -17,6 +17,7 @@ export const cropCards = pgTable("crop_cards", {
   variety: text("variety"),
   startDate: date("start_date").notNull(),
   status: text("status").notNull().default("active"),
+  isArchived: boolean("is_archived").default(false),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

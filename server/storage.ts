@@ -8,7 +8,8 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   updateUserAdmin(id: string, data: Partial<Pick<User, "firstName" | "lastName" | "phoneNumber" | "email">>): Promise<User | undefined>;
   resetUserPin(id: string, hashedPin: string): Promise<User | undefined>;
-  getCropCardsByUser(userId: string): Promise<CropCard[]>;
+  getCropCardsByUser(userId: string, showArchived?: boolean): Promise<CropCard[]>;
+  archiveCropCard(id: number): Promise<CropCard | undefined>;
   getCropCardsWithEvents(userId: string): Promise<Array<CropCard & { events: CropEvent[] }>>;
   getCropCard(id: number): Promise<CropCard | undefined>;
   createCropCard(card: InsertCropCard): Promise<CropCard>;
@@ -97,8 +98,18 @@ class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getCropCardsByUser(userId: string): Promise<CropCard[]> {
-    return db.select().from(cropCards).where(eq(cropCards.userId, userId)).orderBy(desc(cropCards.createdAt));
+  async getCropCardsByUser(userId: string, showArchived?: boolean): Promise<CropCard[]> {
+    if (showArchived) {
+      return db.select().from(cropCards).where(eq(cropCards.userId, userId)).orderBy(desc(cropCards.createdAt));
+    }
+    return db.select().from(cropCards).where(and(eq(cropCards.userId, userId), eq(cropCards.isArchived, false))).orderBy(desc(cropCards.createdAt));
+  }
+
+  async archiveCropCard(id: number): Promise<CropCard | undefined> {
+    const card = await this.getCropCard(id);
+    if (!card) return undefined;
+    const [updated] = await db.update(cropCards).set({ isArchived: !card.isArchived }).where(eq(cropCards.id, id)).returning();
+    return updated;
   }
 
   async getCropCardsWithEvents(userId: string): Promise<Array<CropCard & { events: CropEvent[] }>> {

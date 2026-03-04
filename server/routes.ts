@@ -37,11 +37,24 @@ export async function registerRoutes(
   app.get("/api/crop-cards", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
-      const cards = await storage.getCropCardsByUser(userId);
+      const showArchived = req.query.showArchived === "true";
+      const cards = await storage.getCropCardsByUser(userId, showArchived);
       res.json(cards);
     } catch (error) {
       console.error("Error fetching crop cards:", error);
       res.status(500).json({ message: "Failed to fetch crop cards" });
+    }
+  });
+
+  app.post("/api/crop-cards/:id/archive", isAuthenticated, async (req: any, res) => {
+    try {
+      const card = await storage.getCropCard(parseInt(req.params.id));
+      if (!card) return res.status(404).json({ message: "Not found" });
+      if (card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const updated = await storage.archiveCropCard(card.id);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to archive crop card" });
     }
   });
 

@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Trash2, Plus, Sprout } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2, Plus, Sprout, Archive, ArchiveRestore } from "lucide-react";
 import { AddEventDialog } from "@/components/add-event-dialog";
 import { CropTimeline } from "@/components/crop-timeline";
 import type { CropCard, CropEvent } from "@shared/schema";
@@ -15,9 +15,10 @@ import { format } from "date-fns";
 interface CropCardItemProps {
   card: CropCard;
   onDelete: () => void;
+  onArchive: () => void;
 }
 
-export function CropCardItem({ card, onDelete }: CropCardItemProps) {
+export function CropCardItem({ card, onDelete, onArchive }: CropCardItemProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
@@ -54,7 +55,7 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card className="relative" data-testid={`card-crop-${card.id}`}>
+      <Card className={`relative ${card.isArchived ? "opacity-60" : ""}`} data-testid={`card-crop-${card.id}`}>
         <CollapsibleTrigger className="w-full text-left" data-testid={`button-expand-crop-${card.id}`}>
           <div className="p-4">
             <div className="flex items-start justify-between gap-2">
@@ -146,14 +147,27 @@ export function CropCardItem({ card, onDelete }: CropCardItemProps) {
                   </Button>
                 </div>
               ) : (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  data-testid={`button-delete-crop-${card.id}`}
-                >
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={onArchive}
+                    data-testid={`button-archive-crop-${card.id}`}
+                  >
+                    {card.isArchived
+                      ? <ArchiveRestore className="w-4 h-4 text-amber-600" />
+                      : <Archive className="w-4 h-4 text-muted-foreground" />
+                    }
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    data-testid={`button-delete-crop-${card.id}`}
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                </div>
               )}
             </div>
           </div>

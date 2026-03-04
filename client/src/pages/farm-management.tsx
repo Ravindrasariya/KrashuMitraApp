@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Plus, Sprout } from "lucide-react";
 import { Link } from "wouter";
 import { CropCardItem } from "@/components/crop-card-item";
@@ -15,14 +16,27 @@ export default function FarmManagementPage() {
   const { t } = useTranslation();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const { data: cropCards, isLoading } = useQuery<CropCard[]>({
-    queryKey: ["/api/crop-cards"],
+    queryKey: ["/api/crop-cards", { showArchived }],
+    queryFn: async () => {
+      const res = await fetch(`/api/crop-cards?showArchived=${showArchived}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
     enabled: isAuthenticated,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/crop-cards/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crop-cards"] });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/crop-cards/${id}/archive`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crop-cards"] });
     },
@@ -44,18 +58,29 @@ export default function FarmManagementPage() {
   }
 
   return (
-    <div className="pb-20 md:pb-8" data-testid="page-farm-management">
+    <div className="pb-24 md:pb-8" data-testid="page-farm-management">
       <div className="px-4 md:px-8 pt-4 pb-2 max-w-lg md:max-w-3xl mx-auto">
-        <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
           <h2 className="text-lg font-bold" data-testid="text-my-crop-cards">{t("myCropCards")}</h2>
-          <Button
-            size="sm"
-            onClick={() => setShowAddDialog(true)}
-            data-testid="button-add-crop-card"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            {t("addCropCard")}
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Switch
+                checked={showArchived}
+                onCheckedChange={setShowArchived}
+                data-testid="switch-show-archived-crops"
+                className="scale-75"
+              />
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap">{t("showArchived")}</span>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setShowAddDialog(true)}
+              data-testid="button-add-crop-card"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              {t("addCropCard")}
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -71,6 +96,7 @@ export default function FarmManagementPage() {
                 key={card.id}
                 card={card}
                 onDelete={() => deleteMutation.mutate(card.id)}
+                onArchive={() => archiveMutation.mutate(card.id)}
               />
             ))}
           </div>
