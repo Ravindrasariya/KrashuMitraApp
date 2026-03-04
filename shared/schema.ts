@@ -47,6 +47,12 @@ export const khataRegisters = pgTable("khata_registers", {
   bataidarContact: text("bataidar_contact"),
   bataiType: text("batai_type"),
   bighaCount: text("bigha_count"),
+  panatPersonName: text("panat_person_name"),
+  panatContact: text("panat_contact"),
+  panatRatePerBigha: text("panat_rate_per_bigha"),
+  panatTotalBigha: text("panat_total_bigha"),
+  panatTotalAmount: text("panat_total_amount"),
+  panatRemarks: text("panat_remarks"),
   isArchived: boolean("is_archived").notNull().default(false),
   totalDue: text("total_due").notNull().default("0"),
   totalPaid: text("total_paid").notNull().default("0"),
@@ -68,6 +74,16 @@ export const khataItems = pgTable("khata_items", {
   remarks: text("remarks"),
   isPaid: boolean("is_paid").notNull().default(false),
   expenseBornBy: text("expense_born_by").notNull().default("batai_ratio"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const panatPayments = pgTable("panat_payments", {
+  id: serial("id").primaryKey(),
+  khataRegisterId: integer("khata_register_id").notNull().references(() => khataRegisters.id, { onDelete: "cascade" }),
+  date: date("date").notNull(),
+  amount: text("amount").notNull().default("0"),
+  paymentMode: text("payment_mode").notNull().default("cash"),
+  remarks: text("remarks"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -94,6 +110,11 @@ export const insertKhataItemSchema = createInsertSchema(khataItems).omit({
   createdAt: true,
 });
 
+export const insertPanatPaymentSchema = createInsertSchema(panatPayments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type CropCard = typeof cropCards.$inferSelect;
 export type InsertCropCard = z.infer<typeof insertCropCardSchema>;
 export type CropEvent = typeof cropEvents.$inferSelect;
@@ -102,3 +123,5 @@ export type KhataRegister = typeof khataRegisters.$inferSelect;
 export type InsertKhataRegister = z.infer<typeof insertKhataRegisterSchema>;
 export type KhataItem = typeof khataItems.$inferSelect;
 export type InsertKhataItem = z.infer<typeof insertKhataItemSchema>;
+export type PanatPayment = typeof panatPayments.$inferSelect;
+export type InsertPanatPayment = z.infer<typeof insertPanatPaymentSchema>;

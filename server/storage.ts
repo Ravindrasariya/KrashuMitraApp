@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike } from "drizzle-orm";
 
 export interface IStorage {
@@ -33,6 +33,10 @@ export interface IStorage {
   deleteKhataItem(id: number): Promise<void>;
   getKhataItem(id: number): Promise<KhataItem | undefined>;
   recalculateKhataTotals(registerId: number): Promise<void>;
+  getPanatPayments(registerId: number): Promise<PanatPayment[]>;
+  createPanatPayment(data: InsertPanatPayment): Promise<PanatPayment>;
+  deletePanatPayment(id: number): Promise<void>;
+  getPanatPayment(id: number): Promise<PanatPayment | undefined>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -267,6 +271,24 @@ class DatabaseStorage implements IStorage {
       totalBataidarExpense: totalBataidarExpense.toString(),
       updatedAt: new Date(),
     }).where(eq(khataRegisters.id, registerId));
+  }
+
+  async getPanatPayments(registerId: number): Promise<PanatPayment[]> {
+    return db.select().from(panatPayments).where(eq(panatPayments.khataRegisterId, registerId)).orderBy(panatPayments.date);
+  }
+
+  async createPanatPayment(data: InsertPanatPayment): Promise<PanatPayment> {
+    const [created] = await db.insert(panatPayments).values(data).returning();
+    return created;
+  }
+
+  async getPanatPayment(id: number): Promise<PanatPayment | undefined> {
+    const [payment] = await db.select().from(panatPayments).where(eq(panatPayments.id, id));
+    return payment;
+  }
+
+  async deletePanatPayment(id: number): Promise<void> {
+    await db.delete(panatPayments).where(eq(panatPayments.id, id));
   }
 }
 

@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { setupPhoneAuth, isAuthenticated } from "./auth-phone";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
-import { insertCropCardSchema, insertCropEventSchema, insertKhataRegisterSchema, insertKhataItemSchema } from "@shared/schema";
+import { insertCropCardSchema, insertCropEventSchema, insertKhataRegisterSchema, insertKhataItemSchema, insertPanatPaymentSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
 const ai = new GoogleGenAI({
@@ -198,7 +198,8 @@ export async function registerRoutes(
       if (!reg) return res.status(404).json({ message: "Not found" });
       if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const items = await storage.getKhataItems(reg.id);
-      res.json({ ...reg, items });
+      const panatPaymentsList = reg.khataType === "panat" ? await storage.getPanatPayments(reg.id) : [];
+      res.json({ ...reg, items, panatPayments: panatPaymentsList });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch khata" });
     }
@@ -221,7 +222,7 @@ export async function registerRoutes(
       const reg = await storage.getKhataRegister(parseInt(req.params.id));
       if (!reg) return res.status(404).json({ message: "Not found" });
       if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
-      const allowedFields = insertKhataRegisterSchema.pick({ title: true, plantationDate: true, harvestDate: true, production: true, productionUnit: true, bataidarName: true, bataidarContact: true, bataiType: true, bighaCount: true }).partial();
+      const allowedFields = insertKhataRegisterSchema.pick({ title: true, plantationDate: true, harvestDate: true, production: true, productionUnit: true, bataidarName: true, bataidarContact: true, bataiType: true, bighaCount: true, panatPersonName: true, panatContact: true, panatRatePerBigha: true, panatTotalBigha: true, panatTotalAmount: true, panatRemarks: true }).partial();
       const parsed = allowedFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
       const updated = await storage.updateKhataRegister(parseInt(req.params.id), parsed.data);
@@ -305,6 +306,51 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete item" });
+    }
+  });
+
+  app.get("/api/khata/:id/panat-payments", isAuthenticated, async (req: any, res) => {
+    try {
+      const reg = await storage.getKhataRegister(parseInt(req.params.id));
+      if (!reg) return res.status(404).json({ message: "Not found" });
+      if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const payments = await storage.getPanatPayments(reg.id);
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch panat payments" });
+    }
+  });
+
+  app.post("/api/khata/:id/panat-payments", isAuthenticated, async (req: any, res) => {
+    try {
+      const reg = await storage.getKhataRegister(parseInt(req.params.id));
+      if (!reg) return res.status(404).json({ message: "Not found" });
+      if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const data = insertPanatPaymentSchema.parse({ ...req.body, khataRegisterId: parseInt(req.params.id) });
+      const payment = await storage.createPanatPayment(data);
+      const allPayments = await storage.getPanatPayments(reg.id);
+      const totalPaidAmount = allPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      await storage.updateKhataRegister(reg.id, { totalPaid: totalPaidAmount.toString() } as any);
+      res.status(201).json(payment);
+    } catch (error) {
+      console.error("Error creating panat payment:", error);
+      res.status(400).json({ message: "Invalid data" });
+    }
+  });
+
+  app.delete("/api/khata/panat-payments/:paymentId", isAuthenticated, async (req: any, res) => {
+    try {
+      const payment = await storage.getPanatPayment(parseInt(req.params.paymentId));
+      if (!payment) return res.status(404).json({ message: "Not found" });
+      const reg = await storage.getKhataRegister(payment.khataRegisterId);
+      if (!reg || reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      await storage.deletePanatPayment(parseInt(req.params.paymentId));
+      const allPayments = await storage.getPanatPayments(reg.id);
+      const totalPaidAmount = allPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      await storage.updateKhataRegister(reg.id, { totalPaid: totalPaidAmount.toString() } as any);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete panat payment" });
     }
   });
 

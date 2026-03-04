@@ -12,8 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { KhataItemDialog, SUB_TYPES } from "@/components/khata-item-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Plus, ChevronDown, ChevronUp, Trash2, Pencil, IndianRupee, Loader2, Archive, ArchiveRestore } from "lucide-react";
-import type { KhataRegister, KhataItem, CropCard } from "@shared/schema";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, ChevronDown, ChevronUp, Trash2, Pencil, IndianRupee, Loader2, Archive, ArchiveRestore, Banknote } from "lucide-react";
+import type { KhataRegister, KhataItem, CropCard, PanatPayment } from "@shared/schema";
 
 const KHATA_TYPES = [
   { value: "all", labelKey: "allKhata" as const },
@@ -69,6 +70,9 @@ export default function FarmKhataPage() {
   const [activeRegisterId, setActiveRegisterId] = useState<number | null>(null);
   const [deleteItemId, setDeleteItemId] = useState<number | null>(null);
   const [deleteItemRegisterId, setDeleteItemRegisterId] = useState<number | null>(null);
+  const [panatPaymentOpen, setPanatPaymentOpen] = useState(false);
+  const [panatPaymentRegisterId, setPanatPaymentRegisterId] = useState<number | null>(null);
+  const [deletePaymentId, setDeletePaymentId] = useState<number | null>(null);
 
   const queryParams = new URLSearchParams();
   if (typeFilter !== "all") queryParams.set("type", typeFilter);
@@ -184,6 +188,29 @@ export default function FarmKhataPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/khata"] });
       setDeleteItemId(null);
       toast({ title: t("itemDeleted") });
+    },
+  });
+
+  const createPanatPaymentMut = useMutation({
+    mutationFn: async ({ registerId, data }: { registerId: number; data: any }) => {
+      const res = await apiRequest("POST", `/api/khata/${registerId}/panat-payments`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/khata"] });
+      setPanatPaymentOpen(false);
+      toast({ title: t("paymentAdded") });
+    },
+  });
+
+  const deletePanatPaymentMut = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/khata/panat-payments/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/khata"] });
+      setDeletePaymentId(null);
+      toast({ title: t("paymentDeleted") });
     },
   });
 
@@ -336,10 +363,26 @@ export default function FarmKhataPage() {
                         </span>
                       </div>
                     )}
-                    <div className="flex gap-3 mt-1">
-                      <span className="text-xs text-orange-600">₹{due.toLocaleString("en-IN")} {t("unpaid")}</span>
-                      <span className="text-xs text-green-600">₹{paid.toLocaleString("en-IN")} {t("paid")}</span>
-                    </div>
+                    {reg.khataType === "panat" && reg.panatPersonName && (
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                        <span>{reg.panatPersonName}</span>
+                        {reg.panatContact && <span>📞 {reg.panatContact}</span>}
+                        {reg.panatTotalBigha && <span>{reg.panatTotalBigha} {t("totalBigha")}</span>}
+                        {reg.panatRatePerBigha && <span>@₹{reg.panatRatePerBigha}/{t("bighaCount")}</span>}
+                      </div>
+                    )}
+                    {reg.khataType === "panat" ? (
+                      <div className="flex gap-3 mt-1">
+                        <span className="text-xs text-blue-600 dark:text-blue-400">{t("totalAmount")}: ₹{(parseFloat(reg.panatTotalAmount || "0") || 0).toLocaleString("en-IN")}</span>
+                        <span className="text-xs text-green-600">₹{paid.toLocaleString("en-IN")} {t("paid")}</span>
+                        <span className="text-xs text-orange-600 font-semibold">{t("netBalance")}: ₹{((parseFloat(reg.panatTotalAmount || "0") || 0) - paid).toLocaleString("en-IN")}</span>
+                      </div>
+                    ) : (
+                      <div className="flex gap-3 mt-1">
+                        <span className="text-xs text-orange-600">₹{due.toLocaleString("en-IN")} {t("unpaid")}</span>
+                        <span className="text-xs text-green-600">₹{paid.toLocaleString("en-IN")} {t("paid")}</span>
+                      </div>
+                    )}
                     {reg.khataType === "batai" && (
                       <div className="flex gap-3 mt-0.5">
                         <span className="text-xs text-purple-600 dark:text-purple-400">
@@ -359,16 +402,29 @@ export default function FarmKhataPage() {
 
                 {isExpanded && (
                   <div className="border-t px-3 pb-3">
-                    <div className="flex gap-2 py-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => { e.stopPropagation(); setActiveRegisterId(reg.id); setEditingItem(null); setItemDialogOpen(true); }}
-                        data-testid={`button-add-item-${reg.id}`}
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        {t("addItem")}
-                      </Button>
+                    <div className="flex gap-2 py-2 flex-wrap">
+                      {reg.khataType !== "panat" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); setActiveRegisterId(reg.id); setEditingItem(null); setItemDialogOpen(true); }}
+                          data-testid={`button-add-item-${reg.id}`}
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          {t("addItem")}
+                        </Button>
+                      )}
+                      {reg.khataType === "panat" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); setPanatPaymentRegisterId(reg.id); setPanatPaymentOpen(true); }}
+                          data-testid={`button-add-payment-${reg.id}`}
+                        >
+                          <Banknote className="w-3 h-3 mr-1" />
+                          {t("addPayment")}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
@@ -468,12 +524,66 @@ export default function FarmKhataPage() {
                       </div>
                     )}
 
-                    {items.length > 0 && (
+                    {items.length > 0 && reg.khataType !== "panat" && (
                       <div className="flex justify-between mt-3 pt-2 border-t text-sm font-semibold">
                         <span>{t("totalExpense")}</span>
                         <span>₹{(due + paid).toLocaleString("en-IN")}</span>
                       </div>
                     )}
+
+                    {reg.khataType === "panat" && (() => {
+                      const panatPaymentsList: PanatPayment[] = (expandedData.data as any)?.panatPayments || [];
+                      const panatTotal = parseFloat(reg.panatTotalAmount || "0") || 0;
+                      let cumulative = 0;
+                      return (
+                        <div className="mt-2">
+                          {reg.panatRemarks && (
+                            <p className="text-xs text-muted-foreground mb-2 italic">{reg.panatRemarks}</p>
+                          )}
+                          {panatPaymentsList.length > 0 && (
+                            <>
+                              <p className="text-xs font-semibold mb-1.5">{t("payments")}</p>
+                              <div className="space-y-1.5">
+                                {panatPaymentsList.map(payment => {
+                                  cumulative += parseFloat(payment.amount) || 0;
+                                  const net = panatTotal - cumulative;
+                                  return (
+                                    <div key={payment.id} className="bg-muted/50 rounded-md p-2 text-xs" data-testid={`payment-${payment.id}`}>
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="font-medium">{payment.date}</span>
+                                            <span className="font-bold text-green-600">₹{(parseFloat(payment.amount) || 0).toLocaleString("en-IN")}</span>
+                                            <span className={`text-[10px] px-1 py-0.5 rounded ${payment.paymentMode === "account" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>
+                                              {payment.paymentMode === "account" ? t("account") : t("cash")}
+                                            </span>
+                                            <span className="text-orange-600 font-semibold">{t("netBalance")}: ₹{net.toLocaleString("en-IN")}</span>
+                                          </div>
+                                          {payment.remarks && <p className="text-muted-foreground mt-0.5">{payment.remarks}</p>}
+                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 text-destructive shrink-0"
+                                          onClick={() => setDeletePaymentId(payment.id)}
+                                          data-testid={`button-delete-payment-${payment.id}`}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex justify-between mt-2 pt-2 border-t text-sm font-semibold">
+                                <span>{t("netBalance")}</span>
+                                <span className="text-orange-600">₹{(panatTotal - cumulative).toLocaleString("en-IN")}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </Card>
@@ -547,6 +657,34 @@ export default function FarmKhataPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <PanatPaymentDialog
+        open={panatPaymentOpen}
+        onOpenChange={setPanatPaymentOpen}
+        register={registers.find(r => r.id === panatPaymentRegisterId) || null}
+        existingPayments={(expandedData.data as any)?.panatPayments || []}
+        onSave={(data) => panatPaymentRegisterId && createPanatPaymentMut.mutate({ registerId: panatPaymentRegisterId, data })}
+        isPending={createPanatPaymentMut.isPending}
+      />
+
+      <AlertDialog open={deletePaymentId !== null} onOpenChange={(v) => { if (!v) setDeletePaymentId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("delete")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("deletePaymentConfirm")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletePaymentId && deletePanatPaymentMut.mutate(deletePaymentId)}
+              className="bg-destructive text-destructive-foreground"
+              data-testid="button-confirm-delete-payment"
+            >
+              {t("delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={archiveKhataId !== null} onOpenChange={(v) => { if (!v) setArchiveKhataId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -592,10 +730,18 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
   const [bataiType, setBataiType] = useState("half");
   const [bighaCount, setBighaCount] = useState("");
 
+  const [panatPersonName, setPanatPersonName] = useState("");
+  const [panatContact, setPanatContact] = useState("");
+  const [panatRatePerBigha, setPanatRatePerBigha] = useState("");
+  const [panatTotalBigha, setPanatTotalBigha] = useState("");
+  const [panatTotalAmount, setPanatTotalAmount] = useState("");
+  const [panatRemarks, setPanatRemarks] = useState("");
+
   const isCropCard = khataType === "crop_card";
   const isBatai = khataType === "batai";
+  const isPanat = khataType === "panat";
   const showCropFields = isCropCard || isBatai;
-  const isOtherType = !showCropFields;
+  const isOtherType = !showCropFields && !isPanat;
 
   const handleCardSelect = (val: string) => {
     setSelectedCardId(val);
@@ -613,7 +759,25 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
     }
   };
 
+  const computedPanatTotal = (parseFloat(panatRatePerBigha) || 0) * (parseFloat(panatTotalBigha) || 0);
+
   const handleSave = () => {
+    if (isPanat) {
+      if (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) return;
+      const totalAmt = computedPanatTotal.toString();
+      onSave({
+        khataType: "panat",
+        title: panatPersonName,
+        panatPersonName,
+        panatContact: panatContact || null,
+        panatRatePerBigha,
+        panatTotalBigha,
+        panatTotalAmount: totalAmt,
+        panatRemarks: panatRemarks || null,
+      });
+      setPanatPersonName(""); setPanatContact(""); setPanatRatePerBigha(""); setPanatTotalBigha(""); setPanatTotalAmount(""); setPanatRemarks("");
+      return;
+    }
     if (!title || (showCropFields && !plantationDate)) return;
     if (isBatai && (!bataidarName || !bataiType)) return;
     const data: any = {
@@ -662,6 +826,37 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
 
           {isOtherType && (
             <p className="text-sm text-muted-foreground text-center py-2">{t("comingSoon")}</p>
+          )}
+
+          {isPanat && (
+            <>
+              <div>
+                <Label>{t("panatPersonName")} *</Label>
+                <Input value={panatPersonName} onChange={e => setPanatPersonName(e.target.value)} placeholder={t("panatPersonName")} data-testid="input-panat-person-name" />
+              </div>
+              <div>
+                <Label>{t("panatContact")}</Label>
+                <Input type="tel" value={panatContact} onChange={e => setPanatContact(e.target.value)} placeholder={t("panatContact")} data-testid="input-panat-contact" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("ratePerBigha")} *</Label>
+                  <Input type="number" min="0" value={panatRatePerBigha} onChange={e => setPanatRatePerBigha(e.target.value)} placeholder="₹0" data-testid="input-panat-rate" />
+                </div>
+                <div>
+                  <Label>{t("totalBigha")} *</Label>
+                  <Input type="number" step="0.5" min="0" value={panatTotalBigha} onChange={e => setPanatTotalBigha(e.target.value)} placeholder="0" data-testid="input-panat-bigha" />
+                </div>
+              </div>
+              <div>
+                <Label>{t("totalAmount")}</Label>
+                <Input type="text" readOnly value={`₹${computedPanatTotal.toLocaleString("en-IN")}`} className="bg-muted font-bold" data-testid="input-panat-total" />
+              </div>
+              <div>
+                <Label>{t("panatRemarks")}</Label>
+                <Textarea value={panatRemarks} onChange={e => setPanatRemarks(e.target.value)} placeholder={t("panatRemarks")} rows={2} data-testid="input-panat-remarks" />
+              </div>
+            </>
           )}
 
           {isBatai && (
@@ -789,7 +984,7 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType || isPending}
+              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : (!title || (showCropFields && !plantationDate) || (isBatai && !bataidarName) || isOtherType)) || isPending}
               className="flex-1"
               data-testid="button-create-khata"
             >
@@ -820,6 +1015,38 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const [bataiType, setBataiType] = useState(khata.bataiType || "half");
   const [bighaCount, setBighaCount] = useState(khata.bighaCount || "");
   const isBatai = khata.khataType === "batai";
+  const isPanat = khata.khataType === "panat";
+
+  const [panatPersonName, setPanatPersonName] = useState(khata.panatPersonName || "");
+  const [panatContact, setPanatContact] = useState(khata.panatContact || "");
+  const [panatRatePerBigha, setPanatRatePerBigha] = useState(khata.panatRatePerBigha || "");
+  const [panatTotalBigha, setPanatTotalBigha] = useState(khata.panatTotalBigha || "");
+  const [panatRemarks, setPanatRemarks] = useState(khata.panatRemarks || "");
+  const computedPanatTotal = (parseFloat(panatRatePerBigha) || 0) * (parseFloat(panatTotalBigha) || 0);
+
+  const handleEditSave = () => {
+    if (isPanat) {
+      if (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) return;
+      onSave({
+        title: panatPersonName,
+        panatPersonName,
+        panatContact: panatContact || null,
+        panatRatePerBigha,
+        panatTotalBigha,
+        panatTotalAmount: computedPanatTotal.toString(),
+        panatRemarks: panatRemarks || null,
+      });
+      return;
+    }
+    onSave({
+      title,
+      plantationDate: plantationDate || null,
+      harvestDate: harvestDate || null,
+      production: production || null,
+      productionUnit: productionUnit || null,
+      ...(isBatai ? { bataidarName, bataidarContact: bataidarContact || null, bataiType, bighaCount: bighaCount || null } : {}),
+    });
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -828,6 +1055,36 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
           <DialogTitle>{t("editKhata")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {isPanat && (
+            <>
+              <div>
+                <Label>{t("panatPersonName")} *</Label>
+                <Input value={panatPersonName} onChange={e => setPanatPersonName(e.target.value)} data-testid="input-edit-panat-person-name" />
+              </div>
+              <div>
+                <Label>{t("panatContact")}</Label>
+                <Input type="tel" value={panatContact} onChange={e => setPanatContact(e.target.value)} data-testid="input-edit-panat-contact" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("ratePerBigha")} *</Label>
+                  <Input type="number" min="0" value={panatRatePerBigha} onChange={e => setPanatRatePerBigha(e.target.value)} data-testid="input-edit-panat-rate" />
+                </div>
+                <div>
+                  <Label>{t("totalBigha")} *</Label>
+                  <Input type="number" step="0.5" min="0" value={panatTotalBigha} onChange={e => setPanatTotalBigha(e.target.value)} data-testid="input-edit-panat-bigha" />
+                </div>
+              </div>
+              <div>
+                <Label>{t("totalAmount")}</Label>
+                <Input type="text" readOnly value={`₹${computedPanatTotal.toLocaleString("en-IN")}`} className="bg-muted font-bold" data-testid="input-edit-panat-total" />
+              </div>
+              <div>
+                <Label>{t("panatRemarks")}</Label>
+                <Textarea value={panatRemarks} onChange={e => setPanatRemarks(e.target.value)} rows={2} data-testid="input-edit-panat-remarks" />
+              </div>
+            </>
+          )}
           {isBatai && (
             <>
               <div>
@@ -858,54 +1115,141 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
               </div>
             </>
           )}
-          <div>
-            <Label>{t("khataTitle")}</Label>
-            <Input value={title} onChange={e => setTitle(e.target.value)} data-testid="input-edit-khata-title" />
-          </div>
-          <div>
-            <Label>{t("plantationDate")}</Label>
-            <Input type="date" value={plantationDate} onChange={e => setPlantationDate(e.target.value)} data-testid="input-edit-plantation-date" />
-          </div>
-          <div>
-            <Label>{t("harvestDate")}</Label>
-            <Input type="date" value={harvestDate} onChange={e => setHarvestDate(e.target.value)} data-testid="input-edit-harvest-date" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label>{t("production")}</Label>
-              <Input type="number" value={production} onChange={e => setProduction(e.target.value)} data-testid="input-edit-production" />
-            </div>
-            <div>
-              <Label>{t("productionPerBigha")}</Label>
-              <Select value={productionUnit} onValueChange={setProductionUnit}>
-                <SelectTrigger data-testid="select-edit-production-unit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="quintal">क्विंटल / Quintal</SelectItem>
-                  <SelectItem value="kg">किलो / Kg</SelectItem>
-                  <SelectItem value="bag">बोरी / Bag</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          {!isPanat && (
+            <>
+              <div>
+                <Label>{t("khataTitle")}</Label>
+                <Input value={title} onChange={e => setTitle(e.target.value)} data-testid="input-edit-khata-title" />
+              </div>
+              <div>
+                <Label>{t("plantationDate")}</Label>
+                <Input type="date" value={plantationDate} onChange={e => setPlantationDate(e.target.value)} data-testid="input-edit-plantation-date" />
+              </div>
+              <div>
+                <Label>{t("harvestDate")}</Label>
+                <Input type="date" value={harvestDate} onChange={e => setHarvestDate(e.target.value)} data-testid="input-edit-harvest-date" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("production")}</Label>
+                  <Input type="number" value={production} onChange={e => setProduction(e.target.value)} data-testid="input-edit-production" />
+                </div>
+                <div>
+                  <Label>{t("productionPerBigha")}</Label>
+                  <Select value={productionUnit} onValueChange={setProductionUnit}>
+                    <SelectTrigger data-testid="select-edit-production-unit">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="quintal">क्विंटल / Quintal</SelectItem>
+                      <SelectItem value="kg">किलो / Kg</SelectItem>
+                      <SelectItem value="bag">बोरी / Bag</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </>
+          )}
           <div className="flex gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1" data-testid="button-cancel-edit-khata">
               {t("cancel")}
             </Button>
             <Button
-              onClick={() => onSave({
-                title,
-                plantationDate: plantationDate || null,
-                harvestDate: harvestDate || null,
-                production: production || null,
-                productionUnit: productionUnit || null,
-                ...(isBatai ? { bataidarName, bataidarContact: bataidarContact || null, bataiType, bighaCount: bighaCount || null } : {}),
-              })}
-              disabled={!title || (isBatai && !bataidarName) || isPending}
+              onClick={handleEditSave}
+              disabled={(isPanat ? (!panatPersonName || !panatRatePerBigha || !panatTotalBigha) : (!title || (isBatai && !bataidarName))) || isPending}
               className="flex-1"
               data-testid="button-save-edit-khata"
             >
+              {isPending ? t("loading") : t("save")}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PanatPaymentDialog({ open, onOpenChange, register, existingPayments, onSave, isPending }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  register: KhataRegister | null;
+  existingPayments: PanatPayment[];
+  onSave: (data: any) => void;
+  isPending: boolean;
+}) {
+  const { t } = useTranslation();
+  const today = new Date().toISOString().split("T")[0];
+  const [date, setDate] = useState(today);
+  const [amount, setAmount] = useState("");
+  const [paymentMode, setPaymentMode] = useState("cash");
+  const [remarks, setRemarks] = useState("");
+
+  const totalPaidSoFar = existingPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  const totalAmount = parseFloat(register?.panatTotalAmount || "0") || 0;
+  const netBefore = totalAmount - totalPaidSoFar;
+  const netAfter = netBefore - (parseFloat(amount) || 0);
+
+  const handleSave = () => {
+    if (!amount || !date) return;
+    onSave({ date, amount, paymentMode, remarks: remarks || null });
+    setDate(today); setAmount(""); setPaymentMode("cash"); setRemarks("");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t("addPayment")}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="bg-muted/50 rounded-md p-3 text-sm">
+            <div className="flex justify-between">
+              <span>{t("totalAmount")}</span>
+              <span className="font-bold">₹{totalAmount.toLocaleString("en-IN")}</span>
+            </div>
+            <div className="flex justify-between mt-1">
+              <span>{t("totalPaid")}</span>
+              <span className="font-bold text-green-600">₹{totalPaidSoFar.toLocaleString("en-IN")}</span>
+            </div>
+            <div className="flex justify-between mt-1 border-t pt-1">
+              <span className="font-semibold">{t("netBalance")}</span>
+              <span className="font-bold text-orange-600">₹{netBefore.toLocaleString("en-IN")}</span>
+            </div>
+          </div>
+          <div>
+            <Label>{t("paymentDate")} *</Label>
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} data-testid="input-payment-date" />
+          </div>
+          <div>
+            <Label>{t("paymentAmount")} *</Label>
+            <Input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="₹0" data-testid="input-payment-amount" />
+          </div>
+          <div>
+            <Label>{t("paymentMode")}</Label>
+            <Select value={paymentMode} onValueChange={setPaymentMode}>
+              <SelectTrigger data-testid="select-payment-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash">{t("cash")}</SelectItem>
+                <SelectItem value="account">{t("account")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>{t("paymentRemarks")}</Label>
+            <Input value={remarks} onChange={e => setRemarks(e.target.value)} placeholder={t("paymentRemarks")} data-testid="input-payment-remarks" />
+          </div>
+          {amount && (
+            <div className="text-sm text-center font-semibold text-orange-600">
+              {t("netBalance")}: ₹{netAfter.toLocaleString("en-IN")}
+            </div>
+          )}
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+              {t("cancel")}
+            </Button>
+            <Button onClick={handleSave} disabled={!amount || !date || isPending} className="flex-1" data-testid="button-save-payment">
               {isPending ? t("loading") : t("save")}
             </Button>
           </div>
