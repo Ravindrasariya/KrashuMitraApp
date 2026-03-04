@@ -221,7 +221,7 @@ export async function registerRoutes(
       const reg = await storage.getKhataRegister(parseInt(req.params.id));
       if (!reg) return res.status(404).json({ message: "Not found" });
       if (reg.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
-      const allowedFields = insertKhataRegisterSchema.pick({ title: true, plantationDate: true, harvestDate: true, production: true, productionUnit: true, bataidarName: true, bataidarContact: true, bataiType: true }).partial();
+      const allowedFields = insertKhataRegisterSchema.pick({ title: true, plantationDate: true, harvestDate: true, production: true, productionUnit: true, bataidarName: true, bataidarContact: true, bataiType: true, bighaCount: true }).partial();
       const parsed = allowedFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
       const updated = await storage.updateKhataRegister(parseInt(req.params.id), parsed.data);

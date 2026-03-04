@@ -209,6 +209,7 @@ const translations = {
   bataidarName: { hi: "बटाईदार का नाम", en: "BataiDar Name" },
   bataidarContact: { hi: "बटाईदार का फ़ोन", en: "BataiDar Contact" },
   bataiTypeLbl: { hi: "बटाई का प्रकार", en: "Batai Type" },
+  bighaCount: { hi: "बीघा", en: "Bigha" },
   oneThird: { hi: "तिहाई (1/3)", en: "One Third (1/3)" },
   halfBatai: { hi: "आधी (1/2)", en: "Half (1/2)" },
   expenseBornBy: { hi: "खर्च किसका", en: "Expense Borne By" },

@@ -46,6 +46,7 @@ export const khataRegisters = pgTable("khata_registers", {
   bataidarName: text("bataidar_name"),
   bataidarContact: text("bataidar_contact"),
   bataiType: text("batai_type"),
+  bighaCount: text("bigha_count"),
   isArchived: boolean("is_archived").notNull().default(false),
   totalDue: text("total_due").notNull().default("0"),
   totalPaid: text("total_paid").notNull().default("0"),

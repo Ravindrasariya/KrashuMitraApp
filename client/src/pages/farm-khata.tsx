@@ -590,6 +590,7 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
   const [bataidarName, setBataidarName] = useState("");
   const [bataidarContact, setBataidarContact] = useState("");
   const [bataiType, setBataiType] = useState("half");
+  const [bighaCount, setBighaCount] = useState("");
 
   const isCropCard = khataType === "crop_card";
   const isBatai = khataType === "batai";
@@ -630,10 +631,11 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
       data.bataidarName = bataidarName;
       data.bataidarContact = bataidarContact || null;
       data.bataiType = bataiType;
+      data.bighaCount = bighaCount || null;
     }
     onSave(data);
     setTitle(""); setSelectedCardId(""); setPlantationDate(""); setHarvestDate(""); setProduction("");
-    setBataidarName(""); setBataidarContact(""); setBataiType("half");
+    setBataidarName(""); setBataidarContact(""); setBataiType("half"); setBighaCount("");
   };
 
   return (
@@ -683,17 +685,23 @@ function NewKhataDialog({ open, onOpenChange, cropCards, onSave, isPending }: {
                   data-testid="input-bataidar-contact"
                 />
               </div>
-              <div>
-                <Label>{t("bataiTypeLbl")} *</Label>
-                <Select value={bataiType} onValueChange={setBataiType}>
-                  <SelectTrigger data-testid="select-batai-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="half">{t("halfBatai")}</SelectItem>
-                    <SelectItem value="one_third">{t("oneThird")}</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("bataiTypeLbl")} *</Label>
+                  <Select value={bataiType} onValueChange={setBataiType}>
+                    <SelectTrigger data-testid="select-batai-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="half">{t("halfBatai")}</SelectItem>
+                      <SelectItem value="one_third">{t("oneThird")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{t("bighaCount")}</Label>
+                  <Input type="number" step="0.5" min="0" value={bighaCount} onChange={e => setBighaCount(e.target.value)} placeholder="0" data-testid="input-bigha-count" />
+                </div>
               </div>
             </>
           )}
@@ -810,6 +818,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const [bataidarName, setBataidarName] = useState(khata.bataidarName || "");
   const [bataidarContact, setBataidarContact] = useState(khata.bataidarContact || "");
   const [bataiType, setBataiType] = useState(khata.bataiType || "half");
+  const [bighaCount, setBighaCount] = useState(khata.bighaCount || "");
   const isBatai = khata.khataType === "batai";
 
   return (
@@ -829,17 +838,23 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
                 <Label>{t("bataidarContact")}</Label>
                 <Input type="tel" value={bataidarContact} onChange={e => setBataidarContact(e.target.value)} data-testid="input-edit-bataidar-contact" />
               </div>
-              <div>
-                <Label>{t("bataiTypeLbl")} *</Label>
-                <Select value={bataiType} onValueChange={setBataiType}>
-                  <SelectTrigger data-testid="select-edit-batai-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="half">{t("halfBatai")}</SelectItem>
-                    <SelectItem value="one_third">{t("oneThird")}</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>{t("bataiTypeLbl")} *</Label>
+                  <Select value={bataiType} onValueChange={setBataiType}>
+                    <SelectTrigger data-testid="select-edit-batai-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="half">{t("halfBatai")}</SelectItem>
+                      <SelectItem value="one_third">{t("oneThird")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{t("bighaCount")}</Label>
+                  <Input type="number" step="0.5" min="0" value={bighaCount} onChange={e => setBighaCount(e.target.value)} placeholder="0" data-testid="input-edit-bigha-count" />
+                </div>
               </div>
             </>
           )}
@@ -885,7 +900,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
                 harvestDate: harvestDate || null,
                 production: production || null,
                 productionUnit: productionUnit || null,
-                ...(isBatai ? { bataidarName, bataidarContact: bataidarContact || null, bataiType } : {}),
+                ...(isBatai ? { bataidarName, bataidarContact: bataidarContact || null, bataiType, bighaCount: bighaCount || null } : {}),
               })}
               disabled={!title || (isBatai && !bataidarName) || isPending}
               className="flex-1"

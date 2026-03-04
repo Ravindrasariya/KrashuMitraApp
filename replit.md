@@ -115,7 +115,7 @@ shared/
 - `sessions` - Session storage (express-session with connect-pg-simple)
 - `crop_cards` - Farmer's crop cards (uniqueId, userId, cropName, farmName?, variety?, startDate, status)
 - `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted, productionPerBigha, productionUnit)
-- `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, bataidarName?, bataidarContact?, bataiType?, isArchived, totalDue, totalPaid, totalOwnerExpense, totalBataidarExpense)
+- `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, bataidarName?, bataidarContact?, bataiType?, bighaCount?, isArchived, totalDue, totalPaid, totalOwnerExpense, totalBataidarExpense)
 - `khata_items` - Expense line items (khataRegisterId, date, expenseCategory, subType?, hours?, perBighaRate?, totalCost, remarks?, isPaid, expenseBornBy)
 - `global_unique_id_seq` - Shared sequence for uniqueId across crop_cards and khata_registers (starts at 100)
 - `conversations` - Chat conversations
