@@ -9,10 +9,9 @@ import { useState } from "react";
 
 const navItems = [
   { path: "/", icon: Home, labelKey: "home" as const },
-  { path: "/digital-clinic", icon: Stethoscope, labelKey: "digitalClinic" as const },
-  { path: "/marketplace", icon: ShoppingBag, labelKey: "marketplace" as const },
-  { path: "/farm-management", icon: Sprout, labelKey: "farmManagement" as const },
-  { path: "/farm-khata", icon: BookOpen, labelKey: "farmKhata" as const },
+  { path: "/marketplace", icon: ShoppingBag, labelKey: "navMarket" as const },
+  { path: "/farm-management", icon: Sprout, labelKey: "navCrops" as const },
+  { path: "/farm-khata", icon: BookOpen, labelKey: "navKhata" as const },
 ];
 
 export function BottomNav() {
@@ -55,6 +54,18 @@ export function BottomNav() {
           </SheetTrigger>
           <SheetContent side="bottom" className="rounded-t-2xl pb-8">
             <div className="space-y-2 pt-4">
+              <Link
+                href="/digital-clinic"
+                onClick={() => setSheetOpen(false)}
+                className="flex items-center gap-3 w-full p-3 rounded-md hover-elevate"
+                data-testid="nav-digitalClinic"
+              >
+                <Stethoscope className="w-5 h-5 text-primary" />
+                <span className="font-medium">{t("digitalClinic")}</span>
+              </Link>
+
+              <Separator />
+
               <button
                 onClick={toggleLanguage}
                 className="flex items-center gap-3 w-full p-3 rounded-md hover-elevate"

@@ -22,7 +22,7 @@ export function AppHeader() {
           data-testid="button-header-language"
         >
           <Globe className="w-4 h-4" />
-          <span className="font-medium">{language === "hi" ? "हिंदी" : "EN"}</span>
+          <span className="font-medium">{language === "hi" ? "EN" : "हिंदी"}</span>
         </button>
       </div>
     </header>
