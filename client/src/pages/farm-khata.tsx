@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { KhataItemDialog } from "@/components/khata-item-dialog";
+import { KhataItemDialog, SUB_TYPES } from "@/components/khata-item-dialog";
 import { Plus, ChevronDown, ChevronUp, Trash2, Pencil, IndianRupee, Loader2 } from "lucide-react";
 import type { KhataRegister, KhataItem, CropCard } from "@shared/schema";
 
@@ -356,7 +356,13 @@ export default function FarmKhataPage() {
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-medium">{t(CATEGORY_LABELS[item.expenseCategory] || "others")}</span>
                                   {item.subType && (
-                                    <span className="text-xs bg-background px-1.5 py-0.5 rounded">{item.subType}</span>
+                                    <span className="text-xs bg-background px-1.5 py-0.5 rounded">
+                                      {(() => {
+                                        const subs = SUB_TYPES[item.expenseCategory];
+                                        const match = subs?.find(s => s.value === item.subType);
+                                        return match ? t(match.labelKey as any) : item.subType;
+                                      })()}
+                                    </span>
                                   )}
                                   <span className={`text-[10px] px-1 py-0.5 rounded ${item.isPaid ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"}`}>
                                     {item.isPaid ? t("paid") : t("unpaid")}
@@ -669,6 +675,7 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
   const [plantationDate, setPlantationDate] = useState(khata.plantationDate || "");
   const [harvestDate, setHarvestDate] = useState(khata.harvestDate || "");
   const [production, setProduction] = useState(khata.production || "");
+  const [productionUnit, setProductionUnit] = useState(khata.productionUnit || "quintal");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -689,16 +696,31 @@ function EditKhataDialog({ open, onOpenChange, khata, onSave, isPending }: {
             <Label>{t("harvestDate")}</Label>
             <Input type="date" value={harvestDate} onChange={e => setHarvestDate(e.target.value)} data-testid="input-edit-harvest-date" />
           </div>
-          <div>
-            <Label>{t("production")}</Label>
-            <Input value={production} onChange={e => setProduction(e.target.value)} data-testid="input-edit-production" />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>{t("production")}</Label>
+              <Input type="number" value={production} onChange={e => setProduction(e.target.value)} data-testid="input-edit-production" />
+            </div>
+            <div>
+              <Label>{t("productionPerBigha")}</Label>
+              <Select value={productionUnit} onValueChange={setProductionUnit}>
+                <SelectTrigger data-testid="select-edit-production-unit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="quintal">क्विंटल / Quintal</SelectItem>
+                  <SelectItem value="kg">किलो / Kg</SelectItem>
+                  <SelectItem value="bag">बोरी / Bag</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1" data-testid="button-cancel-edit-khata">
               {t("cancel")}
             </Button>
             <Button
-              onClick={() => onSave({ title, plantationDate: plantationDate || null, harvestDate: harvestDate || null, production: production || null })}
+              onClick={() => onSave({ title, plantationDate: plantationDate || null, harvestDate: harvestDate || null, production: production || null, productionUnit: productionUnit || null })}
               disabled={!title || isPending}
               className="flex-1"
               data-testid="button-save-edit-khata"

@@ -19,7 +19,7 @@ const EXPENSE_CATEGORIES = [
   { value: "harvest", labelKey: "harvest" as const },
 ];
 
-const SUB_TYPES: Record<string, { value: string; labelKey: string }[]> = {
+export const SUB_TYPES: Record<string, { value: string; labelKey: string }[]> = {
   farm_preparation: [
     { value: "cultivator", labelKey: "cultivator" },
     { value: "plow", labelKey: "plow" },
