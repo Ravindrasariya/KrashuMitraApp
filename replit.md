@@ -82,7 +82,8 @@ shared/
 - Edit and delete events with confirmation dialogs
 - Auto-suggestions for descriptions based on history
 - Krashu Mitra AI chatbot with voice input and TTS output (Hindi female voice, feminine persona)
-- Stop button (red square) to abort chatbot mid-response; partial text preserved, no blank bubbles
+- Stop button (red pill in chat area + square icon in input bar) to abort chatbot mid-response; partial text preserved, no blank bubbles
+- Image attachment: users can share crop photos via camera/gallery; images stored in PostgreSQL (chat_images table), sent to Gemini for analysis (disease ID, pest ID, growth assessment)
 - Voice input fills input box for review before sending (no auto-send)
 - Chatbot responds with short bullet-point answers (3-5 points) and suggests 1-2 follow-up questions
 - TTS uses slower rate (0.75) with natural pauses at sentence boundaries for better Hindi flow

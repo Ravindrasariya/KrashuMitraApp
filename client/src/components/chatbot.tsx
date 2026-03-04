@@ -7,12 +7,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2, Square } from "lucide-react";
+import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2, Square, ImagePlus } from "lucide-react";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   images?: string[];
+  imageUrl?: string;
 }
 
 interface CropCardDraft {
@@ -194,6 +195,9 @@ export function Chatbot() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 768px)").matches);
   const [loadingImages, setLoadingImages] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<{ imageId: number; url: string; previewUrl: string } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -253,12 +257,46 @@ export function Chatbot() {
     setIsStreaming(false);
   }, []);
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isStreaming) return;
+  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: language === "hi" ? "फ़ाइल बहुत बड़ी है (अधिकतम 5MB)" : "File too large (max 5MB)", variant: "destructive" });
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch("/api/chat-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ imageData: base64, mimeType: file.type }),
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setAttachedImage({ imageId: data.id, url: data.url, previewUrl: base64 });
+    } catch {
+      toast({ title: language === "hi" ? "फोटो अपलोड विफल" : "Photo upload failed", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [language, toast]);
 
-    const userMsg: ChatMessage = { role: "user", content: text };
+  const sendMessage = useCallback(async (text: string) => {
+    if ((!text.trim() && !attachedImage) || isStreaming) return;
+
+    const currentImage = attachedImage;
+    const userMsg: ChatMessage = { role: "user", content: text, imageUrl: currentImage?.url };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
+    setAttachedImage(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setIsStreaming(true);
 
@@ -270,7 +308,7 @@ export function Chatbot() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ message: text, language, history: messages.slice(-20) }),
+        body: JSON.stringify({ message: text || (language === "hi" ? "इस फोटो को देखें" : "Look at this photo"), language, history: messages.slice(-20), imageId: currentImage?.imageId }),
         signal: controller.signal,
       });
 
@@ -361,7 +399,7 @@ export function Chatbot() {
       setIsStreaming(false);
       setLoadingImages(false);
     }
-  }, [isStreaming, language]);
+  }, [isStreaming, language, attachedImage]);
 
   const approveDraft = useCallback(async () => {
     if (!draft) return;
@@ -530,7 +568,17 @@ export function Chatbot() {
               data-testid={`chat-message-${i}`}
             >
               {msg.role === "user" ? (
-                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                <div>
+                  {msg.imageUrl && (
+                    <img
+                      src={msg.imageUrl}
+                      alt={language === "hi" ? "संलग्न फोटो" : "Attached photo"}
+                      className="rounded-lg max-w-full w-full max-h-40 object-cover mb-1.5"
+                      data-testid={`chat-user-image-${i}`}
+                    />
+                  )}
+                  {msg.content && <div className="whitespace-pre-wrap break-words">{msg.content}</div>}
+                </div>
               ) : (() => {
                 const lines = msg.content.split("\n");
                 const suggestionIdx = lines.findIndex(l => l.trimStart().startsWith("🔎"));
@@ -573,10 +621,16 @@ export function Chatbot() {
         ))}
 
         {isStreaming && (
-          <div className="flex justify-start">
-            <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-            </div>
+          <div className="flex flex-col items-center gap-2 py-1">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            <button
+              onClick={stopStreaming}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-medium shadow-sm"
+              data-testid="button-stop-streaming"
+            >
+              <Square className="w-3 h-3 fill-current" />
+              {t("stopReply")}
+            </button>
           </div>
         )}
 
@@ -688,7 +742,51 @@ export function Chatbot() {
       </div>
 
       <div className="p-3 border-t bg-background shrink-0 rounded-b-2xl">
+        {attachedImage && (
+          <div className="flex items-center gap-2 mb-2 max-w-lg mx-auto">
+            <div className="relative">
+              <img
+                src={attachedImage.previewUrl}
+                alt={language === "hi" ? "संलग्न फोटो" : "Attached photo"}
+                className="w-16 h-16 object-cover rounded-md border"
+                data-testid="img-attachment-preview"
+              />
+              <button
+                onClick={() => setAttachedImage(null)}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"
+                data-testid="button-remove-attachment"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <span className="text-xs text-muted-foreground">{t("attachPhoto")}</span>
+          </div>
+        )}
+        {isUploading && (
+          <div className="flex items-center gap-2 mb-2 max-w-lg mx-auto text-xs text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>{language === "hi" ? "फोटो अपलोड हो रही है..." : "Uploading photo..."}</span>
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleImageSelect}
+          className="hidden"
+          data-testid="input-file-attachment"
+        />
         <div className="flex items-end gap-2 max-w-lg mx-auto">
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isStreaming || isUploading}
+            data-testid="button-attach-image"
+          >
+            <ImagePlus className="w-4 h-4" />
+          </Button>
           <Button
             size="icon"
             variant={isListening ? "destructive" : "outline"}
@@ -728,7 +826,7 @@ export function Chatbot() {
             <Button
               size="icon"
               onClick={() => sendMessage(input)}
-              disabled={!input.trim()}
+              disabled={!input.trim() && !attachedImage}
               data-testid="button-send-chat"
             >
               <Send className="w-4 h-4" />

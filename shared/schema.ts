@@ -171,6 +171,22 @@ export const insertLendenTransactionSchema = createInsertSchema(lendenTransactio
   createdAt: true,
 });
 
+export const chatImages = pgTable("chat_images", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  imageData: text("image_data").notNull(),
+  mimeType: text("mime_type").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertChatImageSchema = createInsertSchema(chatImages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ChatImage = typeof chatImages.$inferSelect;
+export type InsertChatImage = z.infer<typeof insertChatImageSchema>;
+
 export type CropCard = typeof cropCards.$inferSelect;
 export type InsertCropCard = z.infer<typeof insertCropCardSchema>;
 export type CropEvent = typeof cropEvents.$inferSelect;

@@ -98,6 +98,8 @@ const translations = {
   resetFailed: { hi: "पिन रीसेट विफल हुआ", en: "PIN reset failed" },
   pinReset: { hi: "पिन सफलतापूर्वक रीसेट हो गया!", en: "PIN reset successfully!" },
   listenAgain: { hi: "फिर सुनें", en: "Listen again" },
+  stopReply: { hi: "रोकें", en: "Stop" },
+  attachPhoto: { hi: "फोटो जोड़ें", en: "Attach Photo" },
   adminPanel: { hi: "एडमिन पैनल", en: "Admin Panel" },
   allUsers: { hi: "सभी उपयोगकर्ता", en: "All Users" },
   resetPinToDefault: { hi: "पिन रीसेट करें (0000)", en: "Reset PIN (0000)" },

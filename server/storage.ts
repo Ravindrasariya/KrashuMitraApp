@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -45,6 +45,8 @@ export interface IStorage {
   recalculateLendenTotals(registerId: number): Promise<void>;
   accrueInterestForRegister(registerId: number): Promise<void>;
   accrueInterestAllLenden(): Promise<void>;
+  saveChatImage(userId: string, imageData: string, mimeType: string): Promise<ChatImage>;
+  getChatImage(id: number): Promise<ChatImage | undefined>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -498,6 +500,16 @@ class DatabaseStorage implements IStorage {
         console.error(`Failed to accrue interest for register ${reg.id}:`, e);
       }
     }
+  }
+
+  async saveChatImage(userId: string, imageData: string, mimeType: string): Promise<ChatImage> {
+    const [image] = await db.insert(chatImages).values({ userId, imageData, mimeType }).returning();
+    return image;
+  }
+
+  async getChatImage(id: number): Promise<ChatImage | undefined> {
+    const [image] = await db.select().from(chatImages).where(eq(chatImages.id, id));
+    return image;
   }
 }
 

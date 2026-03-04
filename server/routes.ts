@@ -489,9 +489,46 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/chat-images", isAuthenticated, async (req: any, res) => {
+    try {
+      const { imageData, mimeType } = req.body;
+      if (!imageData || !mimeType) {
+        return res.status(400).json({ message: "imageData and mimeType required" });
+      }
+      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+      if (!allowedTypes.includes(mimeType)) {
+        return res.status(400).json({ message: "Invalid image type" });
+      }
+      const base64Only = imageData.replace(/^data:[^;]+;base64,/, "");
+      const actualBytes = Buffer.byteLength(base64Only, "base64");
+      if (actualBytes > 5 * 1024 * 1024) {
+        return res.status(413).json({ message: "Image too large. Max 5MB." });
+      }
+      const image = await storage.saveChatImage(req.session.userId, imageData, mimeType);
+      res.json({ id: image.id, url: `/api/chat-images/${image.id}` });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to save image" });
+    }
+  });
+
+  app.get("/api/chat-images/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const image = await storage.getChatImage(parseInt(req.params.id));
+      if (!image) return res.status(404).json({ message: "Image not found" });
+      if (image.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const base64Data = image.imageData.replace(/^data:[^;]+;base64,/, "");
+      const buffer = Buffer.from(base64Data, "base64");
+      res.setHeader("Content-Type", image.mimeType);
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch image" });
+    }
+  });
+
   app.post("/api/krashuved/chat", isAuthenticated, async (req: any, res) => {
     try {
-      const { message, language, history } = req.body;
+      const { message, language, history, imageId } = req.body;
       const userId = req.session.userId;
 
       const today = new Date().toISOString().split("T")[0];
@@ -638,6 +675,13 @@ Strict language rules:
 - Use simple everyday words instead: "information" (data), "activity" (event), "list" (array), "changes" (update), "ready" (draft).
 - Always speak as an experienced, friendly village farming woman would.
 
+Photo Analysis:
+- When the farmer shares a photo/image of their crop, carefully analyze it.
+- Identify any visible diseases, pests, nutrient deficiencies, or growth issues.
+- Provide practical advice on treatment, prevention, and care based on what you see.
+- If the image is unclear, ask the farmer to share a clearer photo.
+- Always respond in the farmer's language about what you observe in the photo.
+
 Image Support:
 - When the farmer asks about topics where images would help (e.g., crop diseases, pest identification, growth stages, farming techniques), include [IMG: English search keywords] markers in your response.
 - The IMG marker text must be short English search keywords (e.g., [IMG: wheat leaf rust disease], [IMG: potato early blight], [IMG: rice stem borer pest])
@@ -663,13 +707,27 @@ For general agriculture questions, answer concisely and helpfully.`;
         }
       }
 
+      const userParts: Array<any> = [{ text: message }];
+      if (imageId) {
+        const chatImage = await storage.getChatImage(parseInt(imageId));
+        if (chatImage) {
+          const base64Data = chatImage.imageData.replace(/^data:[^;]+;base64,/, "");
+          userParts.push({
+            inlineData: {
+              mimeType: chatImage.mimeType,
+              data: base64Data,
+            },
+          });
+        }
+      }
+
       const stream = await ai.models.generateContentStream({
         model: "gemini-2.5-flash",
         contents: [
           { role: "user", parts: [{ text: systemPrompt }] },
           { role: "model", parts: [{ text: language === "hi" ? "मैं कृषु मित्र हूँ, आपकी कृषि सहायिका। बताइए मैं क्या मदद कर सकती हूँ?" : "I am Krashu Mitra, ready to assist you with agriculture. How can I help?" }] },
           ...conversationHistory,
-          { role: "user", parts: [{ text: message }] },
+          { role: "user", parts: userParts },
         ],
         config: { maxOutputTokens: 8192 },
       });
