@@ -358,6 +358,13 @@ const translations = {
   weatherMax: { hi: "अधिकतम", en: "Max" },
   weatherToday: { hi: "आज", en: "Today" },
   weatherTomorrow: { hi: "कल", en: "Tomorrow" },
+  nextActivity: { hi: "अगली गतिविधि", en: "Next Activity" },
+  inDays: { hi: "दिन में", en: "days" },
+  today: { hi: "आज", en: "Today" },
+  overdue: { hi: "विलंबित", en: "Overdue" },
+  weatherAlert: { hi: "मौसम चेतावनी", en: "Weather Alert" },
+  aiSuggestion: { hi: "सुझाव", en: "Suggestion" },
+  loadingSuggestions: { hi: "सुझाव लोड हो रहे हैं...", en: "Loading suggestions..." },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

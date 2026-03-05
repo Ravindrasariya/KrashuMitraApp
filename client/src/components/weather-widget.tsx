@@ -25,6 +25,8 @@ interface WeatherData {
     tempMin: number;
     precipitation: number;
   }>;
+  lat: number;
+  lng: number;
   timestamp: number;
 }
 
@@ -102,6 +104,8 @@ export function WeatherWidget() {
           tempMin: Math.round(json.daily.temperature_2m_min[i]),
           precipitation: json.daily.precipitation_sum[i],
         })),
+        lat,
+        lng,
         timestamp: Date.now(),
       };
 

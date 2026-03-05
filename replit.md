@@ -4,7 +4,7 @@
 Krashu Mitra is a mobile-first, responsive web application designed to empower Indian farmers. It provides tools for farm management, financial tracking, and AI-powered agricultural assistance. The application supports bilingual operation (Hindi and English) and features a conversational AI chatbot, "Krashu Mitra," to offer guidance and facilitate various farming tasks.
 
 Key capabilities include:
-- **Farm Management**: Crop card creation, tracking of crop events, and yield recording.
+- **Farm Management**: Crop card creation, tracking of crop events, and yield recording. Each active crop card shows AI-powered suggestions: next upcoming activity (with days countdown), weather warnings when conditions are unfavorable, and actionable farming tips — all powered by Gemini AI + Open-Meteo weather data.
 - **Digital Clinic**: AI-powered disease diagnosis, soil testing, and potato seed testing services.
 - **Weather Widget**: Real-time weather display on home page using Open-Meteo API (free, no key required). Shows current temperature with weather icon; click to expand for humidity, wind, and 3-day forecast.
 - **Farm Khata (Ledger)**: Comprehensive expense and income tracking across multiple ledger types, including crop-specific, sharecropping, land lease, rental, machinery expense, and lending ledgers.
@@ -48,3 +48,12 @@ The application follows a client-server architecture:
 -   **Scheduled Tasks**: `node-cron` (for Lending Ledger interest accrual)
 -   **UI Components**: Shadcn UI
 -   **Image Source**: Wikimedia Commons (for chatbot image suggestions)
+-   **Weather API**: Open-Meteo (free, no key required) — used by weather widget and crop suggestion endpoint
+
+## AI Crop Suggestions
+- Endpoint: `GET /api/crop-cards/:id/suggestions?lat={lat}&lng={lng}&lang={hi|en}`
+- Uses Gemini 2.5 Flash with `responseMimeType: "application/json"` and `thinkingConfig: { thinkingBudget: 1024 }` to get structured JSON
+- Returns: `{ nextActivity: { name, daysFromNow, description } | null, weatherWarning: { message, severity } | null, suggestion: string | null }`
+- Server-side in-memory cache per crop card (6-hour TTL), keyed by `cardId-lat-lng-lang`
+- Frontend reads lat/lng from `krashu-weather-cache` localStorage key (set by weather widget)
+- Displayed on active crop cards: compact strip (collapsed) + full detail section (expanded)

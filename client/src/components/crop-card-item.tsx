@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Trash2, Plus, Sprout, Archive, ArchiveRestore } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2, Plus, Sprout, Archive, ArchiveRestore, CalendarClock, CloudRain, Lightbulb, Loader2, AlertTriangle, Info } from "lucide-react";
 import { AddEventDialog } from "@/components/add-event-dialog";
 import { CropTimeline } from "@/components/crop-timeline";
 import type { CropCard, CropEvent } from "@shared/schema";
@@ -18,8 +18,25 @@ interface CropCardItemProps {
   onArchive: () => void;
 }
 
+interface SuggestionData {
+  nextActivity: { name: string; daysFromNow: number; description: string } | null;
+  weatherWarning: { message: string; severity: "info" | "warning" | "danger" } | null;
+  suggestion: string | null;
+}
+
+function getLocationFromCache(): { lat: number; lng: number } {
+  try {
+    const raw = localStorage.getItem("krashu-weather-cache");
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data.lat && data.lng) return { lat: data.lat, lng: data.lng };
+    }
+  } catch {}
+  return { lat: 28.6139, lng: 77.2090 };
+}
+
 export function CropCardItem({ card, onDelete, onArchive }: CropCardItemProps) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CropEvent | null>(null);
@@ -33,6 +50,25 @@ export function CropCardItem({ card, onDelete, onArchive }: CropCardItemProps) {
       return res.json();
     },
     enabled: isOpen,
+  });
+
+  const isActive = card.status === "active" && !card.isArchived;
+
+  const location = useMemo(() => getLocationFromCache(), []);
+
+  const { data: suggestions, isLoading: suggestionsLoading } = useQuery<SuggestionData>({
+    queryKey: ["/api/crop-cards", card.id, "suggestions", language],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/crop-cards/${card.id}/suggestions?lat=${location.lat}&lng=${location.lng}&lang=${language}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: isActive,
+    staleTime: 6 * 60 * 60 * 1000,
+    retry: 1,
   });
 
   const toggleMutation = useMutation({
@@ -51,7 +87,25 @@ export function CropCardItem({ card, onDelete, onArchive }: CropCardItemProps) {
 
   const completedCount = events.filter(e => e.isCompleted).length;
   const totalCount = events.length;
-  const isActive = card.status === "active";
+
+  const severityColors = {
+    info: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800",
+    warning: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800",
+    danger: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800",
+  };
+
+  const SeverityIcon = ({ severity }: { severity: string }) => {
+    if (severity === "danger") return <AlertTriangle className="w-3.5 h-3.5" />;
+    if (severity === "warning") return <CloudRain className="w-3.5 h-3.5" />;
+    return <Info className="w-3.5 h-3.5" />;
+  };
+
+  function formatDaysLabel(days: number): string {
+    if (days === 0) return t("today");
+    if (days < 0) return `${Math.abs(days)} ${language === "hi" ? "दिन पहले" : "days ago"}`;
+    if (language === "hi") return `${days} ${t("inDays")}`;
+    return `${days} ${t("inDays")}`;
+  }
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -112,11 +166,99 @@ export function CropCardItem({ card, onDelete, onArchive }: CropCardItemProps) {
                 </span>
               </div>
             )}
+
+            {isActive && suggestionsLoading && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`suggestion-loading-${card.id}`}>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>{t("loadingSuggestions")}</span>
+              </div>
+            )}
+
+            {isActive && suggestions?.nextActivity && !suggestionsLoading && (
+              <div className="mt-2 flex items-center gap-2 flex-wrap" data-testid={`suggestion-strip-${card.id}`}>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <CalendarClock className="w-3.5 h-3.5 text-primary" />
+                  <span className="font-medium text-foreground">{suggestions.nextActivity.name}</span>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] px-1.5 py-0 no-default-active-elevate ${
+                      suggestions.nextActivity.daysFromNow < 0
+                        ? "border-red-300 text-red-600 dark:border-red-700 dark:text-red-400"
+                        : suggestions.nextActivity.daysFromNow === 0
+                          ? "border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400"
+                          : "border-primary/30 text-primary"
+                    }`}
+                    data-testid={`badge-days-${card.id}`}
+                  >
+                    {suggestions.nextActivity.daysFromNow < 0
+                      ? t("overdue")
+                      : formatDaysLabel(suggestions.nextActivity.daysFromNow)}
+                  </Badge>
+                </div>
+                {suggestions.weatherWarning && (
+                  <div className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full ${
+                    suggestions.weatherWarning.severity === "danger"
+                      ? "text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950/40"
+                      : suggestions.weatherWarning.severity === "warning"
+                        ? "text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/40"
+                        : "text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-950/40"
+                  }`} data-testid={`weather-warning-badge-${card.id}`}>
+                    <SeverityIcon severity={suggestions.weatherWarning.severity} />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </CollapsibleTrigger>
 
         <CollapsibleContent>
           <div className="px-4 pb-4 border-t pt-3">
+            {isActive && suggestions && (suggestions.nextActivity || suggestions.weatherWarning || suggestions.suggestion) && (
+              <div className="mb-4 space-y-2" data-testid={`suggestions-detail-${card.id}`}>
+                {suggestions.nextActivity && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-primary/5 border border-primary/10" data-testid={`next-activity-detail-${card.id}`}>
+                    <CalendarClock className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold">{suggestions.nextActivity.name}</span>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] px-1.5 py-0 no-default-active-elevate ${
+                            suggestions.nextActivity.daysFromNow < 0
+                              ? "border-red-300 text-red-600 dark:border-red-700 dark:text-red-400"
+                              : "border-primary/30 text-primary"
+                          }`}
+                        >
+                          {formatDaysLabel(suggestions.nextActivity.daysFromNow)}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{suggestions.nextActivity.description}</p>
+                    </div>
+                  </div>
+                )}
+
+                {suggestions.weatherWarning && (
+                  <div className={`flex items-start gap-2 p-2.5 rounded-lg border ${severityColors[suggestions.weatherWarning.severity]}`} data-testid={`weather-warning-detail-${card.id}`}>
+                    <SeverityIcon severity={suggestions.weatherWarning.severity} />
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold">{t("weatherAlert")}</span>
+                      <p className="text-xs mt-0.5">{suggestions.weatherWarning.message}</p>
+                    </div>
+                  </div>
+                )}
+
+                {suggestions.suggestion && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800" data-testid={`ai-suggestion-detail-${card.id}`}>
+                    <Lightbulb className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{t("aiSuggestion")}</span>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">{suggestions.suggestion}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <CropTimeline
               events={events}
               isLoading={eventsLoading}

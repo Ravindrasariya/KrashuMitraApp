@@ -189,6 +189,145 @@ export async function registerRoutes(
     }
   });
 
+  const suggestionsCache = new Map<string, { data: any; timestamp: number }>();
+  const SUGGESTIONS_CACHE_MS = 6 * 60 * 60 * 1000;
+
+  app.get("/api/crop-cards/:id/suggestions", isAuthenticated, async (req: any, res) => {
+    try {
+      const cardId = parseInt(req.params.id);
+      const card = await storage.getCropCard(cardId);
+      if (!card) return res.status(404).json({ message: "Not found" });
+      if (card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      if (card.status !== "active") return res.json({ nextActivity: null, weatherWarning: null, suggestion: null });
+
+      const lat = parseFloat(req.query.lat as string) || 28.6139;
+      const lng = parseFloat(req.query.lng as string) || 77.2090;
+      const lang = (req.query.lang as string) === "en" ? "en" : "hi";
+
+      const cacheKey = `${cardId}-${lat.toFixed(2)}-${lng.toFixed(2)}-${lang}`;
+      const cached = suggestionsCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < SUGGESTIONS_CACHE_MS) {
+        return res.json(cached.data);
+      }
+
+      const events = await storage.getCropEvents(cardId);
+      const today = new Date();
+      const startDate = new Date(card.startDate);
+      const daysSincePlanting = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      let weatherInfo = "";
+      try {
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=3`;
+        const weatherRes = await fetch(weatherUrl);
+        if (weatherRes.ok) {
+          const w = await weatherRes.json();
+          weatherInfo = `Current weather: ${w.current.temperature_2m}°C, humidity ${w.current.relative_humidity_2m}%, wind ${w.current.wind_speed_10m} km/h. `;
+          weatherInfo += `3-day forecast: `;
+          for (let i = 0; i < w.daily.time.length; i++) {
+            weatherInfo += `${w.daily.time[i]}: ${w.daily.temperature_2m_min[i]}°-${w.daily.temperature_2m_max[i]}°C, rain ${w.daily.precipitation_sum[i]}mm; `;
+          }
+        }
+      } catch {}
+
+      const completedEvents = events.filter(e => e.isCompleted).map(e => `${e.eventType} (${e.eventDate})`).join(", ");
+      const pendingEvents = events.filter(e => !e.isCompleted).map(e => `${e.eventType} (${e.eventDate})`).join(", ");
+
+      const prompt = lang === "hi"
+        ? `तुम एक कृषि विशेषज्ञ हो। नीचे एक फसल कार्ड की जानकारी है:
+
+फसल: ${card.cropName}${card.variety ? ` (${card.variety})` : ""}
+खेत: ${card.farmName || "अज्ञात"}
+बुवाई तिथि: ${card.startDate} (${daysSincePlanting} दिन पहले)
+पूर्ण गतिविधियाँ: ${completedEvents || "कोई नहीं"}
+बाकी गतिविधियाँ: ${pendingEvents || "कोई नहीं"}
+${weatherInfo}
+
+इस फसल की वर्तमान अवस्था और मौसम के आधार पर, निम्नलिखित JSON format में जवाब दो (सिर्फ JSON, कोई और text नहीं):
+{
+  "nextActivity": { "name": "अगली गतिविधि का नाम", "daysFromNow": number, "description": "संक्षिप्त विवरण (1 वाक्य)" },
+  "weatherWarning": { "message": "मौसम चेतावनी (1 वाक्य)", "severity": "info|warning|danger" } या null अगर कोई चेतावनी नहीं,
+  "suggestion": "किसान के लिए 1 उपयोगी सुझाव (1 वाक्य)"
+}
+
+नियम:
+- nextActivity में फसल की वर्तमान अवस्था के अनुसार अगली सबसे जरूरी गतिविधि बताओ (सिंचाई, खाद, दवाई, निराई, कटाई आदि)
+- daysFromNow = आज से कितने दिन बाद करनी चाहिए (0 = आज, negative = देरी हो गई)
+- weatherWarning सिर्फ तब दो जब मौसम फसल के लिए चिंताजनक हो (ज्यादा बारिश, सर्दी, गर्मी आदि)
+- suggestion में फसल + मौसम दोनों को ध्यान में रखकर सलाह दो`
+        : `You are an agriculture expert. Here is a crop card:
+
+Crop: ${card.cropName}${card.variety ? ` (${card.variety})` : ""}
+Farm: ${card.farmName || "Unknown"}
+Planting date: ${card.startDate} (${daysSincePlanting} days ago)
+Completed activities: ${completedEvents || "None"}
+Pending activities: ${pendingEvents || "None"}
+${weatherInfo}
+
+Based on the crop's current stage and weather, respond ONLY with this JSON (no other text):
+{
+  "nextActivity": { "name": "Next activity name", "daysFromNow": number, "description": "Brief description (1 sentence)" },
+  "weatherWarning": { "message": "Weather warning (1 sentence)", "severity": "info|warning|danger" } or null if no warning,
+  "suggestion": "1 actionable farming tip (1 sentence)"
+}
+
+Rules:
+- nextActivity should be the most important upcoming activity for this crop stage (irrigation, fertilizer, pesticide, weeding, harvest, etc.)
+- daysFromNow = days from today to do this (0 = today, negative = overdue)
+- weatherWarning only if weather poses a concern for the crop (heavy rain, frost, extreme heat, etc.)
+- suggestion should consider both crop stage and weather conditions`;
+
+      const result = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          maxOutputTokens: 2048,
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 1024 },
+        },
+      });
+
+      let responseText = "";
+      try {
+        responseText = result.text || "";
+      } catch (textErr: any) {
+        console.error("Suggestions: result.text threw:", textErr?.message);
+        try {
+          const parts = (result as any).candidates?.[0]?.content?.parts;
+          if (parts) responseText = parts.map((p: any) => p.text || "").join("");
+        } catch {}
+      }
+      let cleanedText = responseText;
+      const codeBlockMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        cleanedText = codeBlockMatch[1].trim();
+      } else {
+        cleanedText = cleanedText.replace(/^```(?:json)?\s*/, "").replace(/```\s*$/, "").trim();
+      }
+      const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        return res.json({ nextActivity: null, weatherWarning: null, suggestion: null });
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        return res.json({ nextActivity: null, weatherWarning: null, suggestion: null });
+      }
+      const data = {
+        nextActivity: parsed.nextActivity || null,
+        weatherWarning: parsed.weatherWarning || null,
+        suggestion: parsed.suggestion || null,
+      };
+
+      suggestionsCache.set(cacheKey, { data, timestamp: Date.now() });
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching suggestions:", error);
+      res.json({ nextActivity: null, weatherWarning: null, suggestion: null });
+    }
+  });
+
   app.get("/api/khata", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
