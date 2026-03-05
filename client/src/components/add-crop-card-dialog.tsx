@@ -48,7 +48,7 @@ export function AddCropCardDialog({ open, onOpenChange }: AddCropCardDialogProps
       cropName: "",
       farmName: "",
       variety: "",
-      startDate: new Date().toISOString().split("T")[0],
+      startDate: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
     },
   });
 

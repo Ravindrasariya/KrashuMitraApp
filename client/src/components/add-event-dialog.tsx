@@ -61,7 +61,7 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
     defaultValues: {
       eventType: "",
       description: "",
-      eventDate: new Date().toISOString().split("T")[0],
+      eventDate: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
       productionPerBigha: "",
       productionUnit: "quintal",
     },
@@ -80,7 +80,7 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
       form.reset({
         eventType: "",
         description: "",
-        eventDate: new Date().toISOString().split("T")[0],
+        eventDate: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
         productionPerBigha: "",
         productionUnit: "quintal",
       });

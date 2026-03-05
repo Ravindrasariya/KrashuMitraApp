@@ -102,7 +102,7 @@ interface KhataItemDialogProps {
 
 export function KhataItemDialog({ open, onOpenChange, onSave, editItem, isPending, khataType }: KhataItemDialogProps) {
   const { t } = useTranslation();
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const isBatai = khataType === "batai";
   const isRental = khataType === "rental";
   const isMachineryExpense = khataType === "machinery_expense";

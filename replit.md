@@ -9,6 +9,7 @@ Bilingual (Hindi default, English toggle). Uses phone number + PIN authenticatio
 - **Backend**: Express.js + Drizzle ORM + PostgreSQL
 - **Auth**: Phone number + 4-digit PIN (bcryptjs hashing, express-session, IP-based forgot-PIN)
 - **AI**: Gemini via Replit AI Integrations (Krashu Mitra chatbot)
+- **Timezone**: IST (Asia/Kolkata) — set via `process.env.TZ = 'Asia/Kolkata'` at top of server/index.ts; client forms use `toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })`
 - **Language**: Hindi/English with custom i18n system
 
 ## Structure

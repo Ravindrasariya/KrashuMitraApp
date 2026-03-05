@@ -1756,7 +1756,7 @@ function PanatPaymentDialog({ open, onOpenChange, register, existingPayments, on
   isPending: boolean;
 }) {
   const { t } = useTranslation();
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const [date, setDate] = useState(today);
   const [amount, setAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
@@ -1846,7 +1846,7 @@ function LendenTransactionDialog({ open, onOpenChange, register, expandedData, o
   isPending: boolean;
 }) {
   const { t } = useTranslation();
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const [txnType, setTxnType] = useState<"borrowing" | "payment">("borrowing");
   const [date, setDate] = useState(today);
   const [principalAmount, setPrincipalAmount] = useState("");
