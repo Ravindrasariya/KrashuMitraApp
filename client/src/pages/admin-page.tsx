@@ -249,7 +249,7 @@ export default function AdminPage() {
   const handleExcelUpload = (cropId: number, clearExisting: boolean) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".xlsx,.xls,.csv";
+    input.accept = ".xlsx,.xls,.csv,.xlsm";
     input.onchange = (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
