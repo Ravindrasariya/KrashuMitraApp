@@ -79,7 +79,12 @@ export function BottomNav() {
 
               {isAuthenticated ? (
                 <>
-                  <div className="flex items-center gap-3 p-3">
+                  <Link
+                    href="/profile"
+                    onClick={() => setSheetOpen(false)}
+                    className="flex items-center gap-3 w-full p-3 rounded-md hover-elevate"
+                    data-testid="nav-profile"
+                  >
                     <User className="w-5 h-5 text-primary" />
                     <div>
                       <p className="font-medium" data-testid="text-username">
@@ -89,7 +94,7 @@ export function BottomNav() {
                         <p className="text-xs text-muted-foreground">+91 {user.phoneNumber}</p>
                       )}
                     </div>
-                  </div>
+                  </Link>
                   <Separator />
                   <button
                     onClick={() => { logout(); setSheetOpen(false); }}

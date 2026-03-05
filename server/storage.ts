@@ -7,6 +7,7 @@ export interface IStorage {
   ensureFarmerCode(userId: string): Promise<string>;
   getAllUsers(): Promise<User[]>;
   updateUserAdmin(id: string, data: Partial<Pick<User, "firstName" | "lastName" | "phoneNumber" | "email">>): Promise<User | undefined>;
+  updateUserProfile(id: string, data: Partial<Pick<User, "firstName" | "village" | "district" | "state" | "latitude" | "longitude">>): Promise<User | undefined>;
   resetUserPin(id: string, hashedPin: string): Promise<User | undefined>;
   getCropCardsByUser(userId: string, showArchived?: boolean): Promise<CropCard[]>;
   archiveCropCard(id: number): Promise<CropCard | undefined>;
@@ -94,6 +95,11 @@ class DatabaseStorage implements IStorage {
   }
 
   async updateUserAdmin(id: string, data: Partial<Pick<User, "firstName" | "lastName" | "phoneNumber" | "email">>): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async updateUserProfile(id: string, data: Partial<Pick<User, "firstName" | "village" | "district" | "state" | "latitude" | "longitude">>): Promise<User | undefined> {
     const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
     return updated;
   }

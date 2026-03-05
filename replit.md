@@ -37,6 +37,7 @@ The application follows a client-server architecture:
 -   **Authentication**: Phone number + 4-digit PIN authentication with `bcryptjs` for hashing and `express-session` for session management. IP-based verification for "Forgot PIN" functionality. Admin panel for user management and PIN resets.
 -   **AI Integration**: Gemini via Replit AI Integrations for the "Krashu Mitra" chatbot, including image analysis for the Crop Doctor feature.
 -   **Timezone Management**: IST (Asia/Kolkata) is set server-side and applied to client-side date formatting.
+-   **Profile Page**: `/profile` page allows users to edit their name, village, district, and state. GPS auto-detection via browser geolocation + OpenStreetMap Nominatim reverse geocoding (free, no API key). Location fields are optional.
 -   **Admin System**: Restricted access `/admin` page for users with `isAdmin: true`, allowing user detail editing and PIN resets.
 -   **Khata System**: Comprehensive ledger management with 7 distinct khata types, each with specific data structures and business logic (e.g., interest accrual for Lending Ledger). Global unique integer IDs are used across `crop_cards` and `khata_registers`.
 

@@ -16,6 +16,7 @@ import PlaceholderPage from "@/pages/placeholder-page";
 import AdminPage from "@/pages/admin-page";
 import FarmKhataPage from "@/pages/farm-khata";
 import DigitalClinicPage from "@/pages/digital-clinic";
+import ProfilePage from "@/pages/profile";
 
 function Router() {
   return (
@@ -28,6 +29,7 @@ function Router() {
         <PlaceholderPage titleKey="marketplace" />
       </Route>
       <Route path="/farm-khata" component={FarmKhataPage} />
+      <Route path="/profile" component={ProfilePage} />
       <Route path="/admin" component={AdminPage} />
       <Route component={NotFound} />
     </Switch>

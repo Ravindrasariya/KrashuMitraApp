@@ -91,22 +91,24 @@ export function SidebarNav() {
 
         {isAuthenticated ? (
           <>
-            <div className="flex items-center gap-3 px-3 py-2.5">
-              <User className="w-5 h-5 text-primary" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate" data-testid="sidebar-username">
-                  {user?.firstName || user?.email || "User"}
-                </p>
-                {profile?.farmerCode && (
-                  <p className="text-[11px] text-primary font-medium truncate" data-testid="sidebar-farmer-code">
-                    {profile.farmerCode}
+            <Link href="/profile">
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-muted transition-colors" data-testid="sidebar-profile-link">
+                <User className="w-5 h-5 text-primary" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate" data-testid="sidebar-username">
+                    {user?.firstName || user?.email || "User"}
                   </p>
-                )}
-                {user?.phoneNumber && (
-                  <p className="text-[11px] text-muted-foreground truncate">+91 {user.phoneNumber}</p>
-                )}
+                  {profile?.farmerCode && (
+                    <p className="text-[11px] text-primary font-medium truncate" data-testid="sidebar-farmer-code">
+                      {profile.farmerCode}
+                    </p>
+                  )}
+                  {user?.phoneNumber && (
+                    <p className="text-[11px] text-muted-foreground truncate">+91 {user.phoneNumber}</p>
+                  )}
+                </div>
               </div>
-            </div>
+            </Link>
             <button
               onClick={() => logout()}
               className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors"

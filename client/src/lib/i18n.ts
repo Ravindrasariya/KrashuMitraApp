@@ -365,6 +365,20 @@ const translations = {
   weatherAlert: { hi: "मौसम चेतावनी", en: "Weather Alert" },
   aiSuggestion: { hi: "सुझाव", en: "Suggestion" },
   loadingSuggestions: { hi: "सुझाव लोड हो रहे हैं...", en: "Loading suggestions..." },
+  myProfile: { hi: "मेरी प्रोफ़ाइल", en: "My Profile" },
+  village: { hi: "गाँव", en: "Village" },
+  district: { hi: "जिला", en: "District" },
+  stateName: { hi: "राज्य", en: "State" },
+  detectLocation: { hi: "GPS से पता लगाएं", en: "Detect from GPS" },
+  detectingLocation: { hi: "स्थान पता लगा रहे हैं...", en: "Detecting location..." },
+  locationDetected: { hi: "स्थान पहचाना गया!", en: "Location detected!" },
+  locationDenied: { hi: "स्थान की अनुमति नहीं दी गई", en: "Location permission denied" },
+  locationError: { hi: "स्थान पता नहीं लग पाया", en: "Could not detect location" },
+  profileUpdated: { hi: "प्रोफ़ाइल अपडेट की गई!", en: "Profile updated!" },
+  profileUpdateFailed: { hi: "प्रोफ़ाइल अपडेट विफल", en: "Profile update failed" },
+  villagePlaceholder: { hi: "गाँव का नाम", en: "Village name" },
+  districtPlaceholder: { hi: "जिले का नाम", en: "District name" },
+  statePlaceholder: { hi: "राज्य का नाम", en: "State name" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

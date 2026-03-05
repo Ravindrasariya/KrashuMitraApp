@@ -34,6 +34,53 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/farmer/profile", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const { firstName, village, district, state, latitude, longitude } = req.body;
+      if (typeof req.body !== "object" || req.body === null) {
+        return res.status(400).json({ message: "Invalid request body" });
+      }
+      const updateData: any = {};
+      if (firstName !== undefined) updateData.firstName = String(firstName).slice(0, 100);
+      if (village !== undefined) updateData.village = String(village).slice(0, 100);
+      if (district !== undefined) updateData.district = String(district).slice(0, 100);
+      if (state !== undefined) updateData.state = String(state).slice(0, 100);
+      if (latitude !== undefined) updateData.latitude = String(latitude).slice(0, 20);
+      if (longitude !== undefined) updateData.longitude = String(longitude).slice(0, 20);
+      const updated = await storage.updateUserProfile(userId, updateData);
+      if (!updated) return res.status(404).json({ message: "User not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  app.post("/api/geocode/reverse", isAuthenticated, async (req: any, res) => {
+    try {
+      const { lat, lng } = req.body;
+      if (!lat || !lng) return res.status(400).json({ message: "lat and lng required" });
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`,
+        { headers: { "User-Agent": "KrashuMitra/1.0" } }
+      );
+      if (!response.ok) {
+        return res.status(502).json({ message: "Geocoding service unavailable" });
+      }
+      const data = await response.json() as any;
+      const address = data.address || {};
+      res.json({
+        village: address.village || address.town || address.city || address.hamlet || "",
+        district: address.county || address.state_district || "",
+        state: address.state || "",
+      });
+    } catch (error) {
+      console.error("Error reverse geocoding:", error);
+      res.status(500).json({ message: "Geocoding failed" });
+    }
+  });
+
   app.get("/api/crop-cards", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
