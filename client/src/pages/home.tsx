@@ -186,7 +186,7 @@ function PriceTrendsSection({ language }: { language: string }) {
     return distDisplay;
   };
 
-  const dates = [...new Set(entries.map(e => e.date))].sort((a, b) => a.localeCompare(b));
+  const dates = [...new Set(entries.map(e => e.date))].sort((a, b) => b.localeCompare(a));
   const districtKeys = [...new Set(entries.map(e => getDistrictKey(e)))].sort((a, b) => a.localeCompare(b));
   const districtLabels: Record<string, string> = {};
   for (const e of entries) {
