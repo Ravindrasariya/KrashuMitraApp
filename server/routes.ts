@@ -710,18 +710,60 @@ Rules:
         const base64Data = imageData.replace(/^data:[^;]+;base64,/, "");
         const language = req.body.language || "hi";
         const diagPrompt = language === "hi"
-          ? `आप एक कृषि विशेषज्ञ हैं। इस फसल/पौधे की तस्वीर का विश्लेषण करें और बताएं:
-1. क्या कोई रोग, कीट, या पोषक तत्व की कमी दिख रही है?
-2. अगर समस्या है तो उसका नाम और विवरण
-3. उपचार/समाधान के उपाय (दवा का नाम, मात्रा, छिड़काव का तरीका)
-4. रोकथाम के टिप्स
-संक्षिप्त बुलेट पॉइंट्स में जवाब दें।`
-          : `You are an agriculture expert. Analyze this crop/plant image and provide:
-1. Any visible disease, pest, or nutrient deficiency?
-2. If problem found: name and description
-3. Treatment/solution (medicine name, dosage, application method)
-4. Prevention tips
-Answer in concise bullet points.`;
+          ? `आप एक कृषि विशेषज्ञ हैं। इस फसल/पौधे की तस्वीर का विश्लेषण करें।
+
+फॉर्मेटिंग नियम:
+- हर सेक्शन का शीर्षक **बोल्ड** में लिखें (सिर्फ एक बार ** लगाएं)
+- बुलेट पॉइंट्स के लिए "- " का उपयोग करें
+- छोटे और सटीक जवाब दें, हर पॉइंट 1-2 लाइन में
+- बेवजह तारे (*) या नेस्टेड फॉर्मेटिंग न लगाएं
+
+इस ढांचे में जवाब दें:
+
+**समस्या की पहचान**
+- रोग/कीट/कमी का नाम
+- यह रोग है, कीट है, या पोषक तत्व की कमी
+
+**कारण**
+- यह समस्या क्यों हुई (1-2 पॉइंट)
+
+**लक्षण**
+- तस्वीर में दिखने वाले मुख्य लक्षण (2-3 पॉइंट)
+
+**उपचार**
+- दवा का नाम और मात्रा
+- छिड़काव/उपयोग का तरीका
+- कब करें
+
+**रोकथाम**
+- भविष्य में बचाव के 2-3 टिप्स`
+          : `You are an agriculture expert. Analyze this crop/plant image.
+
+Formatting rules:
+- Use **bold** for section headings only (single pair of **)
+- Use "- " for bullet points
+- Keep each point concise (1-2 lines max)
+- Do NOT use nested asterisks, excessive markdown, or numbered sub-lists
+
+Respond in this structure:
+
+**Identified Problem**
+- Disease/pest/deficiency name
+- Type: disease, pest, or nutrient deficiency
+
+**Cause**
+- Why this happened (1-2 points)
+
+**Symptoms**
+- Key visible symptoms from the image (2-3 points)
+
+**Treatment**
+- Medicine name and dosage
+- Application method
+- When to apply
+
+**Prevention**
+- 2-3 tips to prevent in future`;
 
         try {
           const result = await ai.models.generateContent({

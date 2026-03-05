@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -18,6 +18,58 @@ import {
 import { FlaskConical, Leaf, Camera, Loader2, ClipboardList } from "lucide-react";
 import type { ServiceRequest } from "@shared/schema";
 
+function MarkdownText({ text, className = "" }: { text: string; className?: string }) {
+  const lines = text.split("\n");
+  const elements: JSX.Element[] = [];
+  let currentList: string[] = [];
+  let key = 0;
+
+  const flushList = () => {
+    if (currentList.length > 0) {
+      elements.push(
+        <ul key={key++} className="list-disc list-inside space-y-0.5 mb-2">
+          {currentList.map((item, i) => (
+            <li key={i}>{renderInline(item)}</li>
+          ))}
+        </ul>
+      );
+      currentList = [];
+    }
+  };
+
+  const renderInline = (str: string) => {
+    const parts = str.split(/\*\*(.+?)\*\*/g);
+    return parts.map((part, i) =>
+      i % 2 === 1 ? <strong key={i}>{part}</strong> : <span key={i}>{part}</span>
+    );
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushList();
+      continue;
+    }
+    if (/^\*\*[^*]+\*\*$/.test(trimmed)) {
+      flushList();
+      const heading = trimmed.replace(/^\*\*/, "").replace(/\*\*$/, "");
+      elements.push(
+        <h5 key={key++} className="font-bold text-sm mt-3 mb-1 text-foreground">{heading}</h5>
+      );
+    } else if (trimmed.startsWith("- ") || trimmed.startsWith("• ") || trimmed.startsWith("* ")) {
+      currentList.push(trimmed.replace(/^[-•*]\s+/, ""));
+    } else {
+      flushList();
+      elements.push(
+        <p key={key++} className="mb-1">{renderInline(trimmed)}</p>
+      );
+    }
+  }
+  flushList();
+
+  return <div className={`text-sm text-muted-foreground ${className}`}>{elements}</div>;
+}
+
 export default function DigitalClinicPage() {
   const { t, language } = useTranslation();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -32,11 +84,6 @@ export default function DigitalClinicPage() {
   const [imageMime, setImageMime] = useState<string>("");
   const [latestDiagnosis, setLatestDiagnosis] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  if (!authLoading && !isAuthenticated) {
-    setLocation("/auth");
-    return null;
-  }
 
   const { data: requests = [], isLoading: requestsLoading } = useQuery<ServiceRequest[]>({
     queryKey: ["/api/service-requests"],
@@ -79,6 +126,16 @@ export default function DigitalClinicPage() {
       toast({ title: err.message, variant: "destructive" });
     },
   });
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      setLocation("/auth");
+    }
+  }, [authLoading, isAuthenticated, setLocation]);
+
+  if (!authLoading && !isAuthenticated) {
+    return null;
+  }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -181,9 +238,9 @@ export default function DigitalClinicPage() {
           {latestDiagnosis && (
             <Card className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800" data-testid="card-diagnosis-result">
               <h4 className="font-semibold text-sm mb-2">{t("cropDoctorResult")}</h4>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap" data-testid="text-diagnosis">
-                {latestDiagnosis}
-              </p>
+              <div data-testid="text-diagnosis">
+                <MarkdownText text={latestDiagnosis} />
+              </div>
             </Card>
           )}
         </Card>
@@ -232,9 +289,9 @@ export default function DigitalClinicPage() {
                       {req.createdAt ? new Date(req.createdAt).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN") : ""}
                     </p>
                     {req.serviceType === "crop_doctor" && req.aiDiagnosis && (
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2" data-testid={`text-diagnosis-${req.id}`}>
-                        {req.aiDiagnosis}
-                      </p>
+                      <div className="mt-1 line-clamp-2" data-testid={`text-diagnosis-${req.id}`}>
+                        <MarkdownText text={req.aiDiagnosis} className="text-xs" />
+                      </div>
                     )}
                   </div>
                 </div>
