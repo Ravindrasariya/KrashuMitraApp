@@ -187,7 +187,7 @@ function PriceTrendsSection({ language }: { language: string }) {
   };
 
   const dates = [...new Set(entries.map(e => e.date))].sort((a, b) => a.localeCompare(b));
-  const districtKeys = [...new Set(entries.map(e => getDistrictKey(e)))];
+  const districtKeys = [...new Set(entries.map(e => getDistrictKey(e)))].sort((a, b) => a.localeCompare(b));
   const districtLabels: Record<string, string> = {};
   for (const e of entries) {
     const key = getDistrictKey(e);
