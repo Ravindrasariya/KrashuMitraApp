@@ -204,9 +204,9 @@ function PriceTrendsSection({ language }: { language: string }) {
 
   const getPriceChange = (date: string, districtKey: string) => {
     const dateIdx = dates.indexOf(date);
-    if (dateIdx <= 0) return 0;
+    if (dateIdx >= dates.length - 1) return 0;
     const current = getEntry(date, districtKey);
-    const prev = getEntry(dates[dateIdx - 1], districtKey);
+    const prev = getEntry(dates[dateIdx + 1], districtKey);
     if (!current || !prev) return 0;
     return Number(current.modalPrice) - Number(prev.modalPrice);
   };
