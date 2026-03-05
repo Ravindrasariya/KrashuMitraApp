@@ -549,6 +549,7 @@ export async function registerRoutes(
       const farmerCode = await storage.ensureFarmerCode(userId);
       const user = await storage.getUserById(userId);
       const cardsWithEvents = await storage.getCropCardsWithEvents(userId);
+      const khataRegisters = await storage.getKhataRegisters(userId, { showArchived: false });
 
       let farmerContext = "";
       if (language === "hi") {
@@ -570,6 +571,21 @@ export async function registerRoutes(
         } else {
           farmerContext += "\nकिसान ने अभी तक कोई फसल कार्ड नहीं बनाया है।";
         }
+        if (khataRegisters.length > 0) {
+          farmerContext += `\n\nकिसान के मौजूदा खाता रजिस्टर (${khataRegisters.length}):\n`;
+          for (const reg of khataRegisters) {
+            const typeLabels: Record<string, string> = { crop_card: "फसल कार्ड खाता", batai: "बटाई खाता", panat: "पानत खाता", miscellaneous: "विविध खाता", rental: "किराया खाता", machinery_expense: "मशीनरी खर्चा", lending_ledger: "लेन देन खाता" };
+            farmerContext += `\n• खाता #${reg.id}: ${typeLabels[reg.khataType] || reg.khataType} | शीर्षक: ${reg.title}`;
+            if (reg.khataType === "rental") farmerContext += ` | किसान: ${reg.rentalFarmerName || ""} | गाँव: ${reg.rentalVillage || ""}`;
+            if (reg.khataType === "batai") farmerContext += ` | बटाईदार: ${reg.bataidarName || ""} | बटाई: ${reg.bataiType || ""}`;
+            if (reg.khataType === "panat") farmerContext += ` | व्यक्ति: ${reg.panatPersonName || ""}`;
+            if (reg.khataType === "machinery_expense") farmerContext += ` | मशीन: ${reg.machineryCategory || ""} ${reg.machineryName || ""}`;
+            if (reg.khataType === "lending_ledger") farmerContext += ` | व्यक्ति: ${reg.lendenPersonName || ""} | प्रकार: ${reg.lendenType === "credit" ? "उधार दिया" : "उधार लिया"}`;
+            farmerContext += ` | बकाया: ₹${reg.totalDue || "0"} | भुगतान: ₹${reg.totalPaid || "0"}`;
+          }
+        } else {
+          farmerContext += "\n\nकिसान ने अभी तक कोई खाता नहीं बनाया है।";
+        }
       } else {
         farmerContext = `\n\n--- Farmer Profile ---\nFarmer ID: ${farmerCode}\nName: ${user?.firstName || ""} ${user?.lastName || ""}\n`;
         if (cardsWithEvents.length > 0) {
@@ -588,6 +604,21 @@ export async function registerRoutes(
           }
         } else {
           farmerContext += "\nFarmer has no crop cards yet.";
+        }
+        if (khataRegisters.length > 0) {
+          farmerContext += `\n\nFarmer's existing khata registers (${khataRegisters.length}):\n`;
+          for (const reg of khataRegisters) {
+            const typeLabels: Record<string, string> = { crop_card: "Crop Card Khata", batai: "Batai Khata", panat: "Panat Khata", miscellaneous: "Miscellaneous Khata", rental: "Rental Khata", machinery: "Machinery Expense", lending_ledger: "Lending Ledger" };
+            farmerContext += `\n• Khata #${reg.id}: ${typeLabels[reg.khataType] || reg.khataType} | Title: ${reg.title}`;
+            if (reg.khataType === "rental") farmerContext += ` | Farmer: ${reg.rentalFarmerName || ""} | Village: ${reg.rentalVillage || ""}`;
+            if (reg.khataType === "batai") farmerContext += ` | Bataidar: ${reg.bataidarName || ""} | Type: ${reg.bataiType || ""}`;
+            if (reg.khataType === "panat") farmerContext += ` | Person: ${reg.panatPersonName || ""}`;
+            if (reg.khataType === "machinery_expense") farmerContext += ` | Machine: ${reg.machineryCategory || ""} ${reg.machineryName || ""}`;
+            if (reg.khataType === "lending_ledger") farmerContext += ` | Person: ${reg.lendenPersonName || ""} | Type: ${reg.lendenType === "credit" ? "Lent" : "Borrowed"}`;
+            farmerContext += ` | Due: ₹${reg.totalDue || "0"} | Paid: ₹${reg.totalPaid || "0"}`;
+          }
+        } else {
+          farmerContext += "\n\nFarmer has no khata registers yet.";
         }
       }
 
@@ -623,6 +654,81 @@ ${farmerContext}
 - अगर कोई recurring/बार-बार होने वाली गतिविधि हो (जैसे "हर 15 दिन में सिंचाई"), तो हर बार के लिए अलग-अलग entry बनाओ। कम से कम 3-4 महीने की अवधि के लिए entries बनाओ।
 - eventType केवल ये हो सकते हैं: plantation, fertiliser, pesticide, watering, harvesting
 - जब किसान अपनी फसलों के बारे में पूछे, तो ऊपर दी गई जानकारी का उपयोग करो।
+
+--- फार्म खाता (Farm Khata) ---
+
+तुम किसानों की खाता-बही (फार्म खाता) बनाने और उसमें एंट्री जोड़ने में भी मदद करती हो। 7 प्रकार के खाते हैं:
+
+1. **किराया खाता (rental)**: एक किसान के लिए एक कार्ड। मशीनरी किराये का हिसाब।
+2. **बटाई खाता (batai)**: साझेदारी खेती का हिसाब।
+3. **पानत खाता (panat)**: जमीन लीज़/पट्टे का हिसाब।
+4. **फसल कार्ड खाता (crop_card)**: किसी फसल कार्ड से जुड़ा खर्चा।
+5. **विविध खाता (miscellaneous)**: अन्य खर्चों का हिसाब।
+6. **मशीनरी खर्चा (machinery_expense)**: एक मशीन के रखरखाव/ईंधन का खर्चा।
+7. **लेन देन खाता (lending_ledger)**: उधार/कर्ज़ का हिसाब।
+
+जब किसान कोई नया खाता बनाना चाहे, तो:
+- पहले ज़रूरी जानकारी पूछो जो किसान ने नहीं बताई
+- फिर ऊपर दी गई खाता सूची में देखो कि क्या उस व्यक्ति/मशीन का खाता पहले से है
+- अगर खाता पहले से है तो उसमें नई एंट्री जोड़ो (khata_add_item_draft)
+- अगर नया खाता बनाना हो तो (khata_create_draft) का उपयोग करो
+
+**नया खाता बनाने के लिए** — सारांश लिखो फिर JSON दो:
+\`\`\`json
+{"type":"khata_create_draft","khataType":"rental|batai|panat|crop_card|miscellaneous|machinery_expense|lending_ledger","title":"खाता का शीर्षक","fields":{...type-specific fields...},"items":[...optional initial items...]}
+\`\`\`
+
+**मौजूदा खाते में एंट्री जोड़ने के लिए** — सारांश लिखो फिर JSON दो:
+\`\`\`json
+{"type":"khata_add_item_draft","khataId":123,"khataType":"rental|batai|panat|crop_card|miscellaneous|machinery_expense|lending_ledger","khataTitle":"खाता शीर्षक","items":[...items to add...]}
+\`\`\`
+
+हर खाता प्रकार की fields और items:
+
+**किराया खाता (rental)**:
+- fields: {"rentalFarmerName":"नाम","rentalContact":"फोन (वैकल्पिक)","rentalVillage":"गाँव (वैकल्पिक)","rentalOpeningBalance":"0"}
+- title: "किसान_नाम, गाँव" (जैसे "रमेश, मोतीपुर")
+- items: [{"rentalMachinery":"harvester|pesticide_spray|plantar|rotavator|seed_drill|thresher|tractor|tractor_trolley|others","rentalFarmWork":"काम का नाम","rentalChargesPerBigha":"दर (या null)","rentalChargesPerHour":"दर (या null)","rentalBigha":"बीघा (या null)","rentalHours":"घंटे (या null)","rentalTotalCharges":"कुल राशि","rentalIsPaid":false,"rentalRemarks":"टिप्पणी (वैकल्पिक)","date":"YYYY-MM-DD"}]
+- rentalTotalCharges = (rentalChargesPerBigha × rentalBigha) या (rentalChargesPerHour × rentalHours)
+
+**बटाई खाता (batai)**:
+- fields: {"bataidarName":"नाम","bataidarContact":"फोन (वैकल्पिक)","bataiType":"half|one_third","bighaCount":"बीघा","plantationDate":"YYYY-MM-DD (वैकल्पिक)","harvestDate":"YYYY-MM-DD (वैकल्पिक)"}
+- title: "फसल_नाम - बटाईदार_नाम" (जैसे "गेहूँ - सुरेश")
+- items: [{"date":"YYYY-MM-DD","expenseCategory":"farm_preparation|seed_cost|plantation|fertiliser|pesticide|manual_weed|watering_labour|harvest","subType":"sub type (वैकल्पिक)","totalCost":"राशि","isPaid":false,"expenseBornBy":"owner|bataidar|batai_ratio","remarks":"टिप्पणी (वैकल्पिक)"}]
+
+**पानत खाता (panat)**:
+- fields: {"panatPersonName":"नाम","panatContact":"फोन (वैकल्पिक)","panatRatePerBigha":"दर प्रति बीघा","panatTotalBigha":"कुल बीघा","panatTotalAmount":"कुल राशि (दर × बीघा)","panatRemarks":"टिप्पणी (वैकल्पिक)"}
+- title: "व्यक्ति_नाम - बीघा" (जैसे "रामू - 5 बीघा")
+- items (panat_payments): [{"date":"YYYY-MM-DD","amount":"भुगतान राशि","remarks":"टिप्पणी (वैकल्पिक)"}]
+
+**फसल कार्ड खाता (crop_card)**:
+- fields: {"cropCardId":123,"plantationDate":"YYYY-MM-DD (वैकल्पिक)","harvestDate":"YYYY-MM-DD (वैकल्पिक)","production":"उत्पादन (वैकल्पिक)","productionUnit":"quintal|bag (वैकल्पिक)"}
+- title: "फसल_नाम - खेत_नाम" (जैसे "गेहूँ - बड़ा खेत")
+- items: same as batai items but expenseBornBy is always "owner"
+
+**विविध खाता (miscellaneous)**:
+- fields: {} (no special fields)
+- title: जो किसान बताए
+- items: same as crop_card items (expenseBornBy always "owner")
+
+**मशीनरी खर्चा (machinery_expense)**:
+- fields: {"machineryCategory":"tractor|harvester|thresher","machineryName":"नाम (वैकल्पिक)","machineryHp":"HP (वैकल्पिक)","machineryPurchaseYear":"खरीद वर्ष (वैकल्पिक)"}
+- title: "श्रेणी" या "श्रेणी - नाम" (जैसे "ट्रैक्टर - महिंद्रा 575")
+- items: [{"date":"YYYY-MM-DD","expenseCategory":"fuel|maintenance|others","totalCost":"राशि","isPaid":false,"remarks":"टिप्पणी (वैकल्पिक)"}]
+
+**लेन देन खाता (lending_ledger)**:
+- fields: {"lendenPersonName":"नाम","lendenContact":"फोन (वैकल्पिक)","lendenVillage":"गाँव (वैकल्पिक)","lendenType":"credit|debit"}
+- credit = किसान ने उधार दिया, debit = किसान ने उधार लिया
+- title: "व्यक्ति_नाम, गाँव"
+- items (lenden_transactions): [{"transactionType":"borrowing|payment","date":"YYYY-MM-DD","principalAmount":"राशि (borrowing के लिए)","interestRateMonthly":"मासिक ब्याज दर % (borrowing के लिए)","paymentAmount":"राशि (payment के लिए)","remarks":"टिप्पणी (वैकल्पिक)"}]
+
+खाता बनाने के महत्वपूर्ण नियम:
+- किसान से बातचीत में सारी ज़रूरी जानकारी पूछो, एक साथ सब मत पूछो — प्राकृतिक बातचीत करो
+- अगर किसान बोले "रमेश का किराया खाता बनाओ" तो पहले पूछो: "रमेश जी का गाँव कौन सा है?" और "कौन सी मशीन का काम किया?"
+- title अपने आप बनाओ उचित format में (ऊपर दिए गए उदाहरण देखो)
+- अगर किसान कहे "plowing" या "जुताई" तो rentalMachinery = "tractor" और rentalFarmWork = "जुताई/plowing" समझो
+- दर और मात्रा से कुल राशि गणना करो
+- अगर तारीख नहीं बताई तो आज (${today}) रखो
 
 जवाब का तरीका:
 - जवाब हमेशा छोटा और सटीक रखो (अधिकतम 3-5 बुलेट पॉइंट)।
@@ -675,6 +781,81 @@ Important rules:
 - For recurring activities (e.g., "watering every 15 days"), create individual entries for EACH occurrence. Generate entries for at least 3-4 months.
 - eventType must be one of: plantation, fertiliser, pesticide, watering, harvesting
 - When the farmer asks about their crops, use the farmer data provided above to answer.
+
+--- Farm Khata ---
+
+You also help farmers create and manage their farm ledgers (Farm Khata). There are 7 khata types:
+
+1. **Rental Khata (rental)**: One card per farmer. Tracks machinery rental charges.
+2. **Batai Khata (batai)**: Sharecropping partnership expenses.
+3. **Panat Khata (panat)**: Land lease/irrigation tracking.
+4. **Crop Card Khata (crop_card)**: Expenses linked to a crop card.
+5. **Miscellaneous Khata (miscellaneous)**: General expenses.
+6. **Machinery Expense (machinery_expense)**: One card per machine, tracks fuel/maintenance.
+7. **Lending Ledger (lending_ledger)**: Loan/credit tracking.
+
+When a farmer wants to create or add to a khata:
+- Ask for any missing required information conversationally
+- Check the farmer's existing khata list above to see if a card already exists for that person/machine
+- If it exists, add items to it (khata_add_item_draft)
+- If not, create a new card (khata_create_draft)
+
+**To create a new khata** — write summary then JSON:
+\`\`\`json
+{"type":"khata_create_draft","khataType":"rental|batai|panat|crop_card|miscellaneous|machinery_expense|lending_ledger","title":"khata title","fields":{...type-specific fields...},"items":[...optional initial items...]}
+\`\`\`
+
+**To add items to existing khata** — write summary then JSON:
+\`\`\`json
+{"type":"khata_add_item_draft","khataId":123,"khataType":"rental|batai|panat|crop_card|miscellaneous|machinery_expense|lending_ledger","khataTitle":"khata title","items":[...items to add...]}
+\`\`\`
+
+Type-specific fields and items:
+
+**Rental (rental)**:
+- fields: {"rentalFarmerName":"name","rentalContact":"phone (optional)","rentalVillage":"village (optional)","rentalOpeningBalance":"0"}
+- title: "FarmerName, Village" (e.g. "Ramesh, Motipur")
+- items: [{"rentalMachinery":"harvester|pesticide_spray|plantar|rotavator|seed_drill|thresher|tractor|tractor_trolley|others","rentalFarmWork":"work description","rentalChargesPerBigha":"rate (or null)","rentalChargesPerHour":"rate (or null)","rentalBigha":"bigha (or null)","rentalHours":"hours (or null)","rentalTotalCharges":"total amount","rentalIsPaid":false,"rentalRemarks":"remark (optional)","date":"YYYY-MM-DD"}]
+- rentalTotalCharges = (rentalChargesPerBigha × rentalBigha) or (rentalChargesPerHour × rentalHours)
+
+**Batai (batai)**:
+- fields: {"bataidarName":"name","bataidarContact":"phone (optional)","bataiType":"half|one_third","bighaCount":"bigha","plantationDate":"YYYY-MM-DD (optional)","harvestDate":"YYYY-MM-DD (optional)"}
+- title: "CropName - BataidarName" (e.g. "Wheat - Suresh")
+- items: [{"date":"YYYY-MM-DD","expenseCategory":"farm_preparation|seed_cost|plantation|fertiliser|pesticide|manual_weed|watering_labour|harvest","subType":"sub type (optional)","totalCost":"amount","isPaid":false,"expenseBornBy":"owner|bataidar|batai_ratio","remarks":"remark (optional)"}]
+
+**Panat (panat)**:
+- fields: {"panatPersonName":"name","panatContact":"phone (optional)","panatRatePerBigha":"rate per bigha","panatTotalBigha":"total bigha","panatTotalAmount":"total (rate × bigha)","panatRemarks":"remark (optional)"}
+- title: "PersonName - Bigha" (e.g. "Ramu - 5 Bigha")
+- items (panat_payments): [{"date":"YYYY-MM-DD","amount":"payment amount","remarks":"remark (optional)"}]
+
+**Crop Card Khata (crop_card)**:
+- fields: {"cropCardId":123,"plantationDate":"YYYY-MM-DD (optional)","harvestDate":"YYYY-MM-DD (optional)","production":"production (optional)","productionUnit":"quintal|bag (optional)"}
+- title: "CropName - FarmName" (e.g. "Wheat - Big Farm")
+- items: same as batai items but expenseBornBy is always "owner"
+
+**Miscellaneous (miscellaneous)**:
+- fields: {} (no special fields)
+- title: whatever the farmer says
+- items: same as crop_card items (expenseBornBy always "owner")
+
+**Machinery Expense (machinery_expense)**:
+- fields: {"machineryCategory":"tractor|harvester|thresher","machineryName":"name (optional)","machineryHp":"HP (optional)","machineryPurchaseYear":"year (optional)"}
+- title: "Category" or "Category - Name" (e.g. "Tractor - Mahindra 575")
+- items: [{"date":"YYYY-MM-DD","expenseCategory":"fuel|maintenance|others","totalCost":"amount","isPaid":false,"remarks":"remark (optional)"}]
+
+**Lending Ledger (lending_ledger)**:
+- fields: {"lendenPersonName":"name","lendenContact":"phone (optional)","lendenVillage":"village (optional)","lendenType":"credit|debit"}
+- credit = farmer lent money, debit = farmer borrowed money
+- title: "PersonName, Village"
+- items (lenden_transactions): [{"transactionType":"borrowing|payment","date":"YYYY-MM-DD","principalAmount":"amount (for borrowing)","interestRateMonthly":"monthly interest rate % (for borrowing)","paymentAmount":"amount (for payment)","remarks":"remark (optional)"}]
+
+Khata creation rules:
+- Ask for missing info conversationally, don't overwhelm — ask naturally one step at a time
+- If the farmer says "create kiraya khata for Ramesh", ask "What village is Ramesh from?" and "What machinery work was done?"
+- Auto-generate the title in the correct format (see examples above)
+- If farmer says "plowing" or "jotai", set rentalMachinery = "tractor" and rentalFarmWork = "plowing"
+- Calculate totals from rate × quantity
+- If no date specified, use today (${today})
 
 Response style:
 - Keep answers short and concise (3-5 bullet points max).

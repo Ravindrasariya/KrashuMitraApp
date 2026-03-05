@@ -45,7 +45,23 @@ interface CropCardEditDraft {
   removeEventIds?: number[];
 }
 
-type Draft = CropCardDraft | CropCardEditDraft;
+interface KhataCreateDraft {
+  type: "khata_create_draft";
+  khataType: string;
+  title: string;
+  fields: Record<string, any>;
+  items?: Array<Record<string, any>>;
+}
+
+interface KhataAddItemDraft {
+  type: "khata_add_item_draft";
+  khataId: number;
+  khataType: string;
+  khataTitle: string;
+  items: Array<Record<string, any>>;
+}
+
+type Draft = CropCardDraft | CropCardEditDraft | KhataCreateDraft | KhataAddItemDraft;
 
 const CHAT_STORAGE_KEY = "krashu-chat-history";
 const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
@@ -53,7 +69,7 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 function stripJsonFromMessage(text: string): string {
   let cleaned = text.replace(/```json\s*[\s\S]*?```/g, "").trim();
   cleaned = cleaned.replace(/```\s*[\s\S]*?```/g, "").trim();
-  cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"crop_card_(draft|edit_draft)"[\s\S]*\}/g, "").trim();
+  cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft))"[\s\S]*\}/g, "").trim();
   cleaned = cleaned.replace(/\[IMG:\s*.+?\]/g, "").trim();
   cleaned = cleaned.split("\n").filter(line => !/^\s*[*\-•]\s*$/.test(line)).join("\n");
   cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
@@ -84,22 +100,24 @@ function saveMessages(messages: ChatMessage[]) {
   } catch {}
 }
 
+const DRAFT_TYPES = ["crop_card_draft", "crop_card_edit_draft", "khata_create_draft", "khata_add_item_draft"];
+
 function tryParseDraft(text: string): Draft | null {
   try {
     const parsed = JSON.parse(text);
-    if (parsed.type === "crop_card_draft" || parsed.type === "crop_card_edit_draft") return parsed;
+    if (DRAFT_TYPES.includes(parsed.type)) return parsed;
   } catch {}
 
   try {
     const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[1]);
-      if (parsed.type === "crop_card_draft" || parsed.type === "crop_card_edit_draft") return parsed;
+      if (DRAFT_TYPES.includes(parsed.type)) return parsed;
     }
   } catch {}
 
   try {
-    const rawMatch = text.match(/\{[\s\S]*"type"\s*:\s*"crop_card_(draft|edit_draft)"[\s\S]*\}/);
+    const rawMatch = text.match(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft))"[\s\S]*\}/);
     if (rawMatch) {
       const parsed = JSON.parse(rawMatch[0]);
       return parsed;
@@ -468,9 +486,74 @@ export function Chatbot() {
           role: "assistant",
           content: language === "hi" ? "फसल कार्ड सफलतापूर्वक अपडेट किया गया!" : "Crop card updated successfully!"
         }]);
+      } else if (draft.type === "khata_create_draft") {
+        const regPayload: Record<string, any> = {
+          khataType: draft.khataType,
+          title: draft.title,
+          ...(draft.fields || {}),
+        };
+        const regRes = await apiRequest("POST", "/api/khata", regPayload);
+        const reg = await regRes.json();
+
+        if (draft.items && draft.items.length > 0) {
+          for (const rawItem of draft.items) {
+            if (draft.khataType === "panat") {
+              await apiRequest("POST", `/api/khata/${reg.id}/panat-payments`, rawItem);
+            } else if (draft.khataType === "lending_ledger") {
+              await apiRequest("POST", `/api/khata/${reg.id}/lenden`, rawItem);
+            } else {
+              const item = { ...rawItem };
+              if (draft.khataType === "rental") {
+                if (!item.expenseCategory) item.expenseCategory = "rental";
+                if (!item.totalCost) item.totalCost = "0";
+              }
+              if (!item.expenseCategory) item.expenseCategory = "others";
+              if (!item.totalCost) item.totalCost = "0";
+              await apiRequest("POST", `/api/khata/${reg.id}/items`, item);
+            }
+          }
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["/api/khata"] });
+        toast({ title: language === "hi" ? "खाता बन गया!" : "Khata created!" });
+        setDraft(null);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: language === "hi" ? "खाता सफलतापूर्वक बनाया गया! आप इसे खाता टैब में देख सकते हैं।" : "Khata created successfully! You can view it in the Khata tab."
+        }]);
+      } else if (draft.type === "khata_add_item_draft") {
+        for (const rawItem of draft.items) {
+          if (draft.khataType === "panat") {
+            await apiRequest("POST", `/api/khata/${draft.khataId}/panat-payments`, rawItem);
+          } else if (draft.khataType === "lending_ledger") {
+            await apiRequest("POST", `/api/khata/${draft.khataId}/lenden`, rawItem);
+          } else {
+            const item = { ...rawItem };
+            if (draft.khataType === "rental") {
+              if (!item.expenseCategory) item.expenseCategory = "rental";
+              if (!item.totalCost) item.totalCost = "0";
+            }
+            if (!item.expenseCategory) item.expenseCategory = "others";
+            if (!item.totalCost) item.totalCost = "0";
+            await apiRequest("POST", `/api/khata/${draft.khataId}/items`, item);
+          }
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["/api/khata"] });
+        toast({ title: language === "hi" ? "एंट्री जोड़ दी गई!" : "Entry added!" });
+        setDraft(null);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: language === "hi" ? "खाते में एंट्री सफलतापूर्वक जोड़ दी गई!" : "Entry added to khata successfully!"
+        }]);
       }
-    } catch (error) {
-      toast({ title: "Error", variant: "destructive" });
+    } catch (error: any) {
+      console.error("Draft approval error:", error);
+      toast({
+        title: language === "hi" ? "त्रुटि हुई" : "Error occurred",
+        description: error?.message || String(error),
+        variant: "destructive",
+      });
     }
   }, [draft, language, t, toast]);
 
@@ -517,7 +600,21 @@ export function Chatbot() {
 
   const isEditDraft = draft?.type === "crop_card_edit_draft";
   const editDraft = isEditDraft ? (draft as CropCardEditDraft) : null;
-  const createDraft = !isEditDraft ? (draft as CropCardDraft | null) : null;
+  const isKhataCreateDraft = draft?.type === "khata_create_draft";
+  const khataCreateDraft = isKhataCreateDraft ? (draft as KhataCreateDraft) : null;
+  const isKhataAddItemDraft = draft?.type === "khata_add_item_draft";
+  const khataAddItemDraft = isKhataAddItemDraft ? (draft as KhataAddItemDraft) : null;
+  const createDraft = draft?.type === "crop_card_draft" ? (draft as CropCardDraft) : null;
+
+  const KHATA_TYPE_LABELS: Record<string, Record<string, string>> = {
+    rental: { hi: "किराया खाता", en: "Rental Khata" },
+    batai: { hi: "बटाई खाता", en: "Batai Khata" },
+    panat: { hi: "पानत खाता", en: "Panat Khata" },
+    crop_card: { hi: "फसल कार्ड खाता", en: "Crop Card Khata" },
+    miscellaneous: { hi: "विविध खाता", en: "Miscellaneous Khata" },
+    machinery_expense: { hi: "मशीनरी खर्चा", en: "Machinery Expense" },
+    lending_ledger: { hi: "लेन देन खाता", en: "Lending Ledger" },
+  };
 
   const chatContent = (
     <>
@@ -733,6 +830,98 @@ export function Chatbot() {
                 {t("approve")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-edit-draft">
+                <X className="w-3 h-3 mr-1" />
+                {t("reject")}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {khataCreateDraft && (
+          <Card className="p-3 border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20" data-testid="khata-create-draft-card">
+            <h4 className="text-sm font-bold mb-2">
+              {language === "hi" ? "नया खाता:" : "New Khata:"}
+              {" "}
+              <span className="text-emerald-700 dark:text-emerald-400">
+                {KHATA_TYPE_LABELS[khataCreateDraft.khataType]?.[language] || khataCreateDraft.khataType}
+              </span>
+            </h4>
+            <p className="text-sm"><strong>{language === "hi" ? "शीर्षक:" : "Title:"}</strong> {khataCreateDraft.title}</p>
+            {khataCreateDraft.fields && Object.keys(khataCreateDraft.fields).length > 0 && (
+              <div className="mt-1 space-y-0.5">
+                {Object.entries(khataCreateDraft.fields).filter(([, v]) => v && v !== "0" && v !== "null").map(([key, val]) => (
+                  <p key={key} className="text-xs text-muted-foreground">
+                    {key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}: {String(val)}
+                  </p>
+                ))}
+              </div>
+            )}
+            {khataCreateDraft.items && khataCreateDraft.items.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {language === "hi" ? `${khataCreateDraft.items.length} एंट्री:` : `${khataCreateDraft.items.length} entries:`}
+                </p>
+                {khataCreateDraft.items.slice(0, 4).map((item, i) => (
+                  <p key={i} className="text-xs text-muted-foreground">
+                    {item.date || ""} — ₹{item.rentalTotalCharges || item.totalCost || item.principalAmount || item.paymentAmount || item.amount || ""}
+                    {item.rentalFarmWork ? ` (${item.rentalFarmWork})` : ""}
+                    {item.expenseCategory ? ` (${item.expenseCategory})` : ""}
+                    {item.transactionType ? ` (${item.transactionType})` : ""}
+                  </p>
+                ))}
+                {khataCreateDraft.items.length > 4 && (
+                  <p className="text-xs text-muted-foreground italic">
+                    {language === "hi" ? `...और ${khataCreateDraft.items.length - 4} और` : `...and ${khataCreateDraft.items.length - 4} more`}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" onClick={approveDraft} data-testid="button-approve-khata-create">
+                <Check className="w-3 h-3 mr-1" />
+                {t("approve")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-khata-create">
+                <X className="w-3 h-3 mr-1" />
+                {t("reject")}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {khataAddItemDraft && (
+          <Card className="p-3 border-blue-500/30 bg-blue-50 dark:bg-blue-950/20" data-testid="khata-add-item-draft-card">
+            <h4 className="text-sm font-bold mb-2">
+              {language === "hi" ? "खाते में एंट्री जोड़ें:" : "Add to Khata:"}
+              {" "}
+              <span className="text-blue-700 dark:text-blue-400">{khataAddItemDraft.khataTitle}</span>
+            </h4>
+            <p className="text-xs text-muted-foreground mb-1">
+              {KHATA_TYPE_LABELS[khataAddItemDraft.khataType]?.[language] || khataAddItemDraft.khataType}
+            </p>
+            {khataAddItemDraft.items.length > 0 && (
+              <div className="space-y-1">
+                {khataAddItemDraft.items.slice(0, 4).map((item, i) => (
+                  <p key={i} className="text-xs text-muted-foreground">
+                    {item.date || ""} — ₹{item.rentalTotalCharges || item.totalCost || item.principalAmount || item.paymentAmount || item.amount || ""}
+                    {item.rentalFarmWork ? ` (${item.rentalFarmWork})` : ""}
+                    {item.expenseCategory ? ` (${item.expenseCategory})` : ""}
+                    {item.transactionType ? ` (${item.transactionType})` : ""}
+                  </p>
+                ))}
+                {khataAddItemDraft.items.length > 4 && (
+                  <p className="text-xs text-muted-foreground italic">
+                    {language === "hi" ? `...और ${khataAddItemDraft.items.length - 4} और` : `...and ${khataAddItemDraft.items.length - 4} more`}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" onClick={approveDraft} data-testid="button-approve-khata-add">
+                <Check className="w-3 h-3 mr-1" />
+                {t("approve")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-khata-add">
                 <X className="w-3 h-3 mr-1" />
                 {t("reject")}
               </Button>

@@ -97,6 +97,10 @@ shared/
 - Chatbot is context-aware: knows farmer's existing crop cards and events
 - Chatbot can create new crop cards via conversation (crop_card_draft)
 - Chatbot can edit existing crop cards via conversation (crop_card_edit_draft)
+- Chatbot can create/manage all 7 Farm Khata types via conversation (khata_create_draft, khata_add_item_draft)
+  - System prompt includes farmer's existing khata registers as context (so AI can find existing cards)
+  - Rental items normalized with expenseCategory="rental" and totalCost="0" before POST
+  - Khata type in prompts uses `machinery_expense` (not `machinery`) to match DB values
 - Each farmer gets a unique Farmer ID in FMYYYYMMDD{seq} format
 - Farmer ID shown in chatbot header and sidebar profile
 - Farm Khata (expense ledger) with 7 khata types:
