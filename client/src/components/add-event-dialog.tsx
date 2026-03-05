@@ -94,6 +94,7 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
       apiRequest("POST", `/api/crop-cards/${cropCardId}/events`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", cropCardId, "events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", cropCardId, "suggestions"] });
       toast({ title: t("eventAdded") });
       form.reset();
       onOpenChange(false);
@@ -108,6 +109,7 @@ export function AddEventDialog({ open, onOpenChange, cropCardId, editEvent }: Ad
       apiRequest("PATCH", `/api/crop-events/${editEvent!.id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", cropCardId, "events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", cropCardId, "suggestions"] });
       toast({ title: t("eventUpdated") });
       form.reset();
       onOpenChange(false);

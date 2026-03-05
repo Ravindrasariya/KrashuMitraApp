@@ -75,6 +75,7 @@ export function CropCardItem({ card, onDelete, onArchive }: CropCardItemProps) {
     mutationFn: (eventId: number) => apiRequest("POST", `/api/crop-events/${eventId}/toggle`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", card.id, "events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", card.id, "suggestions"] });
     },
   });
 
@@ -82,6 +83,7 @@ export function CropCardItem({ card, onDelete, onArchive }: CropCardItemProps) {
     mutationFn: (eventId: number) => apiRequest("DELETE", `/api/crop-events/${eventId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", card.id, "events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crop-cards", card.id, "suggestions"] });
     },
   });
 

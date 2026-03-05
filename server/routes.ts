@@ -140,6 +140,7 @@ export async function registerRoutes(
       if (card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const data = insertCropEventSchema.parse({ ...req.body, cropCardId: parseInt(req.params.id) });
       const event = await storage.createCropEvent(data);
+      invalidateSuggestionsForCard(parseInt(req.params.id));
       res.status(201).json(event);
     } catch (error) {
       console.error("Error creating event:", error);
@@ -154,6 +155,7 @@ export async function registerRoutes(
       const card = await storage.getCropCard(event.cropCardId);
       if (!card || card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const updated = await storage.toggleCropEventComplete(parseInt(req.params.id));
+      invalidateSuggestionsForCard(event.cropCardId);
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Failed to toggle event" });
@@ -170,6 +172,7 @@ export async function registerRoutes(
       const parsed = allowedFields.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
       const updated = await storage.updateCropEvent(parseInt(req.params.id), parsed.data);
+      invalidateSuggestionsForCard(event.cropCardId);
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Failed to update event" });
@@ -183,6 +186,7 @@ export async function registerRoutes(
       const card = await storage.getCropCard(event.cropCardId);
       if (!card || card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       await storage.deleteCropEvent(parseInt(req.params.id));
+      invalidateSuggestionsForCard(event.cropCardId);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete event" });
@@ -192,6 +196,13 @@ export async function registerRoutes(
   const suggestionsCache = new Map<string, { en: any; hi: any | null; timestamp: number }>();
   const SUGGESTIONS_CACHE_MS = 6 * 60 * 60 * 1000;
   const nullSuggestions = { nextActivity: null, weatherWarning: null, suggestion: null };
+
+  function invalidateSuggestionsForCard(cardId: number) {
+    const prefix = `${cardId}-`;
+    for (const key of suggestionsCache.keys()) {
+      if (key.startsWith(prefix)) suggestionsCache.delete(key);
+    }
+  }
 
   function extractGeminiJson(result: any): any | null {
     let responseText = "";
