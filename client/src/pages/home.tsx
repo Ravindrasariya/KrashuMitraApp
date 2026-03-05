@@ -74,7 +74,7 @@ export default function HomePage() {
               </div>
               <h3 className="font-semibold text-sm md:text-base mb-1">{t("marketplace")}</h3>
               <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">
-                {t("comingSoon")}
+                {t("marketplaceDesc")}
               </p>
             </Card>
           </Link>

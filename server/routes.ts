@@ -911,6 +911,107 @@ Respond in this structure:
     }
   });
 
+  // Marketplace routes
+  app.get("/api/marketplace", async (req: any, res) => {
+    try {
+      const category = req.query.category as string | undefined;
+      const listings = await storage.getMarketplaceListings(category ? { category } : undefined);
+      const listingsWithoutPhoto = listings.map(({ photoData, ...rest }) => rest);
+      res.json(listingsWithoutPhoto);
+    } catch (error) {
+      console.error("Error fetching marketplace:", error);
+      res.status(500).json({ message: "Failed to fetch listings" });
+    }
+  });
+
+  app.get("/api/marketplace/:id/image", async (req: any, res) => {
+    try {
+      const listing = await storage.getMarketplaceListing(parseInt(req.params.id));
+      if (!listing || !listing.photoData || !listing.photoMime) {
+        return res.status(404).json({ message: "Image not found" });
+      }
+      const buffer = Buffer.from(listing.photoData, "base64");
+      res.setHeader("Content-Type", listing.photoMime);
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch image" });
+    }
+  });
+
+  app.get("/api/marketplace/:id/contact", isAuthenticated, async (req: any, res) => {
+    try {
+      const listing = await storage.getMarketplaceListing(parseInt(req.params.id));
+      if (!listing) return res.status(404).json({ message: "Not found" });
+      const seller = await storage.getUserById(listing.sellerId);
+      if (!seller) return res.status(404).json({ message: "Seller not found" });
+      res.json({
+        name: seller.firstName || "",
+        phone: seller.phoneNumber || "",
+        farmerCode: seller.farmerCode || "",
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch contact" });
+    }
+  });
+
+  app.post("/api/marketplace", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const user = await storage.getUserById(userId);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+      const { category, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand } = req.body || {};
+      if (!category || !["onion_seedling", "potato_seed"].includes(category)) {
+        return res.status(400).json({ message: "Invalid category" });
+      }
+      if (category === "onion_seedling" && !quantityBigha) {
+        return res.status(400).json({ message: "quantityBigha required for onion_seedling" });
+      }
+      if (category === "potato_seed" && !quantityBags) {
+        return res.status(400).json({ message: "quantityBags required for potato_seed" });
+      }
+
+      const listing = await storage.createMarketplaceListing({
+        sellerId: userId,
+        category,
+        photoData: photoData ? String(photoData) : null,
+        photoMime: photoMime ? String(photoMime).slice(0, 50) : null,
+        quantityBigha: quantityBigha ? String(quantityBigha).slice(0, 20) : null,
+        availableAfterDays: availableAfterDays ? Math.max(0, parseInt(String(availableAfterDays)) || 0) : null,
+        onionType: onionType ? String(onionType).slice(0, 100) : null,
+        quantityBags: quantityBags ? String(quantityBags).slice(0, 20) : null,
+        potatoVariety: potatoVariety ? String(potatoVariety).slice(0, 50) : null,
+        potatoBrand: potatoBrand ? String(potatoBrand).slice(0, 50) : null,
+        sellerVillage: user.village || null,
+        sellerTehsil: user.tehsil || null,
+        sellerDistrict: user.district || null,
+        sellerLat: user.latitude || null,
+        sellerLng: user.longitude || null,
+        isActive: true,
+      });
+
+      const { photoData: _, ...listingWithoutPhoto } = listing;
+      res.status(201).json(listingWithoutPhoto);
+    } catch (error) {
+      console.error("Error creating listing:", error);
+      res.status(500).json({ message: "Failed to create listing" });
+    }
+  });
+
+  app.delete("/api/marketplace/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const listing = await storage.getMarketplaceListing(parseInt(req.params.id));
+      if (!listing) return res.status(404).json({ message: "Not found" });
+      if (listing.sellerId !== userId) return res.status(403).json({ message: "Not authorized" });
+      await storage.deleteMarketplaceListing(listing.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete listing" });
+    }
+  });
+
   app.get("/api/suggestions", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;

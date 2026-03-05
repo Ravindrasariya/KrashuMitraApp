@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -54,6 +54,10 @@ export interface IStorage {
   getAllServiceRequests(): Promise<ServiceRequest[]>;
   getServiceRequest(id: number): Promise<ServiceRequest | undefined>;
   updateServiceRequest(id: number, data: Partial<Pick<ServiceRequest, "status" | "adminRemarks" | "isArchived">>): Promise<ServiceRequest | undefined>;
+  createMarketplaceListing(data: InsertMarketplaceListing): Promise<MarketplaceListing>;
+  getMarketplaceListings(filters?: { category?: string }): Promise<MarketplaceListing[]>;
+  getMarketplaceListing(id: number): Promise<MarketplaceListing | undefined>;
+  deleteMarketplaceListing(id: number): Promise<void>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -555,6 +559,28 @@ class DatabaseStorage implements IStorage {
   async updateServiceRequest(id: number, data: Partial<Pick<ServiceRequest, "status" | "adminRemarks" | "isArchived">>): Promise<ServiceRequest | undefined> {
     const [updated] = await db.update(serviceRequests).set({ ...data, updatedAt: new Date() }).where(eq(serviceRequests.id, id)).returning();
     return updated;
+  }
+
+  async createMarketplaceListing(data: InsertMarketplaceListing): Promise<MarketplaceListing> {
+    const [created] = await db.insert(marketplaceListings).values(data).returning();
+    return created;
+  }
+
+  async getMarketplaceListings(filters?: { category?: string }): Promise<MarketplaceListing[]> {
+    const conditions = [eq(marketplaceListings.isActive, true)];
+    if (filters?.category) {
+      conditions.push(eq(marketplaceListings.category, filters.category));
+    }
+    return db.select().from(marketplaceListings).where(and(...conditions)).orderBy(desc(marketplaceListings.createdAt));
+  }
+
+  async getMarketplaceListing(id: number): Promise<MarketplaceListing | undefined> {
+    const [listing] = await db.select().from(marketplaceListings).where(eq(marketplaceListings.id, id));
+    return listing;
+  }
+
+  async deleteMarketplaceListing(id: number): Promise<void> {
+    await db.delete(marketplaceListings).where(eq(marketplaceListings.id, id));
   }
 }
 

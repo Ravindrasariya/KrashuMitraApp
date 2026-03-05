@@ -12,7 +12,7 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home";
 import FarmManagementPage from "@/pages/farm-management";
 import AuthPage from "@/pages/auth-page";
-import PlaceholderPage from "@/pages/placeholder-page";
+import MarketplacePage from "@/pages/marketplace";
 import AdminPage from "@/pages/admin-page";
 import FarmKhataPage from "@/pages/farm-khata";
 import DigitalClinicPage from "@/pages/digital-clinic";
@@ -25,9 +25,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/farm-management" component={FarmManagementPage} />
       <Route path="/digital-clinic" component={DigitalClinicPage} />
-      <Route path="/marketplace">
-        <PlaceholderPage titleKey="marketplace" />
-      </Route>
+      <Route path="/marketplace" component={MarketplacePage} />
       <Route path="/farm-khata" component={FarmKhataPage} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/admin" component={AdminPage} />

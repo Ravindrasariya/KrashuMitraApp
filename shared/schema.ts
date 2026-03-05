@@ -226,3 +226,32 @@ export type PanatPayment = typeof panatPayments.$inferSelect;
 export type InsertPanatPayment = z.infer<typeof insertPanatPaymentSchema>;
 export type LendenTransaction = typeof lendenTransactions.$inferSelect;
 export type InsertLendenTransaction = z.infer<typeof insertLendenTransactionSchema>;
+
+export const marketplaceListings = pgTable("marketplace_listings", {
+  id: serial("id").primaryKey(),
+  sellerId: varchar("seller_id").notNull().references(() => users.id),
+  category: text("category").notNull(),
+  photoData: text("photo_data"),
+  photoMime: varchar("photo_mime"),
+  quantityBigha: text("quantity_bigha"),
+  availableAfterDays: integer("available_after_days"),
+  onionType: text("onion_type"),
+  quantityBags: text("quantity_bags"),
+  potatoVariety: text("potato_variety"),
+  potatoBrand: text("potato_brand"),
+  sellerVillage: text("seller_village"),
+  sellerTehsil: text("seller_tehsil"),
+  sellerDistrict: text("seller_district"),
+  sellerLat: varchar("seller_lat"),
+  sellerLng: varchar("seller_lng"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertMarketplaceListingSchema = createInsertSchema(marketplaceListings).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MarketplaceListing = typeof marketplaceListings.$inferSelect;
+export type InsertMarketplaceListing = z.infer<typeof insertMarketplaceListingSchema>;
