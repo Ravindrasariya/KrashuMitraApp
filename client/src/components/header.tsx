@@ -8,7 +8,7 @@ import logoPath from "@assets/Gemini_Generated_Image_lu75dlu75dlu75dl(1)_1772735
 function BrandingText({ language }: { language: string }) {
   if (language === "hi") {
     return (
-      <p className="text-[9px] leading-tight mt-0.5">
+      <p className="text-xs leading-tight mt-1">
         <span className="text-green-600 font-semibold">कृषु</span>
         <span className="text-orange-600 font-semibold">वेद</span>
         <span className="text-muted-foreground"> द्वारा</span>
@@ -16,7 +16,7 @@ function BrandingText({ language }: { language: string }) {
     );
   }
   return (
-    <p className="text-[9px] leading-tight mt-0.5">
+    <p className="text-xs leading-tight mt-1">
       <span className="text-muted-foreground">by </span>
       <span className="text-green-600 font-semibold">Krashu</span>
       <span className="text-orange-600 font-semibold">Ved</span>
@@ -42,12 +42,12 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b md:hidden" data-testid="app-header">
-      <div className="flex items-center justify-between px-3 h-14 max-w-lg mx-auto">
+      <div className="flex items-center justify-between px-3 h-16 max-w-lg mx-auto">
         <Link href="/">
           <div className="flex items-center gap-2 cursor-pointer">
-            <img src={logoPath} alt="Logo" className="w-8 h-8 rounded-full object-cover" />
+            <img src={logoPath} alt="Logo" className="w-10 h-10 rounded-full object-cover" />
             <div className="leading-none">
-              <h1 className="text-sm font-bold leading-tight" data-testid="text-app-name">{t("appName")}</h1>
+              <h1 className="text-base font-bold leading-tight" data-testid="text-app-name">{t("appName")}</h1>
               <BrandingText language={language} />
             </div>
           </div>

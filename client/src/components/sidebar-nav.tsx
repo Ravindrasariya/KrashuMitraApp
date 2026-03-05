@@ -17,7 +17,7 @@ const navItems = [
 function BrandingText({ language }: { language: string }) {
   if (language === "hi") {
     return (
-      <p className="text-[10px] leading-tight mt-0.5">
+      <p className="text-xs leading-tight mt-1">
         <span className="text-green-600 font-semibold">कृषु</span>
         <span className="text-orange-600 font-semibold">वेद</span>
         <span className="text-muted-foreground"> द्वारा</span>
@@ -25,7 +25,7 @@ function BrandingText({ language }: { language: string }) {
     );
   }
   return (
-    <p className="text-[10px] leading-tight mt-0.5">
+    <p className="text-xs leading-tight mt-1">
       <span className="text-muted-foreground">by </span>
       <span className="text-green-600 font-semibold">Krashu</span>
       <span className="text-orange-600 font-semibold">Ved</span>
@@ -57,20 +57,20 @@ export function SidebarNav() {
 
   return (
     <header
-      className="hidden md:flex items-center h-14 border-b bg-background/95 backdrop-blur sticky top-0 z-50 px-4 gap-4 shrink-0"
+      className="hidden md:flex items-center h-16 border-b bg-background/95 backdrop-blur sticky top-0 z-50 px-4 gap-4 shrink-0"
       data-testid="sidebar-nav"
     >
       <Link href="/">
         <div className="flex items-center gap-2 shrink-0 cursor-pointer mr-2">
-          <img src={logoPath} alt="Logo" className="w-8 h-8 rounded-full object-cover" />
+          <img src={logoPath} alt="Logo" className="w-10 h-10 rounded-full object-cover" />
           <div className="leading-none">
-            <h1 className="text-sm font-bold leading-tight" data-testid="text-sidebar-app-name">{t("appName")}</h1>
+            <h1 className="text-base font-bold leading-tight" data-testid="text-sidebar-app-name">{t("appName")}</h1>
             <BrandingText language={language} />
           </div>
         </div>
       </Link>
 
-      <nav className="flex items-center gap-1 flex-1 overflow-x-auto">
+      <nav className="flex items-center justify-center gap-1 flex-1 overflow-x-auto">
         {navItems.map(item => {
           const isActive = location === item.path;
           return (
@@ -79,8 +79,8 @@ export function SidebarNav() {
                 aria-current={isActive ? "page" : undefined}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
                   isActive
-                    ? "bg-primary/10 text-primary font-semibold"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-primary/10 text-primary font-bold"
+                    : "text-muted-foreground font-medium hover:bg-muted hover:text-foreground"
                 }`}
                 data-testid={`sidebar-nav-${item.labelKey}`}
               >
@@ -97,8 +97,8 @@ export function SidebarNav() {
               aria-current={location === "/admin" ? "page" : undefined}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
                 location === "/admin"
-                  ? "bg-primary/10 text-primary font-semibold"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-primary/10 text-primary font-bold"
+                  : "text-muted-foreground font-medium hover:bg-muted hover:text-foreground"
               }`}
               data-testid="sidebar-nav-admin"
             >

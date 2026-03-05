@@ -27,7 +27,7 @@ The application follows a client-server architecture:
 -   **Routing**: Wouter
 -   **State Management**: TanStack Query
 -   **Internationalization**: Custom Hindi/English i18n system
--   **UI/UX**: Responsive design. Desktop uses a horizontal top tab bar (no sidebar). Mobile uses a header with profile dropdown + language toggle, and a 5-tab bottom nav (Home, Market, Crops, Khata, Clinic). Color-coded event types for visual clarity (e.g., Plantation - green, Fertiliser - amber). Branding: logo image from attached assets, "Krashu" in green + "Ved" in orange, tagline "by KrashuVed".
+-   **UI/UX**: Responsive design. Desktop uses a horizontal top tab bar (h-16, tabs centered with `justify-center`). Mobile uses a header (h-16) with profile dropdown + language toggle, and a 5-tab bottom nav (Home, Market, Crops, Khata, Clinic). Color-coded event types for visual clarity (e.g., Plantation - green, Fertiliser - amber). Branding: logo image (w-10 h-10), app name text-base font-bold, tagline text-xs with mt-1 spacing. "Krashu" in green + "Ved" in orange. Splash screen on app load (~2.5s) with logo, "KrashuVed" branding, and Hindi tagline "आपका विश्वास, हमारी प्राथमिकता".
 -   **Chatbot UI**: Features voice input, TTS output, a stop button for ongoing responses, and image attachment for AI analysis. Auto-growing textarea for chat input, supporting `Enter` to send and `Shift+Enter` for new lines. Markdown rendering for chat messages.
 -   **Image Display**: Inline display of images pulled from Wikimedia Commons based on AI suggestions.
 
