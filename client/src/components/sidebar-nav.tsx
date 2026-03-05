@@ -57,20 +57,20 @@ export function SidebarNav() {
 
   return (
     <header
-      className="hidden md:flex items-center h-16 border-b bg-background/95 backdrop-blur sticky top-0 z-50 px-4 gap-4 shrink-0"
+      className="hidden md:flex items-center justify-center h-16 border-b bg-background/95 backdrop-blur sticky top-0 z-50 px-4 gap-3 shrink-0"
       data-testid="sidebar-nav"
     >
       <Link href="/">
-        <div className="flex items-center gap-2 shrink-0 cursor-pointer mr-2">
+        <div className="flex items-center gap-2 shrink-0 cursor-pointer">
           <img src={logoPath} alt="Logo" className="w-10 h-10 rounded-full object-cover" />
           <div className="leading-none">
-            <h1 className="text-base font-bold leading-tight" data-testid="text-sidebar-app-name">{t("appName")}</h1>
+            <h1 className="text-lg font-bold leading-tight" data-testid="text-sidebar-app-name">{t("appName")}</h1>
             <BrandingText language={language} />
           </div>
         </div>
       </Link>
 
-      <nav className="flex items-center justify-center gap-1 flex-1 overflow-x-auto">
+      <nav className="flex items-center gap-1 overflow-x-auto">
         {navItems.map(item => {
           const isActive = location === item.path;
           return (
@@ -90,23 +90,6 @@ export function SidebarNav() {
             </Link>
           );
         })}
-
-        {user?.isAdmin && (
-          <Link href="/admin">
-            <button
-              aria-current={location === "/admin" ? "page" : undefined}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
-                location === "/admin"
-                  ? "bg-primary/10 text-primary font-bold"
-                  : "text-muted-foreground font-medium hover:bg-muted hover:text-foreground"
-              }`}
-              data-testid="sidebar-nav-admin"
-            >
-              <Shield className={`w-4 h-4 ${location === "/admin" ? "stroke-[2.5px]" : ""}`} />
-              <span>{t("admin")}</span>
-            </button>
-          </Link>
-        )}
       </nav>
 
       <div className="flex items-center gap-2 shrink-0">
