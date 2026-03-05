@@ -70,7 +70,7 @@ export function SidebarNav() {
         </div>
       </Link>
 
-      <nav className="flex items-center gap-1 overflow-x-auto mx-6">
+      <nav className="flex items-center gap-1 overflow-x-auto mx-[72px]">
         {navItems.map(item => {
           const isActive = location === item.path;
           return (
