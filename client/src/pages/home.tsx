@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Sprout, Stethoscope, ShoppingBag, BookOpen, ArrowRight, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
+import { Sprout, Stethoscope, ShoppingBag, BookOpen, ArrowRight, MapPin } from "lucide-react";
 import { Link } from "wouter";
 import { WeatherWidget } from "@/components/weather-widget";
 import { useState, useEffect, useCallback } from "react";
@@ -17,10 +17,6 @@ function BannerCarousel({ banners, language }: { banners: BannerWithImage[]; lan
 
   const next = useCallback(() => {
     setCurrent(c => (c + 1) % banners.length);
-  }, [banners.length]);
-
-  const prev = useCallback(() => {
-    setCurrent(c => (c - 1 + banners.length) % banners.length);
   }, [banners.length]);
 
   useEffect(() => {
@@ -80,20 +76,6 @@ function BannerCarousel({ banners, language }: { banners: BannerWithImage[]; lan
 
       {banners.length > 1 && (
         <>
-          <button
-            onClick={prev}
-            className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/80 items-center justify-center shadow-lg hover:bg-background transition-all z-10"
-            data-testid="button-banner-prev"
-          >
-            <ChevronLeft className="w-5 h-5 text-primary" />
-          </button>
-          <button
-            onClick={next}
-            className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/80 items-center justify-center shadow-lg hover:bg-background transition-all z-10"
-            data-testid="button-banner-next"
-          >
-            <ChevronRight className="w-5 h-5 text-primary" />
-          </button>
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
             {banners.map((_, idx) => (
               <button
