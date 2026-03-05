@@ -82,7 +82,8 @@ shared/
 - Edit and delete events with confirmation dialogs
 - Auto-suggestions for descriptions based on history
 - Krashu Mitra AI chatbot with voice input and TTS output (Hindi female voice, feminine persona)
-- Stop button (red pill in chat area + square icon in input bar) to abort chatbot mid-response; partial text preserved, no blank bubbles
+- Stop button (square icon in input bar) to abort chatbot mid-response; partial text preserved, no blank bubbles
+- TTS stop button: after text reply finishes and voice starts playing, a VolumeX button appears in input bar to stop voice; isSpeaking state tracks TTS playback via utterance onstart/onend/onerror
 - Image attachment: users can share crop photos via camera/gallery; images stored in PostgreSQL (chat_images table), sent to Gemini for analysis (disease ID, pest ID, growth assessment)
 - Voice input fills input box for review before sending (no auto-send)
 - Chatbot responds with short bullet-point answers (3-5 points) and suggests 1-2 follow-up questions
@@ -118,7 +119,7 @@ shared/
 ## Database Tables
 - `users` - Auth users (id, phoneNumber, pin, knownIps, email, firstName, lastName, farmerCode, isAdmin, mustChangePin)
 - `sessions` - Session storage (express-session with connect-pg-simple)
-- `crop_cards` - Farmer's crop cards (uniqueId, userId, cropName, farmName?, variety?, startDate, status)
+- `crop_cards` - Farmer's crop cards (uniqueId, userId, cropName, farmName?, variety?, startDate, status, isArchived)
 - `crop_events` - Timeline events (cropCardId, eventType, description, eventDate, isCompleted, productionPerBigha, productionUnit)
 - `khata_registers` - Farm expense registers (uniqueId, userId, khataType, cropCardId?, title, plantationDate?, harvestDate?, production?, bataidarName?, bataidarContact?, bataiType?, bighaCount?, panatPersonName?, panatContact?, panatRatePerBigha?, panatTotalBigha?, panatTotalAmount?, panatRemarks?, rentalFarmerName?, rentalContact?, rentalVillage?, rentalOpeningBalance?, rentalRedFlag?, machineryCategory?, machineryName?, machineryHp?, machineryPurchaseYear?, lendenPersonName?, lendenContact?, lendenVillage?, lendenType?, lendenRedFlag?, isArchived, totalDue, totalPaid, totalOwnerExpense, totalBataidarExpense)
 - `lenden_transactions` - Lending ledger transactions (id, khataRegisterId FK, transactionType, date, principalAmount, interestRateMonthly, remainingPrincipal, accruedInterest, lastAccrualDate, borrowingDate, paymentAmount, appliedToInterest, appliedToPrincipal, targetBorrowingId, remarks, createdAt)
@@ -134,7 +135,8 @@ shared/
 - `POST /api/auth/logout` - Destroy session
 - `GET /api/auth/user` - Get current session user
 - `GET /api/farmer/profile` - Returns user profile with farmerCode
-- `GET /api/crop-cards` - List user's crop cards
+- `GET /api/crop-cards` - List user's crop cards (supports ?showArchived=true)
+- `POST /api/crop-cards/:id/archive` - Toggle archive/unarchive crop card
 - `POST /api/crop-cards` - Create crop card
 - `PATCH /api/crop-cards/:id` - Update crop card
 - `DELETE /api/crop-cards/:id` - Delete crop card

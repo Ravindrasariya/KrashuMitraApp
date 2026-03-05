@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2, Square, ImagePlus } from "lucide-react";
+import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2, VolumeX, Square, ImagePlus } from "lucide-react";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -158,7 +158,7 @@ function renderFormattedText(text: string) {
   });
 }
 
-function speakText(text: string, lang: string) {
+function speakText(text: string, lang: string, onStart?: () => void, onEnd?: () => void) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
 
@@ -180,6 +180,10 @@ function speakText(text: string, lang: string) {
     utterance.voice = nonMale || langVoices[0];
   }
 
+  utterance.onstart = () => onStart?.();
+  utterance.onend = () => onEnd?.();
+  utterance.onerror = () => onEnd?.();
+
   window.speechSynthesis.speak(utterance);
 }
 
@@ -191,6 +195,7 @@ export function Chatbot() {
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadSavedMessages());
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 768px)").matches);
@@ -242,6 +247,13 @@ export function Chatbot() {
     }
   }, [input]);
 
+  const stopSpeaking = useCallback(() => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  }, []);
+
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -251,11 +263,9 @@ export function Chatbot() {
       readerRef.current.cancel().catch(() => {});
       readerRef.current = null;
     }
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    stopSpeaking();
     setIsStreaming(false);
-  }, []);
+  }, [stopSpeaking]);
 
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -368,7 +378,7 @@ export function Chatbot() {
                   return updated;
                 });
 
-                speakText(finalContent, language);
+                speakText(finalContent, language, () => setIsSpeaking(true), () => setIsSpeaking(false));
 
                 const parsedDraft = tryParseDraft(data.fullResponse);
                 if (parsedDraft) setDraft(parsedDraft);
@@ -608,7 +618,7 @@ export function Chatbot() {
               })()}
               {msg.role === "assistant" && msg.content && (
                 <button
-                  onClick={() => speakText(msg.content, language)}
+                  onClick={() => speakText(msg.content, language, () => setIsSpeaking(true), () => setIsSpeaking(false))}
                   className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
                   data-testid={`button-speak-${i}`}
                 >
@@ -621,16 +631,8 @@ export function Chatbot() {
         ))}
 
         {isStreaming && (
-          <div className="flex flex-col items-center gap-2 py-1">
+          <div className="flex justify-center py-1">
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-            <button
-              onClick={stopStreaming}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-medium shadow-sm"
-              data-testid="button-stop-streaming"
-            >
-              <Square className="w-3 h-3 fill-current" />
-              {t("stopReply")}
-            </button>
           </div>
         )}
 
@@ -821,6 +823,15 @@ export function Chatbot() {
               data-testid="button-stop-chat"
             >
               <Square className="w-4 h-4" />
+            </Button>
+          ) : isSpeaking ? (
+            <Button
+              size="icon"
+              variant="destructive"
+              onClick={stopSpeaking}
+              data-testid="button-stop-voice"
+            >
+              <VolumeX className="w-4 h-4" />
             </Button>
           ) : (
             <Button

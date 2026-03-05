@@ -99,6 +99,7 @@ const translations = {
   pinReset: { hi: "पिन सफलतापूर्वक रीसेट हो गया!", en: "PIN reset successfully!" },
   listenAgain: { hi: "फिर सुनें", en: "Listen again" },
   stopReply: { hi: "रोकें", en: "Stop" },
+  stopVoice: { hi: "आवाज़ रोकें", en: "Stop Voice" },
   attachPhoto: { hi: "फोटो जोड़ें", en: "Attach Photo" },
   adminPanel: { hi: "एडमिन पैनल", en: "Admin Panel" },
   allUsers: { hi: "सभी उपयोगकर्ता", en: "All Users" },
