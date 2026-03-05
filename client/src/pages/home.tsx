@@ -141,15 +141,21 @@ function PriceTrendsSection({ language }: { language: string }) {
   if (crops.length === 0) return null;
 
   const dates = [...new Set(entries.map(e => e.date))].sort((a, b) => a.localeCompare(b));
-  const markets = [...new Set(entries.map(e => e.market))];
+  const districts = [...new Set(entries.map(e => (e as any).district || e.market))];
 
-  const getEntry = (date: string, market: string) => entries.find(e => e.date === date && e.market === market);
+  const getEntry = (date: string, district: string) => {
+    const matching = entries.filter(e => e.date === date && ((e as any).district || e.market) === district);
+    if (matching.length === 0) return null;
+    if (matching.length === 1) return matching[0];
+    const avgModal = Math.round(matching.reduce((sum, e) => sum + Number(e.modalPrice), 0) / matching.length);
+    return { ...matching[0], modalPrice: String(avgModal) };
+  };
 
-  const getPriceChange = (date: string, market: string) => {
+  const getPriceChange = (date: string, district: string) => {
     const dateIdx = dates.indexOf(date);
     if (dateIdx <= 0) return 0;
-    const current = getEntry(date, market);
-    const prev = getEntry(dates[dateIdx - 1], market);
+    const current = getEntry(date, district);
+    const prev = getEntry(dates[dateIdx - 1], district);
     if (!current || !prev) return 0;
     return Number(current.modalPrice) - Number(prev.modalPrice);
   };
@@ -191,19 +197,19 @@ function PriceTrendsSection({ language }: { language: string }) {
               <table className="w-full text-sm" data-testid="table-price-data">
                 <thead>
                   <tr className="border-b">
-                    <th className="text-left py-2 px-2 font-semibold text-muted-foreground">{t("market")}</th>
+                    <th className="text-left py-2 px-2 font-semibold text-muted-foreground">{t("district")}</th>
                     {dates.map(d => (
                       <th key={d} className="text-center py-2 px-2 font-semibold text-muted-foreground whitespace-nowrap">{formatDate(d)}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {markets.map(market => (
-                    <tr key={market} className="border-b last:border-0">
-                      <td className="py-2.5 px-2 font-medium whitespace-nowrap">{market}</td>
+                  {districts.map(district => (
+                    <tr key={district} className="border-b last:border-0">
+                      <td className="py-2.5 px-2 font-medium whitespace-nowrap">{district}</td>
                       {dates.map(d => {
-                        const entry = getEntry(d, market);
-                        const change = getPriceChange(d, market);
+                        const entry = getEntry(d, district);
+                        const change = getPriceChange(d, district);
                         return (
                           <td key={d} className="text-center py-2.5 px-2">
                             {entry ? (

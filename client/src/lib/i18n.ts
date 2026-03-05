@@ -51,6 +51,7 @@ const translations = {
   priceTrends: { hi: "मूल्य रुझान और पूर्वानुमान", en: "Price Trends & Forecasting" },
   selectCrop: { hi: "फसल चुनें", en: "Select Crop" },
   market: { hi: "मंडी", en: "Market" },
+  district: { hi: "जिला", en: "District" },
   modalPrice: { hi: "भाव", en: "Price" },
   minPrice: { hi: "न्यूनतम", en: "Min" },
   maxPrice: { hi: "अधिकतम", en: "Max" },
