@@ -140,26 +140,50 @@ function PriceTrendsSection({ language }: { language: string }) {
 
   if (crops.length === 0) return null;
 
-  const stateAbbr: Record<string, string> = {
-    "andhra pradesh": "AP", "arunachal pradesh": "AR", "assam": "AS", "bihar": "BR",
-    "chhattisgarh": "CG", "goa": "GA", "gujarat": "GJ", "haryana": "HR",
-    "himachal pradesh": "HP", "jharkhand": "JH", "karnataka": "KA", "kerala": "KL",
-    "madhya pradesh": "MP", "maharashtra": "MH", "manipur": "MN", "meghalaya": "ML",
-    "mizoram": "MZ", "nagaland": "NL", "odisha": "OD", "punjab": "PB",
-    "rajasthan": "RJ", "sikkim": "SK", "tamil nadu": "TN", "telangana": "TG",
-    "tripura": "TR", "uttar pradesh": "UP", "uttarakhand": "UK", "west bengal": "WB",
-    "delhi": "DL", "jammu and kashmir": "JK", "ladakh": "LA", "chandigarh": "CH",
-    "nct of delhi": "DL",
+  const stateMap: Record<string, { en: string; hi: string }> = {
+    "andhra pradesh": { en: "AP", hi: "आंप्र" }, "arunachal pradesh": { en: "AR", hi: "अरुप्र" },
+    "assam": { en: "AS", hi: "असम" }, "bihar": { en: "BR", hi: "बिहार" },
+    "chhattisgarh": { en: "CG", hi: "छग" }, "goa": { en: "GA", hi: "गोवा" },
+    "gujarat": { en: "GJ", hi: "गुज" }, "haryana": { en: "HR", hi: "हरि" },
+    "himachal pradesh": { en: "HP", hi: "हिप्र" }, "jharkhand": { en: "JH", hi: "झार" },
+    "karnataka": { en: "KA", hi: "कर्ना" }, "kerala": { en: "KL", hi: "केरल" },
+    "madhya pradesh": { en: "MP", hi: "मप्र" }, "maharashtra": { en: "MH", hi: "महा" },
+    "manipur": { en: "MN", hi: "मणि" }, "meghalaya": { en: "ML", hi: "मेघा" },
+    "mizoram": { en: "MZ", hi: "मिज़ो" }, "nagaland": { en: "NL", hi: "नागा" },
+    "odisha": { en: "OD", hi: "ओडि" }, "punjab": { en: "PB", hi: "पंजाब" },
+    "rajasthan": { en: "RJ", hi: "राज" }, "sikkim": { en: "SK", hi: "सिक्किम" },
+    "tamil nadu": { en: "TN", hi: "तमिना" }, "telangana": { en: "TG", hi: "तेलं" },
+    "tripura": { en: "TR", hi: "त्रिपु" }, "uttar pradesh": { en: "UP", hi: "उप्र" },
+    "uttarakhand": { en: "UK", hi: "उत्तरा" }, "west bengal": { en: "WB", hi: "पबं" },
+    "delhi": { en: "DL", hi: "दिल्ली" }, "nct of delhi": { en: "DL", hi: "दिल्ली" },
+    "nctof delhi": { en: "DL", hi: "दिल्ली" },
+    "jammu and kashmir": { en: "JK", hi: "जम्मू" }, "ladakh": { en: "LA", hi: "लद्दाख" },
+    "chandigarh": { en: "CH", hi: "चंडी" }, "elangana": { en: "TG", hi: "तेलं" },
+  };
+
+  const districtHindi: Record<string, string> = {
+    "agra": "आगरा", "ahmedabad": "अहमदाबाद", "bangalore": "बेंगलुरु", "delhi": "दिल्ली",
+    "farukhabad": "फर्रुखाबाद", "firozabad": "फ़िरोज़ाबाद", "hyderabad": "हैदराबाद",
+    "indore": "इंदौर", "kanpur": "कानपुर", "kolkata": "कोलकाता", "lucknow": "लखनऊ",
+    "mumbai": "मुंबई", "murshidabad": "मुर्शिदाबाद", "nagpur": "नागपुर", "patna": "पटना",
+    "pune": "पुणे", "surat": "सूरत", "jaipur": "जयपुर", "bhopal": "भोपाल",
+    "chennai": "चेन्नई", "varanasi": "वाराणसी", "allahabad": "इलाहाबाद", "meerut": "मेरठ",
+    "bareilly": "बरेली", "aligarh": "अलीगढ़", "moradabad": "मुरादाबाद", "gorakhpur": "गोरखपुर",
+    "mathura": "मथुरा", "etawah": "इटावा", "mainpuri": "मैनपुरी", "farrukhabad": "फर्रुखाबाद",
+    "hathras": "हाथरस", "fatehabad": "फतेहाबाद", "khairagarh": "खैरागढ़", "samsabad": "सम्साबाद",
   };
 
   const getDistrictKey = (e: any) => e.district || e.market;
   const getDistrictLabel = (e: any) => {
     const dist = e.district || e.market;
+    const isHi = language === "hi";
+    const distDisplay = isHi ? (districtHindi[dist.toLowerCase().trim()] || dist) : dist;
     if (e.state) {
-      const abbr = stateAbbr[e.state.toLowerCase().trim()] || e.state.substring(0, 2).toUpperCase();
-      return `${dist}, ${abbr}`;
+      const stInfo = stateMap[e.state.toLowerCase().trim()];
+      const stAbbr = stInfo ? (isHi ? stInfo.hi : stInfo.en) : e.state.substring(0, 2).toUpperCase();
+      return `${distDisplay}, ${stAbbr}`;
     }
-    return dist;
+    return distDisplay;
   };
 
   const dates = [...new Set(entries.map(e => e.date))].sort((a, b) => a.localeCompare(b));
