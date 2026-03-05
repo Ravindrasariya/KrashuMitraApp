@@ -250,63 +250,59 @@ function PriceTrendsSection({ language }: { language: string }) {
           )}
 
           {cropId && (
-            <div className="p-3 rounded-lg bg-muted/50" data-testid="section-farmer-poll">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-semibold">{t("farmerPoll")}</span>
-                {totalVotes > 0 && <span className="text-xs text-muted-foreground">{totalVotes} {t("totalVotes")}</span>}
-              </div>
+            <div className="p-2 px-3 rounded-lg bg-muted/50" data-testid="section-farmer-poll">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold whitespace-nowrap">{t("farmerPoll")}</span>
 
-              {isAuthenticated && (
-                <div className="flex gap-2 mb-3">
-                  <Button
-                    size="sm"
-                    variant={myVoteData?.vote === "hold" ? "default" : "outline"}
-                    className={`flex-1 ${myVoteData?.vote === "hold" ? "bg-green-600 hover:bg-green-700 text-white" : "border-green-600 text-green-600 hover:bg-green-50"}`}
-                    onClick={() => voteMutation.mutate("hold")}
-                    disabled={voteMutation.isPending}
-                    data-testid="button-vote-hold"
-                  >
-                    {t("hold")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={myVoteData?.vote === "sale" ? "default" : "outline"}
-                    className={`flex-1 ${myVoteData?.vote === "sale" ? "bg-red-600 hover:bg-red-700 text-white" : "border-red-600 text-red-600 hover:bg-red-50"}`}
-                    onClick={() => voteMutation.mutate("sale")}
-                    disabled={voteMutation.isPending}
-                    data-testid="button-vote-sale"
-                  >
-                    {t("sale")}
-                  </Button>
-                </div>
-              )}
-
-              {totalVotes > 0 && (
-                <div data-testid="poll-battery">
-                  <div className="flex rounded-full overflow-hidden h-6 bg-muted">
-                    {holdPct > 0 && (
-                      <div
-                        className="bg-green-600 flex items-center justify-center transition-all duration-500"
-                        style={{ width: `${holdPct}%` }}
-                      >
-                        <span className="text-xs font-bold text-white">{holdPct}% {t("hold")}</span>
-                      </div>
-                    )}
-                    {salePct > 0 && (
-                      <div
-                        className="bg-red-600 flex items-center justify-center transition-all duration-500"
-                        style={{ width: `${salePct}%` }}
-                      >
-                        <span className="text-xs font-bold text-white">{salePct}% {t("sale")}</span>
-                      </div>
-                    )}
+                {isAuthenticated && (
+                  <div className="flex rounded-full overflow-hidden border border-muted-foreground/20 shrink-0">
+                    <button
+                      className={`px-3 py-0.5 text-xs font-medium transition-colors ${myVoteData?.vote === "hold" ? "bg-green-600 text-white" : "bg-background text-green-600 hover:bg-green-50"}`}
+                      onClick={() => voteMutation.mutate("hold")}
+                      disabled={voteMutation.isPending}
+                      data-testid="button-vote-hold"
+                    >
+                      {t("hold")}
+                    </button>
+                    <button
+                      className={`px-3 py-0.5 text-xs font-medium transition-colors border-l border-muted-foreground/20 ${myVoteData?.vote === "sale" ? "bg-red-600 text-white" : "bg-background text-red-600 hover:bg-red-50"}`}
+                      onClick={() => voteMutation.mutate("sale")}
+                      disabled={voteMutation.isPending}
+                      data-testid="button-vote-sale"
+                    >
+                      {t("sale")}
+                    </button>
                   </div>
-                </div>
-              )}
+                )}
 
-              {!isAuthenticated && (
-                <p className="text-xs text-muted-foreground text-center mt-2">{t("yourOpinion")}</p>
-              )}
+                {totalVotes > 0 ? (
+                  <div className="flex-1 flex items-center gap-1.5" data-testid="poll-battery">
+                    <div className="flex-1 flex rounded-full overflow-hidden h-4 bg-muted">
+                      {holdPct > 0 && (
+                        <div
+                          className="bg-green-600 flex items-center justify-center transition-all duration-500"
+                          style={{ width: `${holdPct}%`, minWidth: holdPct > 0 ? '28px' : '0' }}
+                        >
+                          <span className="text-[10px] font-bold text-white leading-none">{holdPct}%</span>
+                        </div>
+                      )}
+                      {salePct > 0 && (
+                        <div
+                          className="bg-red-600 flex items-center justify-center transition-all duration-500"
+                          style={{ width: `${salePct}%`, minWidth: salePct > 0 ? '28px' : '0' }}
+                        >
+                          <span className="text-[10px] font-bold text-white leading-none">{salePct}%</span>
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">{totalVotes}</span>
+                  </div>
+                ) : (
+                  !isAuthenticated && (
+                    <span className="text-xs text-muted-foreground">{t("yourOpinion")}</span>
+                  )
+                )}
+              </div>
             </div>
           )}
         </Card>
