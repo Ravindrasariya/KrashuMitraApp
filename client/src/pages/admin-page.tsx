@@ -250,16 +250,33 @@ export default function AdminPage() {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".xlsx,.xls,.csv,.xlsm";
-    input.onchange = (e: any) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+    input.multiple = true;
+    input.onchange = async (e: any) => {
+      const files = Array.from(e.target.files || []) as File[];
+      if (files.length === 0) return;
       setUploadingCropId(cropId);
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(",")[1];
-        uploadExcelMutation.mutate({ cropId, fileData: base64, clearExisting });
-      };
-      reader.readAsDataURL(file);
+      let totalRows = 0;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(",")[1]);
+          reader.readAsDataURL(file);
+        });
+        try {
+          const res = await apiRequest("POST", `/api/admin/price-crops/${cropId}/upload`, {
+            fileData: base64,
+            clearExisting: clearExisting && i === 0,
+          });
+          const data = await res.json();
+          totalRows += data.count || 0;
+        } catch {
+          toast({ title: `Failed: ${file.name}`, variant: "destructive" });
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/price-crops"] });
+      toast({ title: `${t("dataUploaded")} (${totalRows} rows, ${files.length} files)` });
+      setUploadingCropId(null);
     };
     input.click();
   };
@@ -1053,10 +1070,19 @@ export default function AdminPage() {
               {priceCrops.map(crop => (
                 <Card key={crop.id} className="p-4" data-testid={`card-price-crop-${crop.id}`}>
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{language === "hi" ? crop.nameHi : crop.nameEn}</h3>
-                      <span className="text-xs text-muted-foreground">({language === "hi" ? crop.nameEn : crop.nameHi})</span>
-                      {!crop.isActive && <Badge variant="secondary">{language === "hi" ? "निष्क्रिय" : "Inactive"}</Badge>}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">{language === "hi" ? crop.nameHi : crop.nameEn}</h3>
+                        <span className="text-xs text-muted-foreground">({language === "hi" ? crop.nameEn : crop.nameHi})</span>
+                        {!crop.isActive && <Badge variant="secondary">{language === "hi" ? "निष्क्रिय" : "Inactive"}</Badge>}
+                      </div>
+                      {(crop as any).uploadedSources?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(crop as any).uploadedSources.map((src: string) => (
+                            <span key={src} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium" data-testid={`tag-source-${src}`}>{src}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <Button

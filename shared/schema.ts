@@ -320,6 +320,7 @@ export const priceCrops = pgTable("price_crops", {
   nameHi: text("name_hi").notNull(),
   nameEn: text("name_en").notNull(),
   recommendation: varchar("recommendation", { length: 10 }),
+  uploadedSources: text("uploaded_sources").array().default(sql`'{}'::text[]`),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });

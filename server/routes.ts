@@ -1203,10 +1203,39 @@ Respond in this structure:
 
       if (clearExisting) {
         await storage.clearPriceEntries(cropId);
+        await storage.updatePriceCrop(cropId, { uploadedSources: [] } as any);
       }
 
       await storage.bulkInsertPriceEntries(entries);
-      res.json({ success: true, count: entries.length });
+
+      const stateAbbr: Record<string, string> = {
+        "andhra pradesh": "AP", "arunachal pradesh": "AR", "assam": "AS", "bihar": "BR",
+        "chhattisgarh": "CG", "goa": "GA", "gujarat": "GJ", "haryana": "HR",
+        "himachal pradesh": "HP", "jharkhand": "JH", "karnataka": "KA", "kerala": "KL",
+        "madhya pradesh": "MP", "maharashtra": "MH", "manipur": "MN", "meghalaya": "ML",
+        "mizoram": "MZ", "nagaland": "NL", "odisha": "OD", "punjab": "PB",
+        "rajasthan": "RJ", "sikkim": "SK", "tamil nadu": "TN", "telangana": "TG",
+        "tripura": "TR", "uttar pradesh": "UP", "uttarakhand": "UK", "west bengal": "WB",
+        "delhi": "DL", "jammu and kashmir": "JK", "ladakh": "LA", "chandigarh": "CH",
+      };
+      const sourceTags = new Set<string>();
+      for (const row of rows) {
+        const state = row["state_name"] || row["State"] || row["state"] || "";
+        const district = row["district_name"] || row["District"] || row["district"] || "";
+        if (state) {
+          const stCode = stateAbbr[state.toLowerCase().trim()] || state.substring(0, 2).toUpperCase();
+          const dtCode = district ? district.substring(0, 2).toUpperCase() : "";
+          sourceTags.add(dtCode ? `${stCode}_${dtCode}` : stCode);
+        }
+      }
+
+      if (sourceTags.size > 0) {
+        const existing = crop.uploadedSources || [];
+        const merged = [...new Set([...existing, ...sourceTags])];
+        await storage.updatePriceCrop(cropId, { uploadedSources: merged } as any);
+      }
+
+      res.json({ success: true, count: entries.length, sources: [...sourceTags] });
     } catch (error) {
       console.error("Excel upload error:", error);
       res.status(500).json({ message: "Failed to process Excel file" });
