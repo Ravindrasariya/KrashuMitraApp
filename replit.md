@@ -6,6 +6,7 @@ Krashu Mitra is a mobile-first, responsive web application designed to empower I
 Key capabilities include:
 - **Farm Management**: Crop card creation, tracking of crop events, and yield recording.
 - **Digital Clinic**: AI-powered disease diagnosis, soil testing, and potato seed testing services.
+- **Weather Widget**: Real-time weather display on home page using Open-Meteo API (free, no key required). Shows current temperature with weather icon; click to expand for humidity, wind, and 3-day forecast.
 - **Farm Khata (Ledger)**: Comprehensive expense and income tracking across multiple ledger types, including crop-specific, sharecropping, land lease, rental, machinery expense, and lending ledgers.
 - **AI Chatbot Integration**: A context-aware chatbot for natural language interaction, capable of providing advice, creating/editing crop cards, managing Khata entries, and booking Digital Clinic services (Soil Test, Potato Seed Test, Crop Doctor AI) through conversation.
 

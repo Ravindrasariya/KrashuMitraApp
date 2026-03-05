@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sprout, Stethoscope, ShoppingBag, BookOpen, Mic, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
+import { WeatherWidget } from "@/components/weather-widget";
 
 export default function HomePage() {
   const { t } = useTranslation();
@@ -13,11 +14,16 @@ export default function HomePage() {
     <div className="pb-20 md:pb-8" data-testid="page-home">
       <div className="relative bg-gradient-to-br from-primary/10 via-primary/5 to-background px-4 md:px-8 py-8 md:py-14">
         <div className="max-w-lg md:max-w-4xl mx-auto">
-          {isAuthenticated && user && (
-            <p className="text-sm text-muted-foreground mb-2" data-testid="text-welcome">
-              {t("welcome")}, <span className="font-semibold text-foreground">{user.firstName || user.email}</span>
-            </p>
-          )}
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              {isAuthenticated && user && (
+                <p className="text-sm text-muted-foreground mb-2" data-testid="text-welcome">
+                  {t("welcome")}, <span className="font-semibold text-foreground">{user.firstName || user.email}</span>
+                </p>
+              )}
+            </div>
+            <WeatherWidget />
+          </div>
           <h2 className="text-2xl md:text-3xl font-bold leading-tight mb-2" data-testid="text-hero-title">
             {t("heroTitle")}
           </h2>
