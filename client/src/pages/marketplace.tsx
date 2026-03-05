@@ -26,6 +26,13 @@ const POTATO_VARIETIES = ["CS3", "CS1", "Torus", "Pukhraj", "Jyoti", "Lakar", "O
 const POTATO_BRANDS = ["Merino", "Technico", "Uttkal", "Jain", "Jalandhar", "Merath"];
 const MAX_PHOTOS = 3;
 
+const HINDI_NAMES: Record<string, string> = {
+  CS3: "सीएस3", CS1: "सीएस1", Torus: "टोरस", Pukhraj: "पुखराज",
+  Jyoti: "ज्योति", Lakar: "लकड़", Others: "अन्य",
+  Merino: "मेरिनो", Technico: "टेक्निको", Uttkal: "उत्कल",
+  Jain: "जैन", Jalandhar: "जालंधर", Merath: "मेरठ",
+};
+
 function StarDisplay({ avg, count, size = "sm" }: { avg: number; count: number; size?: "sm" | "md" }) {
   const sizeClass = size === "sm" ? "w-3 h-3" : "w-4 h-4";
   const textClass = size === "sm" ? "text-[10px]" : "text-xs";
@@ -288,6 +295,11 @@ export default function MarketplacePage() {
       ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
       : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
 
+  const hn = (val: string | null | undefined) => {
+    if (!val) return val;
+    return language === "hi" ? (HINDI_NAMES[val] || val) : val;
+  };
+
   const sortLabel = sortBy === "latest" ? t("sortLatest") : sortBy === "nearest" ? t("sortNearest") : t("sortOldest");
 
   return (
@@ -418,7 +430,7 @@ export default function MarketplacePage() {
                           </p>
                         )}
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
-                          {[listing.potatoVariety, listing.potatoBrand].filter(Boolean).join(" · ") || "—"}
+                          {[hn(listing.potatoVariety), hn(listing.potatoBrand)].filter(Boolean).join(" · ") || "—"}
                         </p>
                       </>
                     )}
@@ -615,7 +627,7 @@ export default function MarketplacePage() {
                     </SelectTrigger>
                     <SelectContent>
                       {POTATO_VARIETIES.map(v => (
-                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                        <SelectItem key={v} value={v}>{hn(v)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -629,7 +641,7 @@ export default function MarketplacePage() {
                     <SelectContent>
                       <SelectItem value="none">{t("noBrand")}</SelectItem>
                       {POTATO_BRANDS.map(b => (
-                        <SelectItem key={b} value={b}>{b}</SelectItem>
+                        <SelectItem key={b} value={b}>{hn(b)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -736,10 +748,10 @@ export default function MarketplacePage() {
                             <p className="text-xl font-bold">{listing.quantityBags} {t("bags")}</p>
                           )}
                           {listing.potatoVariety && (
-                            <p className="text-sm font-medium">{t("potatoVariety")}: {listing.potatoVariety}</p>
+                            <p className="text-sm font-medium">{t("potatoVariety")}: {hn(listing.potatoVariety)}</p>
                           )}
                           {listing.potatoBrand && (
-                            <p className="text-sm font-medium">{t("potatoBrand")}: {listing.potatoBrand}</p>
+                            <p className="text-sm font-medium">{t("potatoBrand")}: {hn(listing.potatoBrand)}</p>
                           )}
                         </div>
                       )}
