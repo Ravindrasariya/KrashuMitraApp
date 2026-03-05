@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, banners, type Banner, type InsertBanner } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -66,6 +66,12 @@ export interface IStorage {
   getListingRating(listingId: number, userId: string): Promise<MarketplaceRating | undefined>;
   getListingAvgRating(listingId: number): Promise<{ avg: number; count: number }>;
   getSellerAvgRating(sellerId: string): Promise<{ avg: number; count: number }>;
+  getActiveBanners(): Promise<Banner[]>;
+  getAllBanners(): Promise<Banner[]>;
+  createBanner(data: InsertBanner): Promise<Banner>;
+  updateBanner(id: number, data: Partial<InsertBanner>): Promise<Banner | undefined>;
+  deleteBanner(id: number): Promise<void>;
+  getBanner(id: number): Promise<Banner | undefined>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -653,6 +659,32 @@ class DatabaseStorage implements IStorage {
     const row = result[0];
     if (!row || row.count === 0) return { avg: 0, count: 0 };
     return { avg: Math.round(row.avg * 10) / 10, count: row.count };
+  }
+  async getActiveBanners(): Promise<Banner[]> {
+    return db.select().from(banners).where(eq(banners.isActive, true)).orderBy(asc(banners.sortOrder));
+  }
+
+  async getAllBanners(): Promise<Banner[]> {
+    return db.select().from(banners).orderBy(asc(banners.sortOrder));
+  }
+
+  async createBanner(data: InsertBanner): Promise<Banner> {
+    const [banner] = await db.insert(banners).values(data).returning();
+    return banner;
+  }
+
+  async updateBanner(id: number, data: Partial<InsertBanner>): Promise<Banner | undefined> {
+    const [banner] = await db.update(banners).set(data).where(eq(banners.id, id)).returning();
+    return banner;
+  }
+
+  async deleteBanner(id: number): Promise<void> {
+    await db.delete(banners).where(eq(banners.id, id));
+  }
+
+  async getBanner(id: number): Promise<Banner | undefined> {
+    const [banner] = await db.select().from(banners).where(eq(banners.id, id));
+    return banner;
   }
 }
 

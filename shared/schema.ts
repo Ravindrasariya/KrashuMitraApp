@@ -288,3 +288,29 @@ export const insertMarketplaceRatingSchema = createInsertSchema(marketplaceRatin
 
 export type MarketplaceRating = typeof marketplaceRatings.$inferSelect;
 export type InsertMarketplaceRating = z.infer<typeof insertMarketplaceRatingSchema>;
+
+export const banners = pgTable("banners", {
+  id: serial("id").primaryKey(),
+  type: varchar("type", { length: 10 }).notNull().default("text"),
+  headingHi: text("heading_hi"),
+  headingEn: text("heading_en"),
+  subHeadingHi: text("sub_heading_hi"),
+  subHeadingEn: text("sub_heading_en"),
+  descriptionHi: text("description_hi"),
+  descriptionEn: text("description_en"),
+  imageData: text("image_data"),
+  imageMime: varchar("image_mime"),
+  captionHi: text("caption_hi"),
+  captionEn: text("caption_en"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertBannerSchema = createInsertSchema(banners).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Banner = typeof banners.$inferSelect;
+export type InsertBanner = z.infer<typeof insertBannerSchema>;

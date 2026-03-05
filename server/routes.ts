@@ -911,6 +911,128 @@ Respond in this structure:
     }
   });
 
+  // Banner routes
+  app.get("/api/banners", async (_req: any, res) => {
+    try {
+      const activeBanners = await storage.getActiveBanners();
+      const result = activeBanners.map(({ imageData, ...rest }) => ({
+        ...rest,
+        hasImage: !!imageData,
+      }));
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch banners" });
+    }
+  });
+
+  app.get("/api/banners/:id/image", async (req: any, res) => {
+    try {
+      const banner = await storage.getBanner(parseInt(req.params.id));
+      if (!banner || !banner.imageData || !banner.imageMime) {
+        return res.status(404).json({ message: "Image not found" });
+      }
+      const buffer = Buffer.from(banner.imageData, "base64");
+      res.set("Content-Type", banner.imageMime);
+      res.set("Cache-Control", "public, max-age=86400");
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch banner image" });
+    }
+  });
+
+  app.get("/api/admin/banners", isAdmin, async (_req: any, res) => {
+    try {
+      const allBanners = await storage.getAllBanners();
+      const result = allBanners.map(({ imageData, ...rest }) => ({
+        ...rest,
+        hasImage: !!imageData,
+      }));
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch banners" });
+    }
+  });
+
+  app.post("/api/admin/banners", isAdmin, async (req: any, res) => {
+    try {
+      const { type, headingHi, headingEn, subHeadingHi, subHeadingEn, descriptionHi, descriptionEn, imageData, imageMime, captionHi, captionEn, sortOrder, isActive } = req.body;
+      if (!type || !["text", "image"].includes(type)) {
+        return res.status(400).json({ message: "Invalid banner type" });
+      }
+      if (type === "text" && !headingHi && !headingEn) {
+        return res.status(400).json({ message: "Text banner requires at least one heading" });
+      }
+      if (type === "image" && imageData) {
+        const sizeBytes = Buffer.byteLength(imageData, "base64");
+        if (sizeBytes > 5 * 1024 * 1024) {
+          return res.status(400).json({ message: "Image too large (max 5MB)" });
+        }
+        const allowedMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+        if (imageMime && !allowedMimes.includes(imageMime)) {
+          return res.status(400).json({ message: "Invalid image type" });
+        }
+      }
+      const banner = await storage.createBanner({
+        type,
+        headingHi: headingHi || null,
+        headingEn: headingEn || null,
+        subHeadingHi: subHeadingHi || null,
+        subHeadingEn: subHeadingEn || null,
+        descriptionHi: descriptionHi || null,
+        descriptionEn: descriptionEn || null,
+        imageData: imageData || null,
+        imageMime: imageMime || null,
+        captionHi: captionHi || null,
+        captionEn: captionEn || null,
+        sortOrder: typeof sortOrder === "number" ? sortOrder : 0,
+        isActive: typeof isActive === "boolean" ? isActive : true,
+      });
+      const { imageData: _, ...rest } = banner;
+      res.json({ ...rest, hasImage: !!banner.imageData });
+    } catch (error) {
+      console.error("Error creating banner:", error);
+      res.status(500).json({ message: "Failed to create banner" });
+    }
+  });
+
+  app.patch("/api/admin/banners/:id", isAdmin, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getBanner(id);
+      if (!existing) return res.status(404).json({ message: "Banner not found" });
+
+      if (req.body.type && !["text", "image"].includes(req.body.type)) {
+        return res.status(400).json({ message: "Invalid banner type" });
+      }
+      if (req.body.imageData) {
+        const sizeBytes = Buffer.byteLength(req.body.imageData, "base64");
+        if (sizeBytes > 5 * 1024 * 1024) {
+          return res.status(400).json({ message: "Image too large (max 5MB)" });
+        }
+      }
+      const data: any = {};
+      const allowedFields = ["type", "headingHi", "headingEn", "subHeadingHi", "subHeadingEn", "descriptionHi", "descriptionEn", "imageData", "imageMime", "captionHi", "captionEn", "sortOrder", "isActive"];
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) data[field] = req.body[field];
+      }
+      const banner = await storage.updateBanner(id, data);
+      if (!banner) return res.status(404).json({ message: "Banner not found" });
+      const { imageData: _, ...rest } = banner;
+      res.json({ ...rest, hasImage: !!banner.imageData });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update banner" });
+    }
+  });
+
+  app.delete("/api/admin/banners/:id", isAdmin, async (req: any, res) => {
+    try {
+      await storage.deleteBanner(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete banner" });
+    }
+  });
+
   // Marketplace routes
   app.get("/api/marketplace", async (req: any, res) => {
     try {

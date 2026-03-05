@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -12,8 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Pencil, KeyRound, Check, X, Users, Loader2, Phone, Mail, User as UserIcon, Calendar, Stethoscope, FlaskConical, Leaf, Camera, Archive, ArchiveRestore, MessageSquare, Save } from "lucide-react";
-import type { ServiceRequest } from "@shared/schema";
+import { Search, Pencil, KeyRound, Check, X, Users, Loader2, Phone, Mail, User as UserIcon, Calendar, Stethoscope, FlaskConical, Leaf, Camera, Archive, ArchiveRestore, MessageSquare, Save, Image, Trash2, ChevronUp, ChevronDown, Plus, Eye, EyeOff } from "lucide-react";
+import type { ServiceRequest, Banner } from "@shared/schema";
 
 interface AdminUser {
   id: string;
@@ -38,7 +38,7 @@ export default function AdminPage() {
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"users" | "requests">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "requests" | "banners">("users");
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState({ firstName: "", lastName: "", phoneNumber: "", email: "" });
@@ -48,6 +48,18 @@ export default function AdminPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showArchived, setShowArchived] = useState(false);
   const [remarksEdit, setRemarksEdit] = useState<Record<number, string>>({});
+
+  const [bannerDialogOpen, setBannerDialogOpen] = useState(false);
+  const [editingBanner, setEditingBanner] = useState<(Banner & { hasImage?: boolean }) | null>(null);
+  const [bannerForm, setBannerForm] = useState({
+    type: "text" as "text" | "image",
+    headingHi: "", headingEn: "", subHeadingHi: "", subHeadingEn: "",
+    descriptionHi: "", descriptionEn: "",
+    imageData: "", imageMime: "", captionHi: "", captionEn: "",
+    sortOrder: 0, isActive: true,
+  });
+  const [bannerDeleteConfirm, setBannerDeleteConfirm] = useState<number | null>(null);
+  const bannerImageRef = useRef<HTMLInputElement>(null);
 
   const { data: users = [], isLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/admin/users"],
@@ -106,6 +118,128 @@ export default function AdminPage() {
       toast({ title: "Update failed", variant: "destructive" });
     },
   });
+
+  const { data: adminBanners = [], isLoading: bannersLoading } = useQuery<(Banner & { hasImage: boolean })[]>({
+    queryKey: ["/api/admin/banners"],
+    enabled: isAuthenticated && activeTab === "banners",
+  });
+
+  const createBannerMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/admin/banners", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/banners"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/banners"] });
+      toast({ title: t("bannerSaved") });
+      setBannerDialogOpen(false);
+      setEditingBanner(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to save banner", variant: "destructive" });
+    },
+  });
+
+  const updateBannerMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/admin/banners/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/banners"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/banners"] });
+      toast({ title: t("bannerSaved") });
+      setBannerDialogOpen(false);
+      setEditingBanner(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to update banner", variant: "destructive" });
+    },
+  });
+
+  const deleteBannerMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/admin/banners/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/banners"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/banners"] });
+      toast({ title: t("bannerDeleted") });
+      setBannerDeleteConfirm(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to delete banner", variant: "destructive" });
+    },
+  });
+
+  const openBannerDialog = (banner?: Banner & { hasImage?: boolean }) => {
+    if (banner) {
+      setEditingBanner(banner);
+      setBannerForm({
+        type: (banner.type as "text" | "image") || "text",
+        headingHi: banner.headingHi || "",
+        headingEn: banner.headingEn || "",
+        subHeadingHi: banner.subHeadingHi || "",
+        subHeadingEn: banner.subHeadingEn || "",
+        descriptionHi: banner.descriptionHi || "",
+        descriptionEn: banner.descriptionEn || "",
+        imageData: "",
+        imageMime: "",
+        captionHi: banner.captionHi || "",
+        captionEn: banner.captionEn || "",
+        sortOrder: banner.sortOrder,
+        isActive: banner.isActive,
+      });
+    } else {
+      setEditingBanner(null);
+      setBannerForm({
+        type: "text", headingHi: "", headingEn: "", subHeadingHi: "", subHeadingEn: "",
+        descriptionHi: "", descriptionEn: "", imageData: "", imageMime: "",
+        captionHi: "", captionEn: "", sortOrder: adminBanners.length, isActive: true,
+      });
+    }
+    setBannerDialogOpen(true);
+  };
+
+  const handleBannerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const [meta, base64] = dataUrl.split(",");
+      const mime = meta.match(/:(.*?);/)?.[1] || "image/jpeg";
+      setBannerForm(prev => ({ ...prev, imageData: base64, imageMime: mime }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveBanner = () => {
+    const data = { ...bannerForm };
+    if (editingBanner) {
+      if (!data.imageData) {
+        const { imageData, imageMime, ...rest } = data;
+        updateBannerMutation.mutate({ id: editingBanner.id, data: rest });
+      } else {
+        updateBannerMutation.mutate({ id: editingBanner.id, data });
+      }
+    } else {
+      createBannerMutation.mutate(data);
+    }
+  };
+
+  const moveBanner = (id: number, direction: "up" | "down") => {
+    const idx = adminBanners.findIndex(b => b.id === id);
+    if (idx < 0) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= adminBanners.length) return;
+    const currentOrder = adminBanners[idx].sortOrder;
+    const swapOrder = adminBanners[swapIdx].sortOrder;
+    updateBannerMutation.mutate({ id: adminBanners[idx].id, data: { sortOrder: swapOrder } });
+    updateBannerMutation.mutate({ id: adminBanners[swapIdx].id, data: { sortOrder: currentOrder } });
+  };
 
   if (!isAuthenticated) {
     setLocation("/auth");
@@ -187,6 +321,15 @@ export default function AdminPage() {
         >
           <Stethoscope className="w-4 h-4 mr-1" />
           {t("serviceRequests")}
+        </Button>
+        <Button
+          variant={activeTab === "banners" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setActiveTab("banners")}
+          data-testid="tab-banners"
+        >
+          <Image className="w-4 h-4 mr-1" />
+          {t("manageBanners")}
         </Button>
       </div>
 
@@ -350,7 +493,7 @@ export default function AdminPage() {
             </div>
           )}
         </>
-      ) : (
+      ) : activeTab === "requests" ? (
         <>
           <div className="flex flex-wrap gap-2 mb-4">
             <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -524,7 +667,243 @@ export default function AdminPage() {
             </div>
           )}
         </>
-      )}
+      ) : activeTab === "banners" ? (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">{t("manageBanners")}</h2>
+            <Button size="sm" onClick={() => openBannerDialog()} data-testid="button-add-banner">
+              <Plus className="w-4 h-4 mr-1" />
+              {t("addBanner")}
+            </Button>
+          </div>
+
+          {bannersLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : adminBanners.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Image className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+              <p className="text-muted-foreground">{t("noBanners")}</p>
+              <Button className="mt-3" size="sm" onClick={() => openBannerDialog()} data-testid="button-add-banner-empty">
+                <Plus className="w-4 h-4 mr-1" />
+                {t("addBanner")}
+              </Button>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {adminBanners.map((banner, idx) => (
+                <Card key={banner.id} className="overflow-hidden" data-testid={`card-banner-${banner.id}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          variant="ghost" size="icon" className="h-7 w-7"
+                          disabled={idx === 0}
+                          onClick={() => moveBanner(banner.id, "up")}
+                          data-testid={`button-banner-up-${banner.id}`}
+                        >
+                          <ChevronUp className="w-4 h-4" />
+                        </Button>
+                        <span className="text-xs text-center text-muted-foreground">{banner.sortOrder}</span>
+                        <Button
+                          variant="ghost" size="icon" className="h-7 w-7"
+                          disabled={idx === adminBanners.length - 1}
+                          onClick={() => moveBanner(banner.id, "down")}
+                          data-testid={`button-banner-down-${banner.id}`}
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant={banner.type === "text" ? "default" : "secondary"}>
+                            {banner.type === "text" ? t("textBanner") : t("imageBanner")}
+                          </Badge>
+                          <Badge variant={banner.isActive ? "default" : "outline"} className={banner.isActive ? "bg-green-600" : ""}>
+                            {banner.isActive ? t("bannerActive") : t("bannerInactive")}
+                          </Badge>
+                        </div>
+                        {banner.type === "text" ? (
+                          <div>
+                            <p className="font-semibold text-sm truncate">{language === "hi" ? banner.headingHi : banner.headingEn}</p>
+                            {(banner.subHeadingHi || banner.subHeadingEn) && (
+                              <p className="text-xs text-muted-foreground truncate">{language === "hi" ? banner.subHeadingHi : banner.subHeadingEn}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {banner.hasImage && (
+                              <img src={`/api/banners/${banner.id}/image`} alt="" className="w-16 h-10 object-cover rounded" />
+                            )}
+                            <p className="text-sm truncate">{language === "hi" ? banner.captionHi : banner.captionEn}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost" size="icon" className="h-8 w-8"
+                          onClick={() => updateBannerMutation.mutate({ id: banner.id, data: { isActive: !banner.isActive } })}
+                          data-testid={`button-banner-toggle-${banner.id}`}
+                        >
+                          {banner.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" className="h-8 w-8"
+                          onClick={() => openBannerDialog(banner)}
+                          data-testid={`button-banner-edit-${banner.id}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        {bannerDeleteConfirm === banner.id ? (
+                          <div className="flex items-center gap-1">
+                            <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => deleteBannerMutation.mutate(banner.id)} data-testid={`button-banner-confirm-delete-${banner.id}`}>
+                              <Check className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setBannerDeleteConfirm(null)}>
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8 text-destructive"
+                            onClick={() => setBannerDeleteConfirm(banner.id)}
+                            data-testid={`button-banner-delete-${banner.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {bannerDialogOpen && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setBannerDialogOpen(false)}>
+              <div className="bg-background rounded-lg shadow-lg w-full max-w-lg max-h-[85vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()} data-testid="dialog-banner-form">
+                <h3 className="text-lg font-bold mb-4">{editingBanner ? t("editBanner") : t("addBanner")}</h3>
+
+                <div className="space-y-3">
+                  <div>
+                    <Label>{t("bannerType")}</Label>
+                    <Select value={bannerForm.type} onValueChange={v => setBannerForm(p => ({ ...p, type: v as "text" | "image" }))}>
+                      <SelectTrigger data-testid="select-banner-type"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="text">{t("textBanner")}</SelectItem>
+                        <SelectItem value="image">{t("imageBanner")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {bannerForm.type === "text" ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>{t("headingHi")}</Label>
+                          <Input value={bannerForm.headingHi} onChange={e => setBannerForm(p => ({ ...p, headingHi: e.target.value }))} data-testid="input-banner-heading-hi" />
+                        </div>
+                        <div>
+                          <Label>{t("headingEn")}</Label>
+                          <Input value={bannerForm.headingEn} onChange={e => setBannerForm(p => ({ ...p, headingEn: e.target.value }))} data-testid="input-banner-heading-en" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>{t("subHeadingHi")}</Label>
+                          <Input value={bannerForm.subHeadingHi} onChange={e => setBannerForm(p => ({ ...p, subHeadingHi: e.target.value }))} data-testid="input-banner-subheading-hi" />
+                        </div>
+                        <div>
+                          <Label>{t("subHeadingEn")}</Label>
+                          <Input value={bannerForm.subHeadingEn} onChange={e => setBannerForm(p => ({ ...p, subHeadingEn: e.target.value }))} data-testid="input-banner-subheading-en" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>{t("descriptionHi")}</Label>
+                          <Textarea value={bannerForm.descriptionHi} onChange={e => setBannerForm(p => ({ ...p, descriptionHi: e.target.value }))} rows={2} data-testid="input-banner-desc-hi" />
+                        </div>
+                        <div>
+                          <Label>{t("descriptionEn")}</Label>
+                          <Textarea value={bannerForm.descriptionEn} onChange={e => setBannerForm(p => ({ ...p, descriptionEn: e.target.value }))} rows={2} data-testid="input-banner-desc-en" />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <Label>{t("uploadImage")}</Label>
+                        <input type="file" accept="image/*" ref={bannerImageRef} onChange={handleBannerImageUpload} className="block w-full text-sm mt-1" data-testid="input-banner-image" />
+                        {(bannerForm.imageData || (editingBanner?.hasImage)) && (
+                          <div className="mt-2">
+                            <img
+                              src={bannerForm.imageData ? `data:${bannerForm.imageMime};base64,${bannerForm.imageData}` : `/api/banners/${editingBanner?.id}/image`}
+                              alt="Preview"
+                              className="w-full h-32 object-cover rounded"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>{t("captionHi")}</Label>
+                          <Input value={bannerForm.captionHi} onChange={e => setBannerForm(p => ({ ...p, captionHi: e.target.value }))} data-testid="input-banner-caption-hi" />
+                        </div>
+                        <div>
+                          <Label>{t("captionEn")}</Label>
+                          <Input value={bannerForm.captionEn} onChange={e => setBannerForm(p => ({ ...p, captionEn: e.target.value }))} data-testid="input-banner-caption-en" />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label>{t("sortOrder")}</Label>
+                      <Input type="number" value={bannerForm.sortOrder} onChange={e => setBannerForm(p => ({ ...p, sortOrder: parseInt(e.target.value) || 0 }))} data-testid="input-banner-sort" />
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={bannerForm.isActive}
+                          onChange={e => setBannerForm(p => ({ ...p, isActive: e.target.checked }))}
+                          className="w-4 h-4"
+                          data-testid="input-banner-active"
+                        />
+                        <span className="text-sm font-medium">{t("bannerActive")}</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-5">
+                  <Button variant="outline" onClick={() => setBannerDialogOpen(false)} data-testid="button-banner-cancel">
+                    <X className="w-4 h-4 mr-1" />
+                    {language === "hi" ? "रद्द करें" : "Cancel"}
+                  </Button>
+                  <Button
+                    onClick={saveBanner}
+                    disabled={createBannerMutation.isPending || updateBannerMutation.isPending}
+                    data-testid="button-banner-save"
+                  >
+                    {(createBannerMutation.isPending || updateBannerMutation.isPending) ? (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4 mr-1" />
+                    )}
+                    {language === "hi" ? "सेव करें" : "Save"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }
