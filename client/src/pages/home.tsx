@@ -35,14 +35,14 @@ function BannerCarousel({ banners, language }: { banners: BannerWithImage[]; lan
 
   return (
     <div
-      className="relative overflow-hidden rounded-xl md:mx-8 md:rounded-2xl"
+      className="relative overflow-hidden rounded-xl md:rounded-2xl"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       data-testid="banner-carousel"
     >
-      <div className="relative min-h-[180px] md:min-h-[220px]">
+      <div className="relative min-h-[180px] md:min-h-[253px]">
         {banner.type === "text" ? (
-          <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-background px-6 py-8 md:px-12 md:py-10 min-h-[180px] md:min-h-[220px] flex flex-col justify-center">
+          <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-background px-6 py-8 md:px-12 md:py-10 min-h-[180px] md:min-h-[253px] flex flex-col justify-center">
             <h2 className="text-2xl md:text-3xl font-bold leading-tight mb-2" data-testid="text-banner-heading">
               {language === "hi" ? banner.headingHi : banner.headingEn}
             </h2>
@@ -58,7 +58,7 @@ function BannerCarousel({ banners, language }: { banners: BannerWithImage[]; lan
             )}
           </div>
         ) : (
-          <div className="relative min-h-[180px] md:min-h-[220px]">
+          <div className="relative min-h-[180px] md:min-h-[253px]">
             {banner.hasImage && (
               <img
                 src={`/api/banners/${banner.id}/image`}
@@ -148,7 +148,7 @@ export default function HomePage() {
           {banners.length > 0 ? (
             <BannerCarousel banners={banners} language={language} />
           ) : (
-            <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-background rounded-xl md:rounded-2xl md:mx-8 px-6 py-8 md:px-12 md:py-10 min-h-[180px] md:min-h-[220px] flex flex-col justify-center">
+            <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-background rounded-xl md:rounded-2xl px-6 py-8 md:px-12 md:py-10 min-h-[180px] md:min-h-[253px] flex flex-col justify-center">
               <h2 className="text-2xl md:text-3xl font-bold leading-tight mb-2" data-testid="text-hero-title">
                 {t("heroTitle")}
               </h2>
