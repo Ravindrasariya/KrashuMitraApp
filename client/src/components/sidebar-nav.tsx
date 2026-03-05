@@ -64,7 +64,7 @@ export function SidebarNav() {
         <div className="flex items-center gap-2 shrink-0 cursor-pointer">
           <img src={logoPath} alt="Logo" className="w-10 h-10 rounded-full object-cover" />
           <div className="leading-none">
-            <h1 className="text-lg font-bold leading-tight" data-testid="text-sidebar-app-name">{t("appName")}</h1>
+            <h1 className="text-lg font-bold leading-tight whitespace-nowrap" data-testid="text-sidebar-app-name">{t("appName")}</h1>
             <BrandingText language={language} />
           </div>
         </div>
