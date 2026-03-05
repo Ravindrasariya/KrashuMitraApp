@@ -292,7 +292,7 @@ function PriceTrendsSection({ language }: { language: string }) {
           )}
 
           {selectedCrop?.recommendation && (
-            <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-muted/50" data-testid="section-krashuved-expectation">
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mb-4 p-3 rounded-lg bg-muted/50" data-testid="section-krashuved-expectation">
               <span className="text-sm font-semibold">{t("krashuvedExpectation")}:</span>
               {selectedCrop.recommendation === "hold" ? (
                 <span className="px-4 py-1.5 rounded-full bg-green-600 text-white font-bold text-sm" data-testid="badge-recommendation-hold">
@@ -303,6 +303,9 @@ function PriceTrendsSection({ language }: { language: string }) {
                   {t("sale")}
                 </span>
               )}
+              <span className="text-[10px] text-muted-foreground italic leading-snug" data-testid="text-price-disclaimer">
+                {t("priceDisclaimer")}
+              </span>
             </div>
           )}
 
@@ -363,9 +366,6 @@ function PriceTrendsSection({ language }: { language: string }) {
             </div>
           )}
 
-          <p className="text-[10px] text-muted-foreground mt-3 leading-snug italic" data-testid="text-price-disclaimer">
-            {t("priceDisclaimer")}
-          </p>
         </Card>
       </div>
     </div>
