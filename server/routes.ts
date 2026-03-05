@@ -189,8 +189,91 @@ export async function registerRoutes(
     }
   });
 
-  const suggestionsCache = new Map<string, { data: any; timestamp: number }>();
+  const suggestionsCache = new Map<string, { en: any; hi: any | null; timestamp: number }>();
   const SUGGESTIONS_CACHE_MS = 6 * 60 * 60 * 1000;
+  const nullSuggestions = { nextActivity: null, weatherWarning: null, suggestion: null };
+
+  function extractGeminiJson(result: any): any | null {
+    let responseText = "";
+    try {
+      responseText = result.text || "";
+    } catch {
+      try {
+        const parts = (result as any).candidates?.[0]?.content?.parts;
+        if (parts) responseText = parts.map((p: any) => p.text || "").join("");
+      } catch {}
+    }
+    let cleanedText = responseText;
+    const codeBlockMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      cleanedText = codeBlockMatch[1].trim();
+    } else {
+      cleanedText = cleanedText.replace(/^```(?:json)?\s*/, "").replace(/```\s*$/, "").trim();
+    }
+    try {
+      return JSON.parse(cleanedText);
+    } catch {}
+    const objMatch = cleanedText.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try { return JSON.parse(objMatch[0]); } catch {}
+    }
+    const arrMatch = cleanedText.match(/\[[\s\S]*\]/);
+    if (arrMatch) {
+      try { return JSON.parse(arrMatch[0]); } catch {}
+    }
+    return null;
+  }
+
+  async function translateSuggestionToHindi(enData: any): Promise<any> {
+    const textsToTranslate: string[] = [];
+    if (enData.nextActivity) {
+      textsToTranslate.push(enData.nextActivity.name, enData.nextActivity.description);
+    }
+    if (enData.weatherWarning) {
+      textsToTranslate.push(enData.weatherWarning.message);
+    }
+    if (enData.suggestion) {
+      textsToTranslate.push(enData.suggestion);
+    }
+    if (textsToTranslate.length === 0) return enData;
+
+    try {
+      const translatePrompt = `Translate the following English texts to Hindi. Return a JSON array of translated strings in the same order. Keep agricultural terms natural in Hindi.\n\n${JSON.stringify(textsToTranslate)}`;
+      const result = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: translatePrompt }] }],
+        config: {
+          maxOutputTokens: 1024,
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 256 },
+        },
+      });
+      const parsed = extractGeminiJson(result);
+      let translations: string[] = [];
+      if (Array.isArray(parsed)) {
+        translations = parsed;
+      } else if (parsed && Array.isArray(parsed.translations)) {
+        translations = parsed.translations;
+      }
+      if (translations.length !== textsToTranslate.length) return enData;
+
+      let idx = 0;
+      const hiData: any = JSON.parse(JSON.stringify(enData));
+      if (hiData.nextActivity) {
+        hiData.nextActivity.name = translations[idx++];
+        hiData.nextActivity.description = translations[idx++];
+      }
+      if (hiData.weatherWarning) {
+        hiData.weatherWarning.message = translations[idx++];
+      }
+      if (hiData.suggestion) {
+        hiData.suggestion = translations[idx++];
+      }
+      return hiData;
+    } catch {
+      return enData;
+    }
+  }
 
   app.get("/api/crop-cards/:id/suggestions", isAuthenticated, async (req: any, res) => {
     try {
@@ -198,16 +281,20 @@ export async function registerRoutes(
       const card = await storage.getCropCard(cardId);
       if (!card) return res.status(404).json({ message: "Not found" });
       if (card.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
-      if (card.status !== "active") return res.json({ nextActivity: null, weatherWarning: null, suggestion: null });
+      if (card.status !== "active") return res.json(nullSuggestions);
 
       const lat = parseFloat(req.query.lat as string) || 28.6139;
       const lng = parseFloat(req.query.lng as string) || 77.2090;
       const lang = (req.query.lang as string) === "en" ? "en" : "hi";
 
-      const cacheKey = `${cardId}-${lat.toFixed(2)}-${lng.toFixed(2)}-${lang}`;
+      const cacheKey = `${cardId}-${lat.toFixed(2)}-${lng.toFixed(2)}`;
       const cached = suggestionsCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < SUGGESTIONS_CACHE_MS) {
-        return res.json(cached.data);
+        if (lang === "en") return res.json(cached.en);
+        if (cached.hi) return res.json(cached.hi);
+        const hiData = await translateSuggestionToHindi(cached.en);
+        cached.hi = hiData;
+        return res.json(hiData);
       }
 
       const events = await storage.getCropEvents(cardId);
@@ -232,29 +319,7 @@ export async function registerRoutes(
       const completedEvents = events.filter(e => e.isCompleted).map(e => `${e.eventType} (${e.eventDate})`).join(", ");
       const pendingEvents = events.filter(e => !e.isCompleted).map(e => `${e.eventType} (${e.eventDate})`).join(", ");
 
-      const prompt = lang === "hi"
-        ? `तुम एक कृषि विशेषज्ञ हो। नीचे एक फसल कार्ड की जानकारी है:
-
-फसल: ${card.cropName}${card.variety ? ` (${card.variety})` : ""}
-खेत: ${card.farmName || "अज्ञात"}
-बुवाई तिथि: ${card.startDate} (${daysSincePlanting} दिन पहले)
-पूर्ण गतिविधियाँ: ${completedEvents || "कोई नहीं"}
-बाकी गतिविधियाँ: ${pendingEvents || "कोई नहीं"}
-${weatherInfo}
-
-इस फसल की वर्तमान अवस्था और मौसम के आधार पर, निम्नलिखित JSON format में जवाब दो (सिर्फ JSON, कोई और text नहीं):
-{
-  "nextActivity": { "name": "अगली गतिविधि का नाम", "daysFromNow": number, "description": "संक्षिप्त विवरण (1 वाक्य)" },
-  "weatherWarning": { "message": "मौसम चेतावनी (1 वाक्य)", "severity": "info|warning|danger" } या null अगर कोई चेतावनी नहीं,
-  "suggestion": "किसान के लिए 1 उपयोगी सुझाव (1 वाक्य)"
-}
-
-नियम:
-- nextActivity में फसल की वर्तमान अवस्था के अनुसार अगली सबसे जरूरी गतिविधि बताओ (सिंचाई, खाद, दवाई, निराई, कटाई आदि)
-- daysFromNow = आज से कितने दिन बाद करनी चाहिए (0 = आज, negative = देरी हो गई)
-- weatherWarning सिर्फ तब दो जब मौसम फसल के लिए चिंताजनक हो (ज्यादा बारिश, सर्दी, गर्मी आदि)
-- suggestion में फसल + मौसम दोनों को ध्यान में रखकर सलाह दो`
-        : `You are an agriculture expert. Here is a crop card:
+      const prompt = `You are an agriculture expert. Here is a crop card:
 
 Crop: ${card.cropName}${card.variety ? ` (${card.variety})` : ""}
 Farm: ${card.farmName || "Unknown"}
@@ -286,45 +351,29 @@ Rules:
         },
       });
 
-      let responseText = "";
-      try {
-        responseText = result.text || "";
-      } catch (textErr: any) {
-        console.error("Suggestions: result.text threw:", textErr?.message);
-        try {
-          const parts = (result as any).candidates?.[0]?.content?.parts;
-          if (parts) responseText = parts.map((p: any) => p.text || "").join("");
-        } catch {}
-      }
-      let cleanedText = responseText;
-      const codeBlockMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (codeBlockMatch) {
-        cleanedText = codeBlockMatch[1].trim();
-      } else {
-        cleanedText = cleanedText.replace(/^```(?:json)?\s*/, "").replace(/```\s*$/, "").trim();
-      }
-      const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        return res.json({ nextActivity: null, weatherWarning: null, suggestion: null });
-      }
+      const parsed = extractGeminiJson(result);
+      if (!parsed) return res.json(nullSuggestions);
 
-      let parsed;
-      try {
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch {
-        return res.json({ nextActivity: null, weatherWarning: null, suggestion: null });
-      }
-      const data = {
+      const enData = {
         nextActivity: parsed.nextActivity || null,
         weatherWarning: parsed.weatherWarning || null,
         suggestion: parsed.suggestion || null,
       };
 
-      suggestionsCache.set(cacheKey, { data, timestamp: Date.now() });
-      res.json(data);
+      const cacheEntry: any = { en: enData, hi: null, timestamp: Date.now() };
+
+      if (lang === "hi") {
+        const hiData = await translateSuggestionToHindi(enData);
+        cacheEntry.hi = hiData;
+        suggestionsCache.set(cacheKey, cacheEntry);
+        return res.json(hiData);
+      }
+
+      suggestionsCache.set(cacheKey, cacheEntry);
+      res.json(enData);
     } catch (error) {
       console.error("Error fetching suggestions:", error);
-      res.json({ nextActivity: null, weatherWarning: null, suggestion: null });
+      res.json(nullSuggestions);
     }
   });
 

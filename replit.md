@@ -52,8 +52,9 @@ The application follows a client-server architecture:
 
 ## AI Crop Suggestions
 - Endpoint: `GET /api/crop-cards/:id/suggestions?lat={lat}&lng={lng}&lang={hi|en}`
+- Always prompts Gemini in English (better quality), translates to Hindi via a separate Gemini call when `lang=hi`
 - Uses Gemini 2.5 Flash with `responseMimeType: "application/json"` and `thinkingConfig: { thinkingBudget: 1024 }` to get structured JSON
 - Returns: `{ nextActivity: { name, daysFromNow, description } | null, weatherWarning: { message, severity } | null, suggestion: string | null }`
-- Server-side in-memory cache per crop card (6-hour TTL), keyed by `cardId-lat-lng-lang`
+- Server-side in-memory cache per crop card (6-hour TTL), keyed by `cardId-lat-lng` (language-independent); English and Hindi translations cached together so switching languages returns consistent numeric data (daysFromNow, severity)
 - Frontend reads lat/lng from `krashu-weather-cache` localStorage key (set by weather widget)
 - Displayed on active crop cards: compact strip (collapsed) + full detail section (expanded)
