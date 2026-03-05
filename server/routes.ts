@@ -1150,7 +1150,8 @@ Respond in this structure:
       const { fileData, clearExisting } = req.body;
       if (!fileData) return res.status(400).json({ message: "No file data" });
 
-      const XLSX = await import("xlsx");
+      const xlsxModule = await import("xlsx");
+      const XLSX = xlsxModule.default || xlsxModule;
       const buffer = Buffer.from(fileData, "base64");
       const workbook = XLSX.read(buffer, { type: "buffer" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
