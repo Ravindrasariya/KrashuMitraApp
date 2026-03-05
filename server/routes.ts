@@ -1117,7 +1117,7 @@ Respond in this structure:
     try {
       const id = parseInt(req.params.id);
       const data: any = {};
-      const allowedFields = ["nameHi", "nameEn", "recommendation", "isActive"];
+      const allowedFields = ["nameHi", "nameEn", "recommendation", "isActive", "uploadedSources"];
       for (const field of allowedFields) {
         if (req.body[field] !== undefined) data[field] = req.body[field];
       }
