@@ -61,7 +61,12 @@ interface KhataAddItemDraft {
   items: Array<Record<string, any>>;
 }
 
-type Draft = CropCardDraft | CropCardEditDraft | KhataCreateDraft | KhataAddItemDraft;
+interface ServiceRequestDraft {
+  type: "service_request_draft";
+  serviceType: "soil_test" | "potato_seed_test" | "crop_doctor";
+}
+
+type Draft = CropCardDraft | CropCardEditDraft | KhataCreateDraft | KhataAddItemDraft | ServiceRequestDraft;
 
 const CHAT_STORAGE_KEY = "krashu-chat-history";
 const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
@@ -69,7 +74,7 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 function stripJsonFromMessage(text: string): string {
   let cleaned = text.replace(/```json\s*[\s\S]*?```/g, "").trim();
   cleaned = cleaned.replace(/```\s*[\s\S]*?```/g, "").trim();
-  cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft))"[\s\S]*\}/g, "").trim();
+  cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft)|service_request_draft)"[\s\S]*\}/g, "").trim();
   cleaned = cleaned.replace(/\[IMG:\s*.+?\]/g, "").trim();
   cleaned = cleaned.split("\n").filter(line => !/^\s*[*\-•]\s*$/.test(line)).join("\n");
   cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
@@ -100,7 +105,7 @@ function saveMessages(messages: ChatMessage[]) {
   } catch {}
 }
 
-const DRAFT_TYPES = ["crop_card_draft", "crop_card_edit_draft", "khata_create_draft", "khata_add_item_draft"];
+const DRAFT_TYPES = ["crop_card_draft", "crop_card_edit_draft", "khata_create_draft", "khata_add_item_draft", "service_request_draft"];
 
 function tryParseDraft(text: string): Draft | null {
   try {
@@ -117,7 +122,7 @@ function tryParseDraft(text: string): Draft | null {
   } catch {}
 
   try {
-    const rawMatch = text.match(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft))"[\s\S]*\}/);
+    const rawMatch = text.match(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft)|service_request_draft)"[\s\S]*\}/);
     if (rawMatch) {
       const parsed = JSON.parse(rawMatch[0]);
       return parsed;
@@ -219,7 +224,9 @@ export function Chatbot() {
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia("(min-width: 768px)").matches);
   const [loadingImages, setLoadingImages] = useState(false);
   const [attachedImage, setAttachedImage] = useState<{ imageId: number; url: string; previewUrl: string } | null>(null);
+  const [lastSentImageId, setLastSentImageId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isApprovingService, setIsApprovingService] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -325,6 +332,11 @@ export function Chatbot() {
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setAttachedImage(null);
+    if (currentImage) {
+      setLastSentImageId(currentImage.imageId);
+    } else {
+      setLastSentImageId(null);
+    }
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setIsStreaming(true);
 
@@ -521,6 +533,58 @@ export function Chatbot() {
           role: "assistant",
           content: language === "hi" ? "खाता सफलतापूर्वक बनाया गया! आप इसे खाता टैब में देख सकते हैं।" : "Khata created successfully! You can view it in the Khata tab."
         }]);
+      } else if (draft.type === "service_request_draft") {
+        setIsApprovingService(true);
+        try {
+          const SERVICE_LABELS: Record<string, Record<string, string>> = {
+            soil_test: { hi: "मिट्टी जाँच", en: "Soil Test" },
+            potato_seed_test: { hi: "आलू बीज जाँच", en: "Potato Seed Test" },
+            crop_doctor: { hi: "फसल डॉक्टर AI", en: "Crop Doctor AI" },
+          };
+          const serviceLabel = SERVICE_LABELS[draft.serviceType]?.[language] || draft.serviceType;
+
+          const payload: Record<string, any> = { serviceType: draft.serviceType };
+
+          if (draft.serviceType === "crop_doctor" && lastSentImageId) {
+            const imgRes = await fetch(`/api/chat-images/${lastSentImageId}`, { credentials: "include" });
+            if (imgRes.ok) {
+              const blob = await imgRes.blob();
+              const reader = new FileReader();
+              const base64 = await new Promise<string>((resolve) => {
+                reader.onload = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+              payload.imageData = base64.replace(/^data:[^;]+;base64,/, "");
+              payload.imageMimeType = blob.type || "image/jpeg";
+            }
+            payload.language = language;
+          }
+
+          const res = await apiRequest("POST", "/api/service-requests", payload);
+          const result = await res.json();
+
+          queryClient.invalidateQueries({ queryKey: ["/api/service-requests"] });
+          setDraft(null);
+
+          if (draft.serviceType === "crop_doctor" && result.aiDiagnosis) {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: language === "hi"
+                ? `**${serviceLabel} रिपोर्ट:**\n\n${result.aiDiagnosis}\n\n🔎 क्या आप मिट्टी जाँच भी करवाना चाहेंगे?`
+                : `**${serviceLabel} Report:**\n\n${result.aiDiagnosis}\n\n🔎 Would you like to book a soil test as well?`
+            }]);
+          } else {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: language === "hi"
+                ? `${serviceLabel} की बुकिंग सफलतापूर्वक हो गई! हमारी टीम जल्द आपसे संपर्क करेगी।\n\n🔎 क्या आप कोई और सेवा बुक करना चाहेंगे?`
+                : `${serviceLabel} booked successfully! Our team will contact you soon.\n\n🔎 Would you like to book another service?`
+            }]);
+          }
+          toast({ title: language === "hi" ? "बुकिंग सफल!" : "Booking successful!" });
+        } finally {
+          setIsApprovingService(false);
+        }
       } else if (draft.type === "khata_add_item_draft") {
         for (const rawItem of draft.items) {
           if (draft.khataType === "panat") {
@@ -605,6 +669,7 @@ export function Chatbot() {
   const isKhataAddItemDraft = draft?.type === "khata_add_item_draft";
   const khataAddItemDraft = isKhataAddItemDraft ? (draft as KhataAddItemDraft) : null;
   const createDraft = draft?.type === "crop_card_draft" ? (draft as CropCardDraft) : null;
+  const serviceRequestDraft = draft?.type === "service_request_draft" ? (draft as ServiceRequestDraft) : null;
 
   const KHATA_TYPE_LABELS: Record<string, Record<string, string>> = {
     rental: { hi: "किराया खाता", en: "Rental Khata" },
@@ -922,6 +987,54 @@ export function Chatbot() {
                 {t("approve")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-khata-add">
+                <X className="w-3 h-3 mr-1" />
+                {t("reject")}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {serviceRequestDraft && (
+          <Card className="p-3 border-teal-500/30 bg-teal-50 dark:bg-teal-950/20" data-testid="service-request-draft-card">
+            <h4 className="text-sm font-bold mb-2 text-teal-800 dark:text-teal-300">
+              {t("chatClinicBooking")}
+            </h4>
+            <div className="space-y-1 mb-2">
+              <p className="text-sm font-medium">
+                <span className="text-teal-700 dark:text-teal-400">
+                  {serviceRequestDraft.serviceType === "soil_test" && t("soilTest")}
+                  {serviceRequestDraft.serviceType === "potato_seed_test" && t("potatoSeedTest")}
+                  {serviceRequestDraft.serviceType === "crop_doctor" && t("cropDoctorAI")}
+                </span>
+              </p>
+              {serviceRequestDraft.serviceType === "crop_doctor" && lastSentImageId && (
+                <p className="text-xs text-muted-foreground">
+                  {t("chatPhotoWillBeSent")}
+                </p>
+              )}
+              {serviceRequestDraft.serviceType === "crop_doctor" && !lastSentImageId && (
+                <p className="text-xs text-orange-600 dark:text-orange-400">
+                  {t("chatNoPhoto")}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" onClick={approveDraft} disabled={isApprovingService} data-testid="button-approve-service">
+                {isApprovingService ? (
+                  <>
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    {serviceRequestDraft.serviceType === "crop_doctor"
+                      ? t("chatAnalyzing")
+                      : t("chatBooking")}
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3 h-3 mr-1" />
+                    {t("chatBookNow")}
+                  </>
+                )}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setDraft(null)} disabled={isApprovingService} data-testid="button-reject-service">
                 <X className="w-3 h-3 mr-1" />
                 {t("reject")}
               </Button>

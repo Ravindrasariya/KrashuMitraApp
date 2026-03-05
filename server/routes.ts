@@ -677,6 +677,7 @@ Answer in concise bullet points.`;
       const user = await storage.getUserById(userId);
       const cardsWithEvents = await storage.getCropCardsWithEvents(userId);
       const khataRegisters = await storage.getKhataRegisters(userId, { showArchived: false });
+      const serviceRequests = await storage.getServiceRequestsByUser(userId);
 
       let farmerContext = "";
       if (language === "hi") {
@@ -698,6 +699,15 @@ Answer in concise bullet points.`;
         } else {
           farmerContext += "\nकिसान ने अभी तक कोई फसल कार्ड नहीं बनाया है।";
         }
+        if (serviceRequests.length > 0) {
+          const recentReqs = serviceRequests.slice(0, 10);
+          const typeLabelsHi: Record<string, string> = { soil_test: "मिट्टी जाँच", potato_seed_test: "आलू बीज जाँच", crop_doctor: "फसल डॉक्टर" };
+          farmerContext += `\n\nकिसान की डिजिटल क्लिनिक रिक्वेस्ट (${serviceRequests.length}):\n`;
+          for (const sr of recentReqs) {
+            farmerContext += `\n• ${typeLabelsHi[sr.serviceType] || sr.serviceType} | स्थिति: ${sr.status === "open" ? "खुला" : "बंद"} | तारीख: ${sr.createdAt ? new Date(sr.createdAt).toISOString().split("T")[0] : ""}`;
+          }
+        }
+
         if (khataRegisters.length > 0) {
           farmerContext += `\n\nकिसान के मौजूदा खाता रजिस्टर (${khataRegisters.length}):\n`;
           for (const reg of khataRegisters) {
@@ -732,6 +742,15 @@ Answer in concise bullet points.`;
         } else {
           farmerContext += "\nFarmer has no crop cards yet.";
         }
+        if (serviceRequests.length > 0) {
+          const recentReqs = serviceRequests.slice(0, 10);
+          const typeLabelsEn: Record<string, string> = { soil_test: "Soil Test", potato_seed_test: "Potato Seed Test", crop_doctor: "Crop Doctor" };
+          farmerContext += `\n\nFarmer's Digital Clinic requests (${serviceRequests.length}):\n`;
+          for (const sr of recentReqs) {
+            farmerContext += `\n• ${typeLabelsEn[sr.serviceType] || sr.serviceType} | Status: ${sr.status} | Date: ${sr.createdAt ? new Date(sr.createdAt).toISOString().split("T")[0] : ""}`;
+          }
+        }
+
         if (khataRegisters.length > 0) {
           farmerContext += `\n\nFarmer's existing khata registers (${khataRegisters.length}):\n`;
           for (const reg of khataRegisters) {
@@ -856,6 +875,30 @@ ${farmerContext}
 - अगर किसान कहे "plowing" या "जुताई" तो rentalMachinery = "tractor" और rentalFarmWork = "जुताई/plowing" समझो
 - दर और मात्रा से कुल राशि गणना करो
 - अगर तारीख नहीं बताई तो आज (${today}) रखो
+
+--- डिजिटल क्लिनिक (Digital Clinic) ---
+
+तुम किसानों को 3 क्लिनिक सेवाएँ बुक करने में भी मदद करती हो:
+
+1. **मिट्टी जाँच (soil_test)**: मिट्टी की गुणवत्ता, pH, पोषक तत्वों की जाँच। हमारी टीम नमूना लेकर जाँच करती है।
+2. **आलू बीज जाँच (potato_seed_test)**: आलू बीज की शुद्धता और गुणवत्ता की जाँच। प्रमाणित बीज से बेहतर उपज।
+3. **फसल डॉक्टर AI (crop_doctor)**: फसल/पौधे की फोटो से AI रोग पहचान और उपचार सुझाव।
+
+जब किसान इनमें से कोई सेवा बुक करना चाहे:
+- पहले सेवा के बारे में संक्षेप में बताओ
+- किसान की पुष्टि माँगो
+- फिर JSON ब्लॉक दो:
+\`\`\`json
+{"type":"service_request_draft","serviceType":"soil_test|potato_seed_test|crop_doctor"}
+\`\`\`
+
+**फसल डॉक्टर के लिए विशेष नियम:**
+- अगर किसान फसल रोग/समस्या पूछे और साथ में फोटो लगाई हो → फसल डॉक्टर सेवा सुझाओ और पुष्टि के बाद service_request_draft दो (serviceType: "crop_doctor")
+- अगर किसान बिना फोटो के रोग पूछे → पहले फोटो लगाने को कहो ("कृपया फसल की फोटो भी भेजें ताकि AI बेहतर जाँच कर सके"), फिर जब फोटो आए तब draft दो
+- फसल डॉक्टर में किसान की लगाई फोटो को AI जाँच के लिए भेजा जाएगा — तुम्हें सिर्फ draft देना है
+
+**मिट्टी जाँच / बीज जाँच के लिए:**
+- किसान की पुष्टि मिलने पर draft दो — उसकी जानकारी (नाम, फोन, किसान ID) अपने आप भेजी जाएगी
 
 जवाब का तरीका:
 - जवाब हमेशा छोटा और सटीक रखो (अधिकतम 3-5 बुलेट पॉइंट)।
@@ -983,6 +1026,30 @@ Khata creation rules:
 - If farmer says "plowing" or "jotai", set rentalMachinery = "tractor" and rentalFarmWork = "plowing"
 - Calculate totals from rate × quantity
 - If no date specified, use today (${today})
+
+--- Digital Clinic ---
+
+You also help farmers book 3 clinic services:
+
+1. **Soil Test (soil_test)**: Soil quality, pH, nutrient analysis. Our team collects samples and tests.
+2. **Potato Seed Test (potato_seed_test)**: Seed purity and quality testing. Certified seeds for better yield.
+3. **Crop Doctor AI (crop_doctor)**: AI-powered crop disease identification and treatment advice from photos.
+
+When a farmer wants to book any of these:
+- Briefly explain the service
+- Ask for confirmation
+- Then output the JSON block:
+\`\`\`json
+{"type":"service_request_draft","serviceType":"soil_test|potato_seed_test|crop_doctor"}
+\`\`\`
+
+**Crop Doctor special rules:**
+- If farmer asks about crop disease/problem AND has attached a photo → suggest Crop Doctor service and after confirmation output service_request_draft (serviceType: "crop_doctor")
+- If farmer asks about disease WITHOUT a photo → ask them to attach a photo first ("Please share a photo of the crop so AI can analyze it better"), then generate the draft when photo arrives
+- The farmer's attached photo will be sent for AI analysis automatically — you just need to output the draft
+
+**Soil Test / Seed Test:**
+- After farmer confirms, output the draft — farmer info (name, phone, farmer ID) will be sent automatically
 
 Response style:
 - Keep answers short and concise (3-5 bullet points max).

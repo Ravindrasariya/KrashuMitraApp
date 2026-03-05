@@ -7,14 +7,14 @@ Key capabilities include:
 - **Farm Management**: Crop card creation, tracking of crop events, and yield recording.
 - **Digital Clinic**: AI-powered disease diagnosis, soil testing, and potato seed testing services.
 - **Farm Khata (Ledger)**: Comprehensive expense and income tracking across multiple ledger types, including crop-specific, sharecropping, land lease, rental, machinery expense, and lending ledgers.
-- **AI Chatbot Integration**: A context-aware chatbot for natural language interaction, capable of providing advice, creating/editing crop cards, and managing Khata entries.
+- **AI Chatbot Integration**: A context-aware chatbot for natural language interaction, capable of providing advice, creating/editing crop cards, managing Khata entries, and booking Digital Clinic services (Soil Test, Potato Seed Test, Crop Doctor AI) through conversation.
 
 ## User Preferences
 - The AI chatbot, "Krashu Mitra," should have a feminine persona and use a Hindi female voice for TTS output.
 - Chatbot responses should be concise, using short bullet-point answers (3-5 points), and suggest 1-2 follow-up questions.
 - TTS should use a slower rate (0.75) with natural pauses at sentence boundaries for better Hindi flow.
 - The chatbot should be context-aware, leveraging the farmer's existing crop cards and events.
-- The chatbot should be able to create new crop cards, edit existing crop cards, and manage all seven Farm Khata types via conversation.
+- The chatbot should be able to create new crop cards, edit existing crop cards, manage all seven Farm Khata types via conversation, and book Digital Clinic services (Soil Test, Potato Seed Test, Crop Doctor AI) through the draft → approval card → API call pattern.
 
 ## System Architecture
 The application follows a client-server architecture:
