@@ -47,6 +47,7 @@ const translations = {
   heroSubtitle: { hi: "AI-संचालित फसल प्रबंधन, डिजिटल क्लिनिक, और बाज़ार - सब एक जगह", en: "AI-powered crop management, digital clinic, and marketplace - all in one place" },
   getStarted: { hi: "शुरू करें", en: "Get Started" },
   comingSoon: { hi: "जल्द आ रहा है", en: "Coming Soon" },
+  farmKhataDesc: { hi: "विभिन्न खातों को आसानी से प्रबंधित करें", en: "Manage Different Khatas Easily" },
   chatWithKrashuved: { hi: "कृषु मित्र से बात करें", en: "Chat with Krashu Mitra" },
   askKrashuved: { hi: "कृषु मित्र से पूछें...", en: "Ask Krashu Mitra..." },
   krashuvedIntro: { hi: "मैं कृषु मित्र हूँ, आपकी कृषि सहायिका। फसल कार्ड बनवाएं या कोई भी कृषि सवाल पूछें।", en: "I am Krashu Mitra, your agriculture assistant. Create crop cards or ask any farming question." },
