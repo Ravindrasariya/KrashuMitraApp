@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Sprout, Stethoscope, ShoppingBag, BookOpen, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { Sprout, Stethoscope, ShoppingBag, BookOpen, ArrowRight, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { Link } from "wouter";
 import { WeatherWidget } from "@/components/weather-widget";
 import { useState, useEffect, useCallback } from "react";
@@ -118,6 +118,11 @@ export default function HomePage() {
     queryKey: ["/api/banners"],
   });
 
+  const { data: profile } = useQuery<{ village?: string; district?: string }>({
+    queryKey: ["/api/farmer/profile"],
+    enabled: isAuthenticated,
+  });
+
   return (
     <div className="pb-20 md:pb-8" data-testid="page-home">
       <div className="px-4 md:px-12 pt-6 md:pt-8 pb-4">
@@ -125,9 +130,17 @@ export default function HomePage() {
           <div className="flex items-start justify-between mb-4">
             <div>
               {isAuthenticated && user && (
-                <p className="text-sm text-muted-foreground" data-testid="text-welcome">
-                  {t("welcome")}, <span className="font-semibold text-foreground">{user.firstName || user.email}</span>
-                </p>
+                <div data-testid="text-welcome">
+                  <p className="text-base md:text-lg text-muted-foreground">
+                    {t("welcome")}, <span className="font-bold text-foreground">{user.firstName || user.email}</span>
+                  </p>
+                  {profile?.village && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5" data-testid="text-village">
+                      <MapPin className="w-3.5 h-3.5" />
+                      {profile.village}{profile.district ? `, ${profile.district}` : ""}
+                    </p>
+                  )}
+                </div>
               )}
               {!isAuthenticated && !isLoading && (
                 <Link href="/auth">

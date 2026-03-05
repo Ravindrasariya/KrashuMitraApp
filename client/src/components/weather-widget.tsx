@@ -174,7 +174,7 @@ export function WeatherWidget() {
     <div className="relative" ref={widgetRef}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/80 backdrop-blur border text-sm transition-colors"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/80 backdrop-blur border text-base transition-colors"
         data-testid="button-weather-toggle"
       >
         <WeatherIcon className="w-4 h-4 text-amber-500" />
