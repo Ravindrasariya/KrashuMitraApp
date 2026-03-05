@@ -12,8 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Pencil, KeyRound, Check, X, Users, Loader2, Phone, Mail, User as UserIcon, Calendar, Stethoscope, FlaskConical, Leaf, Camera, Archive, ArchiveRestore, MessageSquare, Save, Image, Trash2, ChevronUp, ChevronDown, Plus, Eye, EyeOff } from "lucide-react";
-import type { ServiceRequest, Banner } from "@shared/schema";
+import { Search, Pencil, KeyRound, Check, X, Users, Loader2, Phone, Mail, User as UserIcon, Calendar, Stethoscope, FlaskConical, Leaf, Camera, Archive, ArchiveRestore, MessageSquare, Save, Image, Trash2, ChevronUp, ChevronDown, Plus, Eye, EyeOff, TrendingUp, Upload, FileSpreadsheet } from "lucide-react";
+import type { ServiceRequest, Banner, PriceCrop } from "@shared/schema";
 
 interface AdminUser {
   id: string;
@@ -38,7 +38,7 @@ export default function AdminPage() {
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"users" | "requests" | "banners">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "requests" | "banners" | "prices">("users");
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState({ firstName: "", lastName: "", phoneNumber: "", email: "" });
@@ -173,6 +173,121 @@ export default function AdminPage() {
       toast({ title: "Failed to delete banner", variant: "destructive" });
     },
   });
+
+  const { data: priceCrops = [], isLoading: priceCropsLoading } = useQuery<PriceCrop[]>({
+    queryKey: ["/api/admin/price-crops"],
+    enabled: isAuthenticated && activeTab === "prices",
+  });
+
+  const [priceCropDialogOpen, setPriceCropDialogOpen] = useState(false);
+  const [editingPriceCrop, setEditingPriceCrop] = useState<PriceCrop | null>(null);
+  const [priceCropForm, setPriceCropForm] = useState({ nameHi: "", nameEn: "" });
+  const [priceCropDeleteConfirm, setPriceCropDeleteConfirm] = useState<number | null>(null);
+  const priceFileRef = useRef<HTMLInputElement>(null);
+  const [uploadingCropId, setUploadingCropId] = useState<number | null>(null);
+
+  const createPriceCropMutation = useMutation({
+    mutationFn: async (data: { nameHi: string; nameEn: string }) => {
+      const res = await apiRequest("POST", "/api/admin/price-crops", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/price-crops"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/price-crops"] });
+      toast({ title: language === "hi" ? "फसल जोड़ी गई" : "Crop added" });
+      setPriceCropDialogOpen(false);
+      setEditingPriceCrop(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to save crop", variant: "destructive" });
+    },
+  });
+
+  const updatePriceCropMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/admin/price-crops/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/price-crops"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/price-crops"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to update crop", variant: "destructive" });
+    },
+  });
+
+  const deletePriceCropMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/admin/price-crops/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/price-crops"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/price-crops"] });
+      toast({ title: language === "hi" ? "फसल हटाई गई" : "Crop deleted" });
+      setPriceCropDeleteConfirm(null);
+    },
+  });
+
+  const uploadExcelMutation = useMutation({
+    mutationFn: async ({ cropId, fileData, clearExisting }: { cropId: number; fileData: string; clearExisting: boolean }) => {
+      const res = await apiRequest("POST", `/api/admin/price-crops/${cropId}/upload`, { fileData, clearExisting });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/price-crops"] });
+      toast({ title: `${t("dataUploaded")} (${data.count} rows)` });
+      setUploadingCropId(null);
+    },
+    onError: () => {
+      toast({ title: "Failed to upload Excel", variant: "destructive" });
+      setUploadingCropId(null);
+    },
+  });
+
+  const handleExcelUpload = (cropId: number, clearExisting: boolean) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx,.xls,.csv";
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setUploadingCropId(cropId);
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(",")[1];
+        uploadExcelMutation.mutate({ cropId, fileData: base64, clearExisting });
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const openPriceCropDialog = (crop?: PriceCrop) => {
+    if (crop) {
+      setEditingPriceCrop(crop);
+      setPriceCropForm({ nameHi: crop.nameHi, nameEn: crop.nameEn });
+    } else {
+      setEditingPriceCrop(null);
+      setPriceCropForm({ nameHi: "", nameEn: "" });
+    }
+    setPriceCropDialogOpen(true);
+  };
+
+  const savePriceCrop = () => {
+    if (!priceCropForm.nameHi || !priceCropForm.nameEn) {
+      toast({ title: "Both names required", variant: "destructive" });
+      return;
+    }
+    if (editingPriceCrop) {
+      updatePriceCropMutation.mutate({ id: editingPriceCrop.id, data: priceCropForm });
+      setPriceCropDialogOpen(false);
+      setEditingPriceCrop(null);
+    } else {
+      createPriceCropMutation.mutate(priceCropForm);
+    }
+  };
 
   const openBannerDialog = (banner?: Banner & { hasImage?: boolean }) => {
     if (banner) {
@@ -330,6 +445,15 @@ export default function AdminPage() {
         >
           <Image className="w-4 h-4 mr-1" />
           {t("manageBanners")}
+        </Button>
+        <Button
+          variant={activeTab === "prices" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setActiveTab("prices")}
+          data-testid="tab-prices"
+        >
+          <TrendingUp className="w-4 h-4 mr-1" />
+          {t("managePriceTrends")}
         </Button>
       </div>
 
@@ -896,6 +1020,148 @@ export default function AdminPage() {
                     ) : (
                       <Save className="w-4 h-4 mr-1" />
                     )}
+                    {language === "hi" ? "सेव करें" : "Save"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      ) : activeTab === "prices" ? (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">{t("managePriceTrends")}</h2>
+            <Button size="sm" onClick={() => openPriceCropDialog()} data-testid="button-add-price-crop">
+              <Plus className="w-4 h-4 mr-1" />
+              {t("addCrop")}
+            </Button>
+          </div>
+
+          {priceCropsLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+          ) : priceCrops.length === 0 ? (
+            <Card className="p-8 text-center">
+              <TrendingUp className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+              <p className="text-muted-foreground mb-3">{language === "hi" ? "कोई फसल नहीं जोड़ी गई" : "No crops added yet"}</p>
+              <Button size="sm" onClick={() => openPriceCropDialog()} data-testid="button-add-price-crop-empty">
+                <Plus className="w-4 h-4 mr-1" />
+                {t("addCrop")}
+              </Button>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {priceCrops.map(crop => (
+                <Card key={crop.id} className="p-4" data-testid={`card-price-crop-${crop.id}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">{language === "hi" ? crop.nameHi : crop.nameEn}</h3>
+                      <span className="text-xs text-muted-foreground">({language === "hi" ? crop.nameEn : crop.nameHi})</span>
+                      {!crop.isActive && <Badge variant="secondary">{language === "hi" ? "निष्क्रिय" : "Inactive"}</Badge>}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => updatePriceCropMutation.mutate({ id: crop.id, data: { isActive: !crop.isActive } })}
+                        data-testid={`button-toggle-price-crop-${crop.id}`}
+                      >
+                        {crop.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPriceCropDialog(crop)} data-testid={`button-edit-price-crop-${crop.id}`}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      {priceCropDeleteConfirm === crop.id ? (
+                        <div className="flex items-center gap-1">
+                          <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => deletePriceCropMutation.mutate(crop.id)}>
+                            <Check className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPriceCropDeleteConfirm(null)}>
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPriceCropDeleteConfirm(crop.id)} data-testid={`button-delete-price-crop-${crop.id}`}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-sm font-medium">{t("krashuvedExpectation")}:</span>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant={crop.recommendation === "hold" ? "default" : "outline"}
+                        className={crop.recommendation === "hold" ? "bg-green-600 hover:bg-green-700 text-white" : ""}
+                        onClick={() => updatePriceCropMutation.mutate({ id: crop.id, data: { recommendation: crop.recommendation === "hold" ? null : "hold" } })}
+                        data-testid={`button-hold-${crop.id}`}
+                      >
+                        {t("hold")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={crop.recommendation === "sale" ? "default" : "outline"}
+                        className={crop.recommendation === "sale" ? "bg-red-600 hover:bg-red-700 text-white" : ""}
+                        onClick={() => updatePriceCropMutation.mutate({ id: crop.id, data: { recommendation: crop.recommendation === "sale" ? null : "sale" } })}
+                        data-testid={`button-sale-${crop.id}`}
+                      >
+                        {t("sale")}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleExcelUpload(crop.id, false)}
+                      disabled={uploadingCropId === crop.id}
+                      data-testid={`button-upload-${crop.id}`}
+                    >
+                      {uploadingCropId === crop.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />}
+                      {t("uploadExcel")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleExcelUpload(crop.id, true)}
+                      disabled={uploadingCropId === crop.id}
+                      data-testid={`button-clear-upload-${crop.id}`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4 mr-1" />
+                      {t("clearAndUpload")}
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {priceCropDialogOpen && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setPriceCropDialogOpen(false)}>
+              <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()} data-testid="dialog-price-crop-form">
+                <h3 className="text-lg font-semibold mb-4">
+                  {editingPriceCrop ? (language === "hi" ? "फसल संपादित करें" : "Edit Crop") : t("addCrop")}
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label>{t("cropNameHi")}</Label>
+                    <Input value={priceCropForm.nameHi} onChange={e => setPriceCropForm(p => ({ ...p, nameHi: e.target.value }))} placeholder="आलू" data-testid="input-price-crop-name-hi" />
+                  </div>
+                  <div>
+                    <Label>{t("cropNameEn")}</Label>
+                    <Input value={priceCropForm.nameEn} onChange={e => setPriceCropForm(p => ({ ...p, nameEn: e.target.value }))} placeholder="Potato" data-testid="input-price-crop-name-en" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-5">
+                  <Button variant="outline" onClick={() => setPriceCropDialogOpen(false)}>
+                    <X className="w-4 h-4 mr-1" />
+                    {language === "hi" ? "रद्द करें" : "Cancel"}
+                  </Button>
+                  <Button onClick={savePriceCrop} disabled={createPriceCropMutation.isPending} data-testid="button-price-crop-save">
+                    {createPriceCropMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
                     {language === "hi" ? "सेव करें" : "Save"}
                   </Button>
                 </div>

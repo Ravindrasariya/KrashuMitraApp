@@ -1,13 +1,15 @@
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Sprout, Stethoscope, ShoppingBag, BookOpen, ArrowRight, MapPin } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sprout, Stethoscope, ShoppingBag, BookOpen, ArrowRight, MapPin, TrendingUp, TrendingDown } from "lucide-react";
 import { Link } from "wouter";
 import { WeatherWidget } from "@/components/weather-widget";
 import { useState, useEffect, useCallback } from "react";
-import type { Banner } from "@shared/schema";
+import type { Banner, PriceCrop, PriceEntry } from "@shared/schema";
 
 type BannerWithImage = Banner & { hasImage: boolean };
 
@@ -92,6 +94,227 @@ function BannerCarousel({ banners, language }: { banners: BannerWithImage[]; lan
   );
 }
 
+function PriceTrendsSection({ language }: { language: string }) {
+  const { t } = useTranslation();
+  const { isAuthenticated } = useAuth();
+  const [selectedCropId, setSelectedCropId] = useState<string>("");
+
+  const { data: crops = [] } = useQuery<PriceCrop[]>({
+    queryKey: ["/api/price-crops"],
+  });
+
+  useEffect(() => {
+    if (crops.length > 0 && !selectedCropId) {
+      setSelectedCropId(String(crops[0].id));
+    }
+  }, [crops, selectedCropId]);
+
+  const cropId = selectedCropId ? parseInt(selectedCropId) : null;
+  const selectedCrop = crops.find(c => c.id === cropId);
+
+  const { data: entries = [] } = useQuery<PriceEntry[]>({
+    queryKey: ["/api/price-entries", cropId],
+    enabled: !!cropId,
+  });
+
+  const { data: pollResults = { hold: 0, sale: 0 } } = useQuery<{ hold: number; sale: number }>({
+    queryKey: ["/api/price-polls", cropId],
+    enabled: !!cropId,
+  });
+
+  const { data: myVoteData } = useQuery<{ vote: string | null }>({
+    queryKey: ["/api/price-polls", cropId, "my-vote"],
+    enabled: !!cropId && isAuthenticated,
+  });
+
+  const voteMutation = useMutation({
+    mutationFn: async (vote: string) => {
+      const res = await apiRequest("POST", `/api/price-polls/${cropId}/vote`, { vote });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/price-polls", cropId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/price-polls", cropId, "my-vote"] });
+    },
+  });
+
+  if (crops.length === 0) return null;
+
+  const dates = [...new Set(entries.map(e => e.date))].sort((a, b) => a.localeCompare(b));
+  const markets = [...new Set(entries.map(e => e.market))];
+
+  const getEntry = (date: string, market: string) => entries.find(e => e.date === date && e.market === market);
+
+  const getPriceChange = (date: string, market: string) => {
+    const dateIdx = dates.indexOf(date);
+    if (dateIdx <= 0) return 0;
+    const current = getEntry(date, market);
+    const prev = getEntry(dates[dateIdx - 1], market);
+    if (!current || !prev) return 0;
+    return Number(current.modalPrice) - Number(prev.modalPrice);
+  };
+
+  const formatDate = (d: string) => {
+    const date = new Date(d + "T00:00:00");
+    return date.toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN", { day: "numeric", month: "short" });
+  };
+
+  const totalVotes = pollResults.hold + pollResults.sale;
+  const holdPct = totalVotes > 0 ? Math.round((pollResults.hold / totalVotes) * 100) : 0;
+  const salePct = totalVotes > 0 ? 100 - holdPct : 0;
+
+  return (
+    <div className="px-4 md:px-12 pb-4">
+      <div className="max-w-lg md:max-w-5xl mx-auto">
+        <Card className="p-4 md:p-6" data-testid="section-price-trends">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base md:text-lg font-bold flex items-center gap-2" data-testid="text-price-trends-title">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              {t("priceTrends")}
+            </h2>
+            <Select value={selectedCropId} onValueChange={setSelectedCropId}>
+              <SelectTrigger className="w-[140px] md:w-[180px]" data-testid="select-crop">
+                <SelectValue placeholder={t("selectCrop")} />
+              </SelectTrigger>
+              <SelectContent>
+                {crops.map(crop => (
+                  <SelectItem key={crop.id} value={String(crop.id)} data-testid={`select-crop-${crop.id}`}>
+                    {language === "hi" ? crop.nameHi : crop.nameEn}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {entries.length > 0 ? (
+            <div className="overflow-x-auto mb-4">
+              <table className="w-full text-sm" data-testid="table-price-data">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-2 font-semibold text-muted-foreground">{t("market")}</th>
+                    {dates.map(d => (
+                      <th key={d} className="text-center py-2 px-2 font-semibold text-muted-foreground whitespace-nowrap">{formatDate(d)}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {markets.map(market => (
+                    <tr key={market} className="border-b last:border-0">
+                      <td className="py-2.5 px-2 font-medium whitespace-nowrap">{market}</td>
+                      {dates.map(d => {
+                        const entry = getEntry(d, market);
+                        const change = getPriceChange(d, market);
+                        return (
+                          <td key={d} className="text-center py-2.5 px-2">
+                            {entry ? (
+                              <div className="flex flex-col items-center">
+                                <span className={`text-sm font-bold ${change > 0 ? "text-green-600" : change < 0 ? "text-red-600" : ""}`}>
+                                  ₹{Number(entry.modalPrice).toLocaleString()}
+                                </span>
+                                {change !== 0 && (
+                                  <span className={`text-xs flex items-center ${change > 0 ? "text-green-600" : "text-red-600"}`}>
+                                    {change > 0 ? <TrendingUp className="w-3 h-3 mr-0.5" /> : <TrendingDown className="w-3 h-3 mr-0.5" />}
+                                    {change > 0 ? "+" : ""}{change}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-muted-foreground mt-1 text-right">{t("perQuintal")}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-6" data-testid="text-no-price-data">{t("noPriceData")}</p>
+          )}
+
+          {selectedCrop?.recommendation && (
+            <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-muted/50" data-testid="section-krashuved-expectation">
+              <span className="text-sm font-semibold">{t("krashuvedExpectation")}:</span>
+              {selectedCrop.recommendation === "hold" ? (
+                <span className="px-4 py-1.5 rounded-full bg-green-600 text-white font-bold text-sm" data-testid="badge-recommendation-hold">
+                  {t("hold")}
+                </span>
+              ) : (
+                <span className="px-4 py-1.5 rounded-full bg-red-600 text-white font-bold text-sm" data-testid="badge-recommendation-sale">
+                  {t("sale")}
+                </span>
+              )}
+            </div>
+          )}
+
+          {cropId && (
+            <div className="p-3 rounded-lg bg-muted/50" data-testid="section-farmer-poll">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold">{t("farmerPoll")}</span>
+                {totalVotes > 0 && <span className="text-xs text-muted-foreground">{totalVotes} {t("totalVotes")}</span>}
+              </div>
+
+              {isAuthenticated && (
+                <div className="flex gap-2 mb-3">
+                  <Button
+                    size="sm"
+                    variant={myVoteData?.vote === "hold" ? "default" : "outline"}
+                    className={`flex-1 ${myVoteData?.vote === "hold" ? "bg-green-600 hover:bg-green-700 text-white" : "border-green-600 text-green-600 hover:bg-green-50"}`}
+                    onClick={() => voteMutation.mutate("hold")}
+                    disabled={voteMutation.isPending}
+                    data-testid="button-vote-hold"
+                  >
+                    {t("hold")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={myVoteData?.vote === "sale" ? "default" : "outline"}
+                    className={`flex-1 ${myVoteData?.vote === "sale" ? "bg-red-600 hover:bg-red-700 text-white" : "border-red-600 text-red-600 hover:bg-red-50"}`}
+                    onClick={() => voteMutation.mutate("sale")}
+                    disabled={voteMutation.isPending}
+                    data-testid="button-vote-sale"
+                  >
+                    {t("sale")}
+                  </Button>
+                </div>
+              )}
+
+              {totalVotes > 0 && (
+                <div data-testid="poll-battery">
+                  <div className="flex rounded-full overflow-hidden h-6 bg-muted">
+                    {holdPct > 0 && (
+                      <div
+                        className="bg-green-600 flex items-center justify-center transition-all duration-500"
+                        style={{ width: `${holdPct}%` }}
+                      >
+                        <span className="text-xs font-bold text-white">{holdPct}% {t("hold")}</span>
+                      </div>
+                    )}
+                    {salePct > 0 && (
+                      <div
+                        className="bg-red-600 flex items-center justify-center transition-all duration-500"
+                        style={{ width: `${salePct}%` }}
+                      >
+                        <span className="text-xs font-bold text-white">{salePct}% {t("sale")}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!isAuthenticated && (
+                <p className="text-xs text-muted-foreground text-center mt-2">{t("yourOpinion")}</p>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const { t, language } = useTranslation();
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -154,6 +377,8 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      <PriceTrendsSection language={language} />
 
       <div className="px-4 md:px-8 py-6 max-w-lg md:max-w-5xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">

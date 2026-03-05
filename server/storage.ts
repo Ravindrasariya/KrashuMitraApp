@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, banners, type Banner, type InsertBanner } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -72,6 +72,18 @@ export interface IStorage {
   updateBanner(id: number, data: Partial<InsertBanner>): Promise<Banner | undefined>;
   deleteBanner(id: number): Promise<void>;
   getBanner(id: number): Promise<Banner | undefined>;
+  getActivePriceCrops(): Promise<PriceCrop[]>;
+  getAllPriceCrops(): Promise<PriceCrop[]>;
+  getPriceCrop(id: number): Promise<PriceCrop | undefined>;
+  createPriceCrop(data: InsertPriceCrop): Promise<PriceCrop>;
+  updatePriceCrop(id: number, data: Partial<InsertPriceCrop>): Promise<PriceCrop | undefined>;
+  deletePriceCrop(id: number): Promise<void>;
+  getPriceEntries(cropId: number, limit?: number): Promise<PriceEntry[]>;
+  bulkInsertPriceEntries(entries: InsertPriceEntry[]): Promise<void>;
+  clearPriceEntries(cropId: number): Promise<void>;
+  upsertPricePoll(cropId: number, userId: string, vote: string): Promise<PricePoll>;
+  getPricePollResults(cropId: number): Promise<{ hold: number; sale: number }>;
+  getUserPollVote(cropId: number, userId: string): Promise<PricePoll | undefined>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -685,6 +697,93 @@ class DatabaseStorage implements IStorage {
   async getBanner(id: number): Promise<Banner | undefined> {
     const [banner] = await db.select().from(banners).where(eq(banners.id, id));
     return banner;
+  }
+
+  async getActivePriceCrops(): Promise<PriceCrop[]> {
+    return db.select().from(priceCrops).where(eq(priceCrops.isActive, true)).orderBy(asc(priceCrops.nameEn));
+  }
+
+  async getAllPriceCrops(): Promise<PriceCrop[]> {
+    return db.select().from(priceCrops).orderBy(asc(priceCrops.nameEn));
+  }
+
+  async getPriceCrop(id: number): Promise<PriceCrop | undefined> {
+    const [crop] = await db.select().from(priceCrops).where(eq(priceCrops.id, id));
+    return crop;
+  }
+
+  async createPriceCrop(data: InsertPriceCrop): Promise<PriceCrop> {
+    const [crop] = await db.insert(priceCrops).values(data).returning();
+    return crop;
+  }
+
+  async updatePriceCrop(id: number, data: Partial<InsertPriceCrop>): Promise<PriceCrop | undefined> {
+    const [crop] = await db.update(priceCrops).set(data).where(eq(priceCrops.id, id)).returning();
+    return crop;
+  }
+
+  async deletePriceCrop(id: number): Promise<void> {
+    await db.delete(priceCrops).where(eq(priceCrops.id, id));
+  }
+
+  async getPriceEntries(cropId: number, limit?: number): Promise<PriceEntry[]> {
+    const distinctDates = await db.selectDistinct({ date: priceEntries.date })
+      .from(priceEntries)
+      .where(eq(priceEntries.cropId, cropId))
+      .orderBy(desc(priceEntries.date))
+      .limit(limit || 5);
+    
+    if (distinctDates.length === 0) return [];
+    
+    const dates = distinctDates.map(d => d.date);
+    const results = await db.select().from(priceEntries)
+      .where(and(
+        eq(priceEntries.cropId, cropId),
+        sql`${priceEntries.date} IN (${sql.join(dates.map(d => sql`${d}`), sql`, `)})`
+      ))
+      .orderBy(desc(priceEntries.date), asc(priceEntries.market));
+    
+    return results;
+  }
+
+  async bulkInsertPriceEntries(entries: InsertPriceEntry[]): Promise<void> {
+    if (entries.length === 0) return;
+    const batchSize = 100;
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize);
+      await db.insert(priceEntries).values(batch);
+    }
+  }
+
+  async clearPriceEntries(cropId: number): Promise<void> {
+    await db.delete(priceEntries).where(eq(priceEntries.cropId, cropId));
+  }
+
+  async upsertPricePoll(cropId: number, userId: string, vote: string): Promise<PricePoll> {
+    const result = await db.execute(sql`
+      INSERT INTO price_polls (crop_id, user_id, vote) VALUES (${cropId}, ${userId}, ${vote})
+      ON CONFLICT (crop_id, user_id) DO UPDATE SET vote = ${vote}, created_at = CURRENT_TIMESTAMP
+      RETURNING *
+    `);
+    return result.rows[0] as any as PricePoll;
+  }
+
+  async getPricePollResults(cropId: number): Promise<{ hold: number; sale: number }> {
+    const results = await db.execute(sql`
+      SELECT vote, COUNT(*)::int as count FROM price_polls WHERE crop_id = ${cropId} GROUP BY vote
+    `);
+    let hold = 0, sale = 0;
+    for (const row of results.rows as any[]) {
+      if (row.vote === "hold") hold = row.count;
+      if (row.vote === "sale") sale = row.count;
+    }
+    return { hold, sale };
+  }
+
+  async getUserPollVote(cropId: number, userId: string): Promise<PricePoll | undefined> {
+    const [poll] = await db.select().from(pricePolls)
+      .where(and(eq(pricePolls.cropId, cropId), eq(pricePolls.userId, userId)));
+    return poll;
   }
 }
 

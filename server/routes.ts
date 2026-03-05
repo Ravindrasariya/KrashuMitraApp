@@ -1033,6 +1033,185 @@ Respond in this structure:
     }
   });
 
+  // Price Trends - Public routes
+  app.get("/api/price-crops", async (_req, res) => {
+    try {
+      const crops = await storage.getActivePriceCrops();
+      res.json(crops);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch price crops" });
+    }
+  });
+
+  app.get("/api/price-entries/:cropId", async (req, res) => {
+    try {
+      const cropId = parseInt(req.params.cropId);
+      const entries = await storage.getPriceEntries(cropId, 5);
+      res.json(entries);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch price entries" });
+    }
+  });
+
+  app.get("/api/price-polls/:cropId", async (req, res) => {
+    try {
+      const cropId = parseInt(req.params.cropId);
+      const results = await storage.getPricePollResults(cropId);
+      res.json(results);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch poll results" });
+    }
+  });
+
+  app.get("/api/price-polls/:cropId/my-vote", async (req: any, res) => {
+    try {
+      if (!req.session?.userId) return res.json({ vote: null });
+      const cropId = parseInt(req.params.cropId);
+      const poll = await storage.getUserPollVote(cropId, req.session.userId);
+      res.json({ vote: poll?.vote || null });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch vote" });
+    }
+  });
+
+  app.post("/api/price-polls/:cropId/vote", async (req: any, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: "Login required" });
+      const cropId = parseInt(req.params.cropId);
+      const { vote } = req.body;
+      if (!vote || !["hold", "sale"].includes(vote)) {
+        return res.status(400).json({ message: "Invalid vote" });
+      }
+      await storage.upsertPricePoll(cropId, req.session.userId, vote);
+      const results = await storage.getPricePollResults(cropId);
+      res.json(results);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to cast vote" });
+    }
+  });
+
+  // Price Trends - Admin routes
+  app.get("/api/admin/price-crops", isAdmin, async (_req: any, res) => {
+    try {
+      const crops = await storage.getAllPriceCrops();
+      res.json(crops);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch price crops" });
+    }
+  });
+
+  app.post("/api/admin/price-crops", isAdmin, async (req: any, res) => {
+    try {
+      const { nameHi, nameEn } = req.body;
+      if (!nameHi || !nameEn) {
+        return res.status(400).json({ message: "Both Hindi and English names required" });
+      }
+      const crop = await storage.createPriceCrop({ nameHi, nameEn });
+      res.json(crop);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create price crop" });
+    }
+  });
+
+  app.patch("/api/admin/price-crops/:id", isAdmin, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data: any = {};
+      const allowedFields = ["nameHi", "nameEn", "recommendation", "isActive"];
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) data[field] = req.body[field];
+      }
+      if (data.recommendation && !["hold", "sale"].includes(data.recommendation)) {
+        data.recommendation = null;
+      }
+      const crop = await storage.updatePriceCrop(id, data);
+      if (!crop) return res.status(404).json({ message: "Crop not found" });
+      res.json(crop);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update price crop" });
+    }
+  });
+
+  app.delete("/api/admin/price-crops/:id", isAdmin, async (req: any, res) => {
+    try {
+      await storage.deletePriceCrop(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete price crop" });
+    }
+  });
+
+  app.post("/api/admin/price-crops/:id/upload", isAdmin, async (req: any, res) => {
+    try {
+      const cropId = parseInt(req.params.id);
+      const crop = await storage.getPriceCrop(cropId);
+      if (!crop) return res.status(404).json({ message: "Crop not found" });
+
+      const { fileData, clearExisting } = req.body;
+      if (!fileData) return res.status(400).json({ message: "No file data" });
+
+      const XLSX = require("xlsx");
+      const buffer = Buffer.from(fileData, "base64");
+      const workbook = XLSX.read(buffer, { type: "buffer" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "Excel file is empty" });
+      }
+
+      const entries: any[] = [];
+      for (const row of rows) {
+        const dateVal = row["Date"] || row["date"] || row["DATE"];
+        const market = row["Market"] || row["market"] || row["MARKET"] || row["Market Name"] || row["market_name"];
+        const minPrice = row["Min Price"] || row["min_price"] || row["MIN_PRICE"] || row["Min"] || row["min"];
+        const maxPrice = row["Max Price"] || row["max_price"] || row["MAX_PRICE"] || row["Max"] || row["max"];
+        const modalPrice = row["Modal Price"] || row["modal_price"] || row["MODAL_PRICE"] || row["Modal"] || row["modal"];
+
+        if (!market || modalPrice === undefined) continue;
+
+        let parsedDate: string;
+        if (typeof dateVal === "number") {
+          const d = XLSX.SSF.parse_date_code(dateVal);
+          parsedDate = `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
+        } else if (dateVal) {
+          const d = new Date(dateVal);
+          if (!isNaN(d.getTime())) {
+            parsedDate = d.toISOString().split("T")[0];
+          } else {
+            continue;
+          }
+        } else {
+          continue;
+        }
+
+        entries.push({
+          cropId,
+          market: String(market).trim(),
+          date: parsedDate,
+          minPrice: String(minPrice || modalPrice),
+          maxPrice: String(maxPrice || modalPrice),
+          modalPrice: String(modalPrice),
+          unit: row["Unit"] || row["unit"] || "quintal",
+        });
+      }
+
+      if (entries.length === 0) {
+        return res.status(400).json({ message: "No valid data found in Excel. Expected columns: Date, Market, Min Price, Max Price, Modal Price" });
+      }
+
+      if (clearExisting) {
+        await storage.clearPriceEntries(cropId);
+      }
+
+      await storage.bulkInsertPriceEntries(entries);
+      res.json({ success: true, count: entries.length });
+    } catch (error) {
+      console.error("Excel upload error:", error);
+      res.status(500).json({ message: "Failed to process Excel file" });
+    }
+  });
+
   // Marketplace routes
   app.get("/api/marketplace", async (req: any, res) => {
     try {

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, serial, integer, text, varchar, timestamp, boolean, date, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, varchar, timestamp, boolean, date, uniqueIndex, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -314,3 +314,56 @@ export const insertBannerSchema = createInsertSchema(banners).omit({
 
 export type Banner = typeof banners.$inferSelect;
 export type InsertBanner = z.infer<typeof insertBannerSchema>;
+
+export const priceCrops = pgTable("price_crops", {
+  id: serial("id").primaryKey(),
+  nameHi: text("name_hi").notNull(),
+  nameEn: text("name_en").notNull(),
+  recommendation: varchar("recommendation", { length: 10 }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertPriceCropSchema = createInsertSchema(priceCrops).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PriceCrop = typeof priceCrops.$inferSelect;
+export type InsertPriceCrop = z.infer<typeof insertPriceCropSchema>;
+
+export const priceEntries = pgTable("price_entries", {
+  id: serial("id").primaryKey(),
+  cropId: integer("crop_id").notNull().references(() => priceCrops.id, { onDelete: "cascade" }),
+  market: text("market").notNull(),
+  date: date("date").notNull(),
+  minPrice: numeric("min_price").notNull(),
+  maxPrice: numeric("max_price").notNull(),
+  modalPrice: numeric("modal_price").notNull(),
+  unit: text("unit").notNull().default("quintal"),
+});
+
+export const insertPriceEntrySchema = createInsertSchema(priceEntries).omit({
+  id: true,
+});
+
+export type PriceEntry = typeof priceEntries.$inferSelect;
+export type InsertPriceEntry = z.infer<typeof insertPriceEntrySchema>;
+
+export const pricePolls = pgTable("price_polls", {
+  id: serial("id").primaryKey(),
+  cropId: integer("crop_id").notNull().references(() => priceCrops.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  vote: varchar("vote", { length: 10 }).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  uniqueIndex("price_polls_crop_user_idx").on(table.cropId, table.userId),
+]);
+
+export const insertPricePollSchema = createInsertSchema(pricePolls).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PricePoll = typeof pricePolls.$inferSelect;
+export type InsertPricePoll = z.infer<typeof insertPricePollSchema>;
