@@ -61,6 +61,7 @@ const translations = {
   sale: { hi: "बेचें", en: "Sale" },
   farmerPoll: { hi: "किसान मतदान", en: "Farmer Poll" },
   yourOpinion: { hi: "आपकी राय क्या है?", en: "What's your opinion?" },
+  priceDisclaimer: { hi: "अस्वीकरण: कृषुवेद सही पूर्वानुमान देने का पूरा प्रयास करता है, लेकिन यह गलत भी हो सकता है। किसानों को अपने विवेक से निर्णय लेने की सलाह दी जाती है।", en: "Disclaimer: KrashuVed tries its best to provide accurate forecasting, but it may be wrong. Farmers are advised to use their own discretion." },
   totalVotes: { hi: "कुल वोट", en: "Total Votes" },
   noPriceData: { hi: "कोई मूल्य डेटा उपलब्ध नहीं", en: "No price data available" },
   managePriceTrends: { hi: "मूल्य प्रबंधन", en: "Manage Prices" },

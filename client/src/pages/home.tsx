@@ -223,7 +223,7 @@ function PriceTrendsSection({ language }: { language: string }) {
   return (
     <div className="px-4 md:px-12 pb-4">
       <div className="max-w-lg md:max-w-5xl mx-auto">
-        <Card className="p-4 md:p-6" data-testid="section-price-trends">
+        <Card className="p-4 md:p-6 bg-amber-50/70 dark:bg-amber-950/20 border-amber-200/50" data-testid="section-price-trends">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base md:text-lg font-bold flex items-center gap-2" data-testid="text-price-trends-title">
               <TrendingUp className="w-5 h-5 text-primary" />
@@ -362,6 +362,10 @@ function PriceTrendsSection({ language }: { language: string }) {
               </div>
             </div>
           )}
+
+          <p className="text-[10px] text-muted-foreground mt-3 leading-snug italic" data-testid="text-price-disclaimer">
+            {t("priceDisclaimer")}
+          </p>
         </Card>
       </div>
     </div>
