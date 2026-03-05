@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { FlaskConical, Leaf, Camera, Loader2, ClipboardList } from "lucide-react";
+import { FlaskConical, Leaf, Camera, Loader2, ClipboardList, ChevronDown, ChevronUp } from "lucide-react";
 import type { ServiceRequest } from "@shared/schema";
 
 function MarkdownText({ text, className = "" }: { text: string; className?: string }) {
@@ -83,6 +83,7 @@ export default function DigitalClinicPage() {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageMime, setImageMime] = useState<string>("");
   const [latestDiagnosis, setLatestDiagnosis] = useState<string | null>(null);
+  const [expandedRequestId, setExpandedRequestId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: requests = [], isLoading: requestsLoading } = useQuery<ServiceRequest[]>({
@@ -262,41 +263,68 @@ export default function DigitalClinicPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {requests.map((req) => (
-              <Card key={req.id} className="p-3" data-testid={`card-request-${req.id}`}>
-                <div className="flex items-start gap-3 flex-wrap">
-                  {req.serviceType === "crop_doctor" && req.imageData && (
-                    <img
-                      src={`/api/service-requests/${req.id}/image`}
-                      alt=""
-                      className="w-12 h-12 rounded-md object-cover shrink-0"
-                      data-testid={`img-request-${req.id}`}
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <Badge variant="secondary" data-testid={`badge-type-${req.id}`}>
-                        {serviceLabel(req.serviceType)}
-                      </Badge>
-                      <Badge
-                        variant={req.status === "open" ? "default" : "outline"}
-                        data-testid={`badge-status-${req.id}`}
-                      >
-                        {req.status === "open" ? t("open") : t("closed")}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground" data-testid={`text-date-${req.id}`}>
-                      {req.createdAt ? new Date(req.createdAt).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN") : ""}
-                    </p>
-                    {req.serviceType === "crop_doctor" && req.aiDiagnosis && (
-                      <div className="mt-1 line-clamp-2" data-testid={`text-diagnosis-${req.id}`}>
-                        <MarkdownText text={req.aiDiagnosis} className="text-xs" />
-                      </div>
+            {requests.map((req) => {
+              const isCropDoctor = req.serviceType === "crop_doctor" && req.aiDiagnosis;
+              const isExpanded = expandedRequestId === req.id;
+              return (
+                <Card
+                  key={req.id}
+                  className={`p-3 ${isCropDoctor ? "cursor-pointer" : ""}`}
+                  data-testid={`card-request-${req.id}`}
+                  onClick={isCropDoctor ? () => setExpandedRequestId(isExpanded ? null : req.id) : undefined}
+                >
+                  <div className="flex items-start gap-3 flex-wrap">
+                    {req.serviceType === "crop_doctor" && req.imageData && !isExpanded && (
+                      <img
+                        src={`/api/service-requests/${req.id}/image`}
+                        alt=""
+                        className="w-12 h-12 rounded-md object-cover shrink-0"
+                        data-testid={`img-request-${req.id}`}
+                      />
                     )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <Badge variant="secondary" data-testid={`badge-type-${req.id}`}>
+                          {serviceLabel(req.serviceType)}
+                        </Badge>
+                        <Badge
+                          variant={req.status === "open" ? "default" : "outline"}
+                          data-testid={`badge-status-${req.id}`}
+                        >
+                          {req.status === "open" ? t("open") : t("closed")}
+                        </Badge>
+                        {isCropDoctor && (
+                          <span className="ml-auto text-muted-foreground" data-testid={`button-expand-request-${req.id}`}>
+                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground" data-testid={`text-date-${req.id}`}>
+                        {req.createdAt ? new Date(req.createdAt).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN") : ""}
+                      </p>
+                      {isCropDoctor && !isExpanded && (
+                        <div className="mt-1 line-clamp-2" data-testid={`text-diagnosis-${req.id}`}>
+                          <MarkdownText text={req.aiDiagnosis!} className="text-xs" />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))}
+                  {isCropDoctor && isExpanded && (
+                    <div className="mt-3 pt-3 border-t" data-testid={`text-diagnosis-full-${req.id}`}>
+                      {req.imageData && (
+                        <img
+                          src={`/api/service-requests/${req.id}/image`}
+                          alt=""
+                          className="w-full max-h-64 object-contain rounded-md mb-3"
+                          data-testid={`img-request-full-${req.id}`}
+                        />
+                      )}
+                      <MarkdownText text={req.aiDiagnosis!} />
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
