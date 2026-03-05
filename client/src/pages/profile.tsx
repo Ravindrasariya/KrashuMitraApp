@@ -26,8 +26,10 @@ export default function ProfilePage() {
 
   const [firstName, setFirstName] = useState("");
   const [village, setVillage] = useState("");
+  const [tehsil, setTehsil] = useState("");
   const [district, setDistrict] = useState("");
   const [stateName, setStateName] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [detecting, setDetecting] = useState(false);
@@ -36,8 +38,10 @@ export default function ProfilePage() {
     if (profile) {
       setFirstName(profile.firstName || "");
       setVillage(profile.village || "");
+      setTehsil(profile.tehsil || "");
       setDistrict(profile.district || "");
       setStateName(profile.state || "");
+      setPostalCode(profile.postalCode || "");
       setLat(profile.latitude || "");
       setLng(profile.longitude || "");
     }
@@ -50,7 +54,7 @@ export default function ProfilePage() {
   }, [authLoading, isAuthenticated, setLocation]);
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { firstName: string; village: string; district: string; state: string; latitude?: string; longitude?: string }) => {
+    mutationFn: async (data: { firstName: string; village: string; tehsil: string; district: string; state: string; postalCode: string; latitude?: string; longitude?: string }) => {
       const res = await apiRequest("PATCH", "/api/farmer/profile", data);
       return res.json();
     },
@@ -83,8 +87,10 @@ export default function ProfilePage() {
           const res = await apiRequest("POST", "/api/geocode/reverse", { lat: latitude, lng: longitude });
           const data = await res.json();
           if (data.village) setVillage(data.village);
+          if (data.tehsil) setTehsil(data.tehsil);
           if (data.district) setDistrict(data.district);
           if (data.state) setStateName(data.state);
+          if (data.postalCode) setPostalCode(data.postalCode);
           toast({ title: t("locationDetected") });
         } catch {
           toast({ title: t("locationError"), variant: "destructive" });
@@ -104,8 +110,10 @@ export default function ProfilePage() {
     updateMutation.mutate({
       firstName: firstName.trim(),
       village: village.trim(),
+      tehsil: tehsil.trim(),
       district: district.trim(),
       state: stateName.trim(),
+      postalCode: postalCode.trim(),
       latitude: lat || undefined,
       longitude: lng || undefined,
     });
@@ -197,6 +205,16 @@ export default function ProfilePage() {
               />
             </div>
             <div>
+              <Label htmlFor="tehsil" className="text-sm">{t("tehsil")}</Label>
+              <Input
+                id="tehsil"
+                value={tehsil}
+                onChange={(e) => setTehsil(e.target.value)}
+                placeholder={t("tehsilPlaceholder")}
+                data-testid="input-profile-tehsil"
+              />
+            </div>
+            <div>
               <Label htmlFor="district" className="text-sm">{t("district")}</Label>
               <Input
                 id="district"
@@ -214,6 +232,18 @@ export default function ProfilePage() {
                 onChange={(e) => setStateName(e.target.value)}
                 placeholder={t("statePlaceholder")}
                 data-testid="input-profile-state"
+              />
+            </div>
+            <div>
+              <Label htmlFor="postalCode" className="text-sm">{t("postalCode")}</Label>
+              <Input
+                id="postalCode"
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder={t("postalCodePlaceholder")}
+                inputMode="numeric"
+                maxLength={6}
+                data-testid="input-profile-postal-code"
               />
             </div>
           </div>

@@ -376,9 +376,13 @@ const translations = {
   locationError: { hi: "स्थान पता नहीं लग पाया", en: "Could not detect location" },
   profileUpdated: { hi: "प्रोफ़ाइल अपडेट की गई!", en: "Profile updated!" },
   profileUpdateFailed: { hi: "प्रोफ़ाइल अपडेट विफल", en: "Profile update failed" },
+  tehsil: { hi: "तहसील", en: "Tehsil" },
+  postalCode: { hi: "पिन कोड", en: "Postal Code" },
   villagePlaceholder: { hi: "गाँव का नाम", en: "Village name" },
+  tehsilPlaceholder: { hi: "तहसील का नाम", en: "Tehsil name" },
   districtPlaceholder: { hi: "जिले का नाम", en: "District name" },
   statePlaceholder: { hi: "राज्य का नाम", en: "State name" },
+  postalCodePlaceholder: { hi: "पिन कोड", en: "Postal code" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

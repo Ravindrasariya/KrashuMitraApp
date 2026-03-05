@@ -37,15 +37,17 @@ export async function registerRoutes(
   app.patch("/api/farmer/profile", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
-      const { firstName, village, district, state, latitude, longitude } = req.body;
+      const { firstName, village, tehsil, district, state, postalCode, latitude, longitude } = req.body;
       if (typeof req.body !== "object" || req.body === null) {
         return res.status(400).json({ message: "Invalid request body" });
       }
       const updateData: any = {};
       if (firstName !== undefined) updateData.firstName = String(firstName).slice(0, 100);
       if (village !== undefined) updateData.village = String(village).slice(0, 100);
+      if (tehsil !== undefined) updateData.tehsil = String(tehsil).slice(0, 100);
       if (district !== undefined) updateData.district = String(district).slice(0, 100);
       if (state !== undefined) updateData.state = String(state).slice(0, 100);
+      if (postalCode !== undefined) updateData.postalCode = String(postalCode).slice(0, 10);
       if (latitude !== undefined) updateData.latitude = String(latitude).slice(0, 20);
       if (longitude !== undefined) updateData.longitude = String(longitude).slice(0, 20);
       const updated = await storage.updateUserProfile(userId, updateData);
@@ -72,8 +74,10 @@ export async function registerRoutes(
       const address = data.address || {};
       res.json({
         village: address.village || address.town || address.city || address.hamlet || "",
+        tehsil: address.suburb || address.city_district || address.town || "",
         district: address.county || address.state_district || "",
         state: address.state || "",
+        postalCode: address.postcode || "",
       });
     } catch (error) {
       console.error("Error reverse geocoding:", error);
