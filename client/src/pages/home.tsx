@@ -25,7 +25,7 @@ function BannerCarousel({ banners, language }: { banners: BannerWithImage[]; lan
 
   useEffect(() => {
     if (banners.length <= 1 || paused) return;
-    const timer = setInterval(next, 10000);
+    const timer = setInterval(next, 15000);
     return () => clearInterval(timer);
   }, [banners.length, paused, next]);
 
