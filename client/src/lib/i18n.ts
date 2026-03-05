@@ -418,6 +418,11 @@ const translations = {
   bigha: { hi: "बीघा", en: "Bigha" },
   marketplaceDesc: { hi: "बिक्री और खरीद - प्याज रोप, आलू बीज", en: "Buy & sell - Onion seedlings, Potato seeds" },
   myListing: { hi: "मेरी सूची", en: "My listing" },
+  rateThisListing: { hi: "इस सूची को रेट करें", en: "Rate this listing" },
+  sellerRating: { hi: "विक्रेता रेटिंग", en: "Seller Rating" },
+  ratings: { hi: "रेटिंग", en: "ratings" },
+  yourRating: { hi: "आपकी रेटिंग", en: "Your rating" },
+  cannotRateOwn: { hi: "अपनी सूची को रेट नहीं कर सकते", en: "Cannot rate own listing" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

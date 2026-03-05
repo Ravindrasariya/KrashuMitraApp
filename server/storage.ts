@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -62,6 +62,10 @@ export interface IStorage {
   getListingPhotos(listingId: number): Promise<MarketplacePhoto[]>;
   getListingPhotoByIndex(listingId: number, index: number): Promise<MarketplacePhoto | undefined>;
   getListingPhotoCount(listingId: number): Promise<number>;
+  upsertListingRating(listingId: number, userId: string, stars: number): Promise<MarketplaceRating>;
+  getListingRating(listingId: number, userId: string): Promise<MarketplaceRating | undefined>;
+  getListingAvgRating(listingId: number): Promise<{ avg: number; count: number }>;
+  getSellerAvgRating(sellerId: string): Promise<{ avg: number; count: number }>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -605,6 +609,50 @@ class DatabaseStorage implements IStorage {
   async getListingPhotoCount(listingId: number): Promise<number> {
     const result = await db.select({ count: sql<number>`count(*)::int` }).from(marketplacePhotos).where(eq(marketplacePhotos.listingId, listingId));
     return result[0]?.count ?? 0;
+  }
+
+  async upsertListingRating(listingId: number, userId: string, stars: number): Promise<MarketplaceRating> {
+    const result = await db.execute(sql`
+      INSERT INTO marketplace_ratings (listing_id, user_id, stars, created_at)
+      VALUES (${listingId}, ${userId}, ${stars}, CURRENT_TIMESTAMP)
+      ON CONFLICT (listing_id, user_id) DO UPDATE SET stars = ${stars}
+      RETURNING *
+    `);
+    const row = (result as any).rows?.[0] || (result as any)[0];
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      userId: row.user_id,
+      stars: row.stars,
+      createdAt: row.created_at,
+    };
+  }
+
+  async getListingRating(listingId: number, userId: string): Promise<MarketplaceRating | undefined> {
+    const [rating] = await db.select().from(marketplaceRatings).where(and(eq(marketplaceRatings.listingId, listingId), eq(marketplaceRatings.userId, userId)));
+    return rating;
+  }
+
+  async getListingAvgRating(listingId: number): Promise<{ avg: number; count: number }> {
+    const result = await db.select({
+      avg: sql<number>`COALESCE(AVG(stars), 0)::float`,
+      count: sql<number>`count(*)::int`,
+    }).from(marketplaceRatings).where(eq(marketplaceRatings.listingId, listingId));
+    const row = result[0];
+    if (!row || row.count === 0) return { avg: 0, count: 0 };
+    return { avg: Math.round(row.avg * 10) / 10, count: row.count };
+  }
+
+  async getSellerAvgRating(sellerId: string): Promise<{ avg: number; count: number }> {
+    const result = await db.select({
+      avg: sql<number>`COALESCE(AVG(${marketplaceRatings.stars}), 0)::float`,
+      count: sql<number>`count(${marketplaceRatings.id})::int`,
+    }).from(marketplaceRatings)
+      .innerJoin(marketplaceListings, eq(marketplaceRatings.listingId, marketplaceListings.id))
+      .where(eq(marketplaceListings.sellerId, sellerId));
+    const row = result[0];
+    if (!row || row.count === 0) return { avg: 0, count: 0 };
+    return { avg: Math.round(row.avg * 10) / 10, count: row.count };
   }
 }
 

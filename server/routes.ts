@@ -917,8 +917,11 @@ Respond in this structure:
       const category = req.query.category as string | undefined;
       const listings = await storage.getMarketplaceListings(category ? { category } : undefined);
       const results = await Promise.all(listings.map(async ({ photoData, ...rest }) => {
-        const photoCount = await storage.getListingPhotoCount(rest.id);
-        return { ...rest, photoCount };
+        const [photoCount, ratingInfo] = await Promise.all([
+          storage.getListingPhotoCount(rest.id),
+          storage.getListingAvgRating(rest.id),
+        ]);
+        return { ...rest, photoCount, avgRating: ratingInfo.avg, ratingCount: ratingInfo.count };
       }));
       res.json(results);
     } catch (error) {
@@ -966,10 +969,13 @@ Respond in this structure:
       if (!listing) return res.status(404).json({ message: "Not found" });
       const seller = await storage.getUserById(listing.sellerId);
       if (!seller) return res.status(404).json({ message: "Seller not found" });
+      const sellerRating = await storage.getSellerAvgRating(listing.sellerId);
       res.json({
         name: seller.firstName || "",
         phone: seller.phoneNumber || "",
         farmerCode: seller.farmerCode || "",
+        sellerAvgRating: sellerRating.avg,
+        sellerRatingCount: sellerRating.count,
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch contact" });
@@ -1046,6 +1052,43 @@ Respond in this structure:
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete listing" });
+    }
+  });
+
+  app.post("/api/marketplace/:id/rate", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const listingId = parseInt(req.params.id);
+      const { stars } = req.body || {};
+      if (!stars || stars < 1 || stars > 5 || !Number.isInteger(stars)) {
+        return res.status(400).json({ message: "Stars must be an integer between 1 and 5" });
+      }
+      const listing = await storage.getMarketplaceListing(listingId);
+      if (!listing) return res.status(404).json({ message: "Listing not found" });
+      if (listing.sellerId === userId) {
+        return res.status(403).json({ message: "Cannot rate your own listing" });
+      }
+      const rating = await storage.upsertListingRating(listingId, userId, stars);
+      const avgInfo = await storage.getListingAvgRating(listingId);
+      res.json({ rating, avg: avgInfo.avg, count: avgInfo.count });
+    } catch (error) {
+      console.error("Error rating listing:", error);
+      res.status(500).json({ message: "Failed to rate listing" });
+    }
+  });
+
+  app.get("/api/marketplace/:id/rating", async (req: any, res) => {
+    try {
+      const listingId = parseInt(req.params.id);
+      const avgInfo = await storage.getListingAvgRating(listingId);
+      const result: any = { avg: avgInfo.avg, count: avgInfo.count };
+      if (req.session?.userId) {
+        const myRating = await storage.getListingRating(listingId, req.session.userId);
+        result.myRating = myRating?.stars || null;
+      }
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch rating" });
     }
   });
 

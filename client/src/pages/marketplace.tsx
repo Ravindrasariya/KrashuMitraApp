@@ -17,14 +17,57 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star } from "lucide-react";
 import type { MarketplaceListing } from "@shared/schema";
 
-type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & { photoCount: number };
+type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & { photoCount: number; avgRating: number; ratingCount: number };
 
 const POTATO_VARIETIES = ["CS3", "CS1", "Torus", "Pukhraj", "Jyoti", "Lakar", "Others"];
 const POTATO_BRANDS = ["Merino", "Technico", "Uttkal", "Jain", "Jalandhar", "Merath"];
 const MAX_PHOTOS = 3;
+
+function StarDisplay({ avg, count, size = "sm" }: { avg: number; count: number; size?: "sm" | "md" }) {
+  const sizeClass = size === "sm" ? "w-3 h-3" : "w-4 h-4";
+  const textClass = size === "sm" ? "text-[10px]" : "text-xs";
+  return (
+    <div className="flex items-center gap-0.5" data-testid="star-display">
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star
+          key={i}
+          className={`${sizeClass} ${i <= Math.round(avg) ? "fill-yellow-400 text-yellow-400" : "text-gray-300 dark:text-gray-600"}`}
+        />
+      ))}
+      {count > 0 && <span className={`${textClass} text-muted-foreground ml-0.5`}>({count})</span>}
+    </div>
+  );
+}
+
+function InteractiveStars({ currentRating, onRate, disabled }: { currentRating: number; onRate: (stars: number) => void; disabled?: boolean }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex items-center gap-0.5" data-testid="interactive-stars">
+      {[1, 2, 3, 4, 5].map(i => (
+        <button
+          key={i}
+          disabled={disabled}
+          className="p-0.5 disabled:opacity-50"
+          onMouseEnter={() => setHover(i)}
+          onMouseLeave={() => setHover(0)}
+          onClick={() => onRate(i)}
+          data-testid={`star-button-${i}`}
+        >
+          <Star
+            className={`w-6 h-6 transition-colors ${
+              i <= (hover || currentRating)
+                ? "fill-yellow-400 text-yellow-400"
+                : "text-gray-300 dark:text-gray-600"
+            }`}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function MarketplacePage() {
   const { t, language } = useTranslation();
@@ -45,7 +88,7 @@ export default function MarketplacePage() {
   const [sortBy, setSortBy] = useState<"latest" | "nearest" | "oldest">("latest");
   const [sortOpen, setSortOpen] = useState(false);
   const [viewerCoords, setViewerCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [contactInfo, setContactInfo] = useState<{ [id: number]: { name: string; phone: string; farmerCode: string } }>({});
+  const [contactInfo, setContactInfo] = useState<{ [id: number]: { name: string; phone: string; farmerCode: string; sellerAvgRating?: number; sellerRatingCount?: number } }>({});
   const [contactLoading, setContactLoading] = useState<number | null>(null);
   const [detailListing, setDetailListing] = useState<ListingNoPhoto | null>(null);
   const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
@@ -85,6 +128,30 @@ export default function MarketplacePage() {
       toast({ title: t("listingDeleted") });
       qc.invalidateQueries({ queryKey: ["/api/marketplace"] });
       setDetailListing(null);
+    },
+  });
+
+  const detailRatingQuery = useQuery<{ avg: number; count: number; myRating: number | null }>({
+    queryKey: ["/api/marketplace", detailListing?.id, "rating"],
+    queryFn: async () => {
+      const res = await fetch(`/api/marketplace/${detailListing!.id}/rating`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!detailListing,
+  });
+
+  const rateMutation = useMutation({
+    mutationFn: async ({ listingId, stars }: { listingId: number; stars: number }) => {
+      const res = await apiRequest("POST", `/api/marketplace/${listingId}/rate`, { stars });
+      return res.json();
+    },
+    onSuccess: (data, variables) => {
+      qc.invalidateQueries({ queryKey: ["/api/marketplace", variables.listingId, "rating"] });
+      qc.invalidateQueries({ queryKey: ["/api/marketplace"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: err.message, variant: "destructive" });
     },
   });
 
@@ -370,6 +437,10 @@ export default function MarketplacePage() {
                   <div className="text-xs font-medium text-foreground/70">
                     {new Date(listing.createdAt).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN")}
                   </div>
+
+                  {(listing.ratingCount > 0) && (
+                    <StarDisplay avg={listing.avgRating} count={listing.ratingCount} />
+                  )}
 
                   <div className="flex items-center gap-0.5 pt-1 border-t border-border/40">
                     {isAuthenticated && !contactInfo[listing.id] && (
@@ -688,17 +759,44 @@ export default function MarketplacePage() {
                         {" · "}{daysSinceListed(listing)} {t("daysAgo")}
                       </div>
 
+                      {detailRatingQuery.data && (
+                        <div className="space-y-2">
+                          <StarDisplay avg={detailRatingQuery.data.avg} count={detailRatingQuery.data.count} size="md" />
+                          {isAuthenticated && !isOwner && (
+                            <div className="flex items-center gap-2" data-testid="rate-section">
+                              <span className="text-xs text-muted-foreground">{t("yourRating")}:</span>
+                              <InteractiveStars
+                                currentRating={detailRatingQuery.data.myRating || 0}
+                                onRate={(stars) => rateMutation.mutate({ listingId: listing.id, stars })}
+                                disabled={rateMutation.isPending}
+                              />
+                            </div>
+                          )}
+                          {isOwner && (
+                            <p className="text-xs text-muted-foreground italic">{t("cannotRateOwn")}</p>
+                          )}
+                        </div>
+                      )}
+
                       <div className="pt-2 border-t space-y-2">
                         {isAuthenticated ? (
                           contactInfo[listing.id] ? (
-                            <div className="flex items-center gap-3 text-sm" data-testid="text-detail-contact">
-                              <div>
-                                <p className="font-semibold">{contactInfo[listing.id].name}</p>
-                                <a href={`tel:+91${contactInfo[listing.id].phone}`} className="text-primary font-medium flex items-center gap-1">
-                                  <Phone className="w-3.5 h-3.5" />
-                                  +91 {contactInfo[listing.id].phone}
-                                </a>
+                            <div className="space-y-1.5 text-sm" data-testid="text-detail-contact">
+                              <div className="flex items-center gap-3">
+                                <div>
+                                  <p className="font-semibold">{contactInfo[listing.id].name}</p>
+                                  <a href={`tel:+91${contactInfo[listing.id].phone}`} className="text-primary font-medium flex items-center gap-1">
+                                    <Phone className="w-3.5 h-3.5" />
+                                    +91 {contactInfo[listing.id].phone}
+                                  </a>
+                                </div>
                               </div>
+                              {(contactInfo[listing.id].sellerRatingCount ?? 0) > 0 && (
+                                <div className="flex items-center gap-1.5" data-testid="seller-rating">
+                                  <span className="text-xs text-muted-foreground">{t("sellerRating")}:</span>
+                                  <StarDisplay avg={contactInfo[listing.id].sellerAvgRating ?? 0} count={contactInfo[listing.id].sellerRatingCount ?? 0} />
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <Button

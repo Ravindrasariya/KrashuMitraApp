@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, serial, integer, text, varchar, timestamp, boolean, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, varchar, timestamp, boolean, date, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -270,3 +270,21 @@ export const insertMarketplacePhotoSchema = createInsertSchema(marketplacePhotos
 
 export type MarketplacePhoto = typeof marketplacePhotos.$inferSelect;
 export type InsertMarketplacePhoto = z.infer<typeof insertMarketplacePhotoSchema>;
+
+export const marketplaceRatings = pgTable("marketplace_ratings", {
+  id: serial("id").primaryKey(),
+  listingId: integer("listing_id").notNull().references(() => marketplaceListings.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  stars: integer("stars").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  uniqueIndex("marketplace_ratings_listing_user_idx").on(table.listingId, table.userId),
+]);
+
+export const insertMarketplaceRatingSchema = createInsertSchema(marketplaceRatings).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MarketplaceRating = typeof marketplaceRatings.$inferSelect;
+export type InsertMarketplaceRating = z.infer<typeof insertMarketplaceRatingSchema>;
