@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -58,6 +58,10 @@ export interface IStorage {
   getMarketplaceListings(filters?: { category?: string }): Promise<MarketplaceListing[]>;
   getMarketplaceListing(id: number): Promise<MarketplaceListing | undefined>;
   deleteMarketplaceListing(id: number): Promise<void>;
+  addListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void>;
+  getListingPhotos(listingId: number): Promise<MarketplacePhoto[]>;
+  getListingPhotoByIndex(listingId: number, index: number): Promise<MarketplacePhoto | undefined>;
+  getListingPhotoCount(listingId: number): Promise<number>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -580,7 +584,27 @@ class DatabaseStorage implements IStorage {
   }
 
   async deleteMarketplaceListing(id: number): Promise<void> {
+    await db.delete(marketplacePhotos).where(eq(marketplacePhotos.listingId, id));
     await db.delete(marketplaceListings).where(eq(marketplaceListings.id, id));
+  }
+
+  async addListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void> {
+    if (photos.length === 0) return;
+    await db.insert(marketplacePhotos).values(photos.map(p => ({ ...p, listingId })));
+  }
+
+  async getListingPhotos(listingId: number): Promise<MarketplacePhoto[]> {
+    return db.select().from(marketplacePhotos).where(eq(marketplacePhotos.listingId, listingId)).orderBy(asc(marketplacePhotos.sortOrder));
+  }
+
+  async getListingPhotoByIndex(listingId: number, index: number): Promise<MarketplacePhoto | undefined> {
+    const [photo] = await db.select().from(marketplacePhotos).where(and(eq(marketplacePhotos.listingId, listingId), eq(marketplacePhotos.sortOrder, index)));
+    return photo;
+  }
+
+  async getListingPhotoCount(listingId: number): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)::int` }).from(marketplacePhotos).where(eq(marketplacePhotos.listingId, listingId));
+    return result[0]?.count ?? 0;
   }
 }
 

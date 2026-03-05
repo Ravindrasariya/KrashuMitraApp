@@ -255,3 +255,18 @@ export const insertMarketplaceListingSchema = createInsertSchema(marketplaceList
 
 export type MarketplaceListing = typeof marketplaceListings.$inferSelect;
 export type InsertMarketplaceListing = z.infer<typeof insertMarketplaceListingSchema>;
+
+export const marketplacePhotos = pgTable("marketplace_photos", {
+  id: serial("id").primaryKey(),
+  listingId: integer("listing_id").notNull().references(() => marketplaceListings.id, { onDelete: "cascade" }),
+  photoData: text("photo_data").notNull(),
+  photoMime: varchar("photo_mime").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const insertMarketplacePhotoSchema = createInsertSchema(marketplacePhotos).omit({
+  id: true,
+});
+
+export type MarketplacePhoto = typeof marketplacePhotos.$inferSelect;
+export type InsertMarketplacePhoto = z.infer<typeof insertMarketplacePhotoSchema>;

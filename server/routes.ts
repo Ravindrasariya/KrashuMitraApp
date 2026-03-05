@@ -916,8 +916,11 @@ Respond in this structure:
     try {
       const category = req.query.category as string | undefined;
       const listings = await storage.getMarketplaceListings(category ? { category } : undefined);
-      const listingsWithoutPhoto = listings.map(({ photoData, ...rest }) => rest);
-      res.json(listingsWithoutPhoto);
+      const results = await Promise.all(listings.map(async ({ photoData, ...rest }) => {
+        const photoCount = await storage.getListingPhotoCount(rest.id);
+        return { ...rest, photoCount };
+      }));
+      res.json(results);
     } catch (error) {
       console.error("Error fetching marketplace:", error);
       res.status(500).json({ message: "Failed to fetch listings" });
@@ -926,7 +929,16 @@ Respond in this structure:
 
   app.get("/api/marketplace/:id/image", async (req: any, res) => {
     try {
-      const listing = await storage.getMarketplaceListing(parseInt(req.params.id));
+      const listingId = parseInt(req.params.id);
+      const index = parseInt(req.query.index as string) || 0;
+      const photo = await storage.getListingPhotoByIndex(listingId, index);
+      if (photo) {
+        const buffer = Buffer.from(photo.photoData, "base64");
+        res.setHeader("Content-Type", photo.photoMime);
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.send(buffer);
+      }
+      const listing = await storage.getMarketplaceListing(listingId);
       if (!listing || !listing.photoData || !listing.photoMime) {
         return res.status(404).json({ message: "Image not found" });
       }
@@ -936,6 +948,15 @@ Respond in this structure:
       res.send(buffer);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch image" });
+    }
+  });
+
+  app.get("/api/marketplace/:id/photos", async (req: any, res) => {
+    try {
+      const photos = await storage.getListingPhotos(parseInt(req.params.id));
+      res.json(photos.map(p => ({ id: p.id, sortOrder: p.sortOrder })));
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch photos" });
     }
   });
 
@@ -961,7 +982,7 @@ Respond in this structure:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { category, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand } = req.body || {};
+      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand } = req.body || {};
       if (!category || !["onion_seedling", "potato_seed"].includes(category)) {
         return res.status(400).json({ message: "Invalid category" });
       }
@@ -975,8 +996,8 @@ Respond in this structure:
       const listing = await storage.createMarketplaceListing({
         sellerId: userId,
         category,
-        photoData: photoData ? String(photoData) : null,
-        photoMime: photoMime ? String(photoMime).slice(0, 50) : null,
+        photoData: null,
+        photoMime: null,
         quantityBigha: quantityBigha ? String(quantityBigha).slice(0, 20) : null,
         availableAfterDays: availableAfterDays ? Math.max(0, parseInt(String(availableAfterDays)) || 0) : null,
         onionType: onionType ? String(onionType).slice(0, 100) : null,
@@ -991,8 +1012,24 @@ Respond in this structure:
         isActive: true,
       });
 
+      const photoArr = Array.isArray(photos) ? photos.slice(0, 3) : [];
+      if (photoArr.length > 0) {
+        await storage.addListingPhotos(listing.id, photoArr.map((p: any, i: number) => ({
+          photoData: String(p.base64),
+          photoMime: String(p.mime).slice(0, 50),
+          sortOrder: i,
+        })));
+      } else if (photoData) {
+        await storage.addListingPhotos(listing.id, [{
+          photoData: String(photoData),
+          photoMime: String(photoMime || "image/jpeg").slice(0, 50),
+          sortOrder: 0,
+        }]);
+      }
+
+      const photoCount = await storage.getListingPhotoCount(listing.id);
       const { photoData: _, ...listingWithoutPhoto } = listing;
-      res.status(201).json(listingWithoutPhoto);
+      res.status(201).json({ ...listingWithoutPhoto, photoCount });
     } catch (error) {
       console.error("Error creating listing:", error);
       res.status(500).json({ message: "Failed to create listing" });
