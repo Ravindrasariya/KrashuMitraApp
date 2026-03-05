@@ -183,6 +183,7 @@ export default function AdminPage() {
   const [editingPriceCrop, setEditingPriceCrop] = useState<PriceCrop | null>(null);
   const [priceCropForm, setPriceCropForm] = useState({ nameHi: "", nameEn: "" });
   const [priceCropDeleteConfirm, setPriceCropDeleteConfirm] = useState<number | null>(null);
+  const [sourceTagDeleteConfirm, setSourceTagDeleteConfirm] = useState<string | null>(null);
   const priceFileRef = useRef<HTMLInputElement>(null);
   const [uploadingCropId, setUploadingCropId] = useState<number | null>(null);
 
@@ -1078,9 +1079,48 @@ export default function AdminPage() {
                       </div>
                       {(crop as any).uploadedSources?.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {(crop as any).uploadedSources.map((src: string) => (
-                            <span key={src} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium" data-testid={`tag-source-${src}`}>{src}</span>
-                          ))}
+                          {(crop as any).uploadedSources.map((src: string) => {
+                            const confirmKey = `${crop.id}-${src}`;
+                            const isConfirming = sourceTagDeleteConfirm === confirmKey;
+                            return (
+                              <span
+                                key={src}
+                                className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors ${isConfirming ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}
+                                data-testid={`tag-source-${src}`}
+                              >
+                                {src}
+                                {isConfirming ? (
+                                  <>
+                                    <button
+                                      className="ml-0.5 hover:text-red-900"
+                                      onClick={() => {
+                                        const updated = ((crop as any).uploadedSources || []).filter((s: string) => s !== src);
+                                        updatePriceCropMutation.mutate({ id: crop.id, data: { uploadedSources: updated } as any });
+                                        setSourceTagDeleteConfirm(null);
+                                      }}
+                                      data-testid={`button-confirm-remove-source-${src}`}
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      className="hover:text-gray-900"
+                                      onClick={() => setSourceTagDeleteConfirm(null)}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    className="ml-0.5 hover:text-blue-900"
+                                    onClick={() => setSourceTagDeleteConfirm(confirmKey)}
+                                    data-testid={`button-remove-source-${src}`}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
