@@ -70,7 +70,7 @@ export function SidebarNav() {
         </div>
       </Link>
 
-      <nav className="flex items-center gap-1 overflow-x-auto mx-[72px]">
+      <nav className="flex items-center gap-1 overflow-x-auto mx-[72px] scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
         {navItems.map(item => {
           const isActive = location === item.path;
           return (
