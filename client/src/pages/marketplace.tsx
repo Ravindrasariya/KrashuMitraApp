@@ -314,20 +314,17 @@ export default function MarketplacePage() {
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-        <div className="flex gap-1">
-          {["all", "onion_seedling", "potato_seed"].map(cat => (
-            <Button
-              key={cat}
-              variant={filterCategory === cat ? "default" : "outline"}
-              size="sm"
-              onClick={() => setFilterCategory(cat)}
-              data-testid={`filter-${cat}`}
-            >
-              {cat === "all" ? t("allCategories") : cat === "onion_seedling" ? t("onionSeedling") : t("potatoSeed")}
-            </Button>
-          ))}
-        </div>
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <Select value={filterCategory} onValueChange={setFilterCategory}>
+          <SelectTrigger className="w-[160px] h-9 text-sm" data-testid="select-filter-category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all" data-testid="filter-all">{t("allCategories")}</SelectItem>
+            <SelectItem value="onion_seedling" data-testid="filter-onion_seedling">{t("onionSeedling")}</SelectItem>
+            <SelectItem value="potato_seed" data-testid="filter-potato_seed">{t("potatoSeed")}</SelectItem>
+          </SelectContent>
+        </Select>
         <div className="ml-auto relative">
           <Button
             variant="outline"
