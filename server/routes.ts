@@ -1166,6 +1166,7 @@ Respond in this structure:
         const dateVal = row["Date"] || row["date"] || row["DATE"] || row["date_arrival"] || row["Date_Arrival"] || row["Arrival_Date"];
         const market = row["Market"] || row["market"] || row["MARKET"] || row["Market Name"] || row["market_name"] || row["market_center_name"] || row["Market_Center_Name"] || row["Market Center Name"];
         const district = row["district_name"] || row["District"] || row["district"] || row["DISTRICT"] || row["District Name"] || "";
+        const stateName = row["state_name"] || row["State"] || row["state"] || row["STATE"] || row["State Name"] || "";
         const minPrice = row["Min Price"] || row["min_price"] || row["MIN_PRICE"] || row["Min"] || row["min"] || row["MIN"];
         const maxPrice = row["Max Price"] || row["max_price"] || row["MAX_PRICE"] || row["Max"] || row["max"] || row["MAX"];
         const modalPrice = row["Modal Price"] || row["modal_price"] || row["MODAL_PRICE"] || row["Modal"] || row["modal"] || row["MODAL"];
@@ -1191,6 +1192,7 @@ Respond in this structure:
           cropId,
           market: String(market).trim(),
           district: district ? String(district).trim() : null,
+          state: stateName ? String(stateName).trim() : null,
           date: parsedDate,
           minPrice: String(minPrice || modalPrice),
           maxPrice: String(maxPrice || modalPrice),

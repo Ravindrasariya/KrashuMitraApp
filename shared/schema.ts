@@ -338,6 +338,7 @@ export const priceEntries = pgTable("price_entries", {
   cropId: integer("crop_id").notNull().references(() => priceCrops.id, { onDelete: "cascade" }),
   market: text("market").notNull(),
   district: text("district"),
+  state: text("state"),
   date: date("date").notNull(),
   minPrice: numeric("min_price").notNull(),
   maxPrice: numeric("max_price").notNull(),

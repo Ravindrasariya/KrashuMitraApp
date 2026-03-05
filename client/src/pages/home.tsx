@@ -140,22 +140,49 @@ function PriceTrendsSection({ language }: { language: string }) {
 
   if (crops.length === 0) return null;
 
-  const dates = [...new Set(entries.map(e => e.date))].sort((a, b) => a.localeCompare(b));
-  const districts = [...new Set(entries.map(e => (e as any).district || e.market))];
+  const stateAbbr: Record<string, string> = {
+    "andhra pradesh": "AP", "arunachal pradesh": "AR", "assam": "AS", "bihar": "BR",
+    "chhattisgarh": "CG", "goa": "GA", "gujarat": "GJ", "haryana": "HR",
+    "himachal pradesh": "HP", "jharkhand": "JH", "karnataka": "KA", "kerala": "KL",
+    "madhya pradesh": "MP", "maharashtra": "MH", "manipur": "MN", "meghalaya": "ML",
+    "mizoram": "MZ", "nagaland": "NL", "odisha": "OD", "punjab": "PB",
+    "rajasthan": "RJ", "sikkim": "SK", "tamil nadu": "TN", "telangana": "TG",
+    "tripura": "TR", "uttar pradesh": "UP", "uttarakhand": "UK", "west bengal": "WB",
+    "delhi": "DL", "jammu and kashmir": "JK", "ladakh": "LA", "chandigarh": "CH",
+    "nct of delhi": "DL",
+  };
 
-  const getEntry = (date: string, district: string) => {
-    const matching = entries.filter(e => e.date === date && ((e as any).district || e.market) === district);
+  const getDistrictKey = (e: any) => e.district || e.market;
+  const getDistrictLabel = (e: any) => {
+    const dist = e.district || e.market;
+    if (e.state) {
+      const abbr = stateAbbr[e.state.toLowerCase().trim()] || e.state.substring(0, 2).toUpperCase();
+      return `${dist}, ${abbr}`;
+    }
+    return dist;
+  };
+
+  const dates = [...new Set(entries.map(e => e.date))].sort((a, b) => a.localeCompare(b));
+  const districtKeys = [...new Set(entries.map(e => getDistrictKey(e)))];
+  const districtLabels: Record<string, string> = {};
+  for (const e of entries) {
+    const key = getDistrictKey(e);
+    if (!districtLabels[key]) districtLabels[key] = getDistrictLabel(e);
+  }
+
+  const getEntry = (date: string, districtKey: string) => {
+    const matching = entries.filter(e => e.date === date && getDistrictKey(e) === districtKey);
     if (matching.length === 0) return null;
     if (matching.length === 1) return matching[0];
     const avgModal = Math.round(matching.reduce((sum, e) => sum + Number(e.modalPrice), 0) / matching.length);
     return { ...matching[0], modalPrice: String(avgModal) };
   };
 
-  const getPriceChange = (date: string, district: string) => {
+  const getPriceChange = (date: string, districtKey: string) => {
     const dateIdx = dates.indexOf(date);
     if (dateIdx <= 0) return 0;
-    const current = getEntry(date, district);
-    const prev = getEntry(dates[dateIdx - 1], district);
+    const current = getEntry(date, districtKey);
+    const prev = getEntry(dates[dateIdx - 1], districtKey);
     if (!current || !prev) return 0;
     return Number(current.modalPrice) - Number(prev.modalPrice);
   };
@@ -204,12 +231,12 @@ function PriceTrendsSection({ language }: { language: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {districts.map(district => (
-                    <tr key={district} className="border-b last:border-0">
-                      <td className="py-2.5 px-2 font-medium whitespace-nowrap">{district}</td>
+                  {districtKeys.map(dk => (
+                    <tr key={dk} className="border-b last:border-0">
+                      <td className="py-2.5 px-2 font-medium whitespace-nowrap">{districtLabels[dk] || dk}</td>
                       {dates.map(d => {
-                        const entry = getEntry(d, district);
-                        const change = getPriceChange(d, district);
+                        const entry = getEntry(d, dk);
+                        const change = getPriceChange(d, dk);
                         return (
                           <td key={d} className="text-center py-2.5 px-2">
                             {entry ? (
