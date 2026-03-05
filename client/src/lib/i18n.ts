@@ -4,7 +4,7 @@ export type Language = "hi" | "en";
 
 const translations = {
   appName: { hi: "कृषु मित्र", en: "Krashu Mitra" },
-  appTagline: { hi: "कृषु मित्र द्वारा", en: "by Krashu Mitra" },
+  appTagline: { hi: "कृषुवेद द्वारा", en: "by KrashuVed" },
   home: { hi: "होम", en: "Home" },
   digitalClinic: { hi: "डिजिटल क्लिनिक", en: "Digital Clinic" },
   marketplace: { hi: "बाज़ार", en: "Marketplace" },
@@ -13,6 +13,7 @@ const translations = {
   navMarket: { hi: "बाज़ार", en: "Market" },
   navCrops: { hi: "फसल कार्ड", en: "Crop Card" },
   navKhata: { hi: "खाता", en: "Khata" },
+  navClinic: { hi: "क्लिनिक", en: "Clinic" },
   admin: { hi: "एडमिन", en: "Admin" },
   login: { hi: "लॉगिन", en: "Login" },
   logout: { hi: "लॉगआउट", en: "Logout" },

@@ -1,9 +1,10 @@
 import { useLocation, Link } from "wouter";
-import { Home, Stethoscope, ShoppingBag, Sprout, BookOpen, Globe, LogOut, User, Shield } from "lucide-react";
+import { Home, Stethoscope, ShoppingBag, Sprout, BookOpen, Globe, LogOut, User, Shield, ChevronDown } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { Separator } from "@/components/ui/separator";
+import { useState, useRef, useEffect } from "react";
+import logoPath from "@assets/Gemini_Generated_Image_lu75dlu75dlu75dl(1)_1772735328079.png";
 
 const navItems = [
   { path: "/", icon: Home, labelKey: "home" as const },
@@ -13,46 +14,77 @@ const navItems = [
   { path: "/farm-khata", icon: BookOpen, labelKey: "farmKhata" as const },
 ];
 
+function BrandingText({ language }: { language: string }) {
+  if (language === "hi") {
+    return (
+      <p className="text-[10px] leading-tight mt-0.5">
+        <span className="text-green-600 font-semibold">कृषु</span>
+        <span className="text-orange-600 font-semibold">वेद</span>
+        <span className="text-muted-foreground"> द्वारा</span>
+      </p>
+    );
+  }
+  return (
+    <p className="text-[10px] leading-tight mt-0.5">
+      <span className="text-muted-foreground">by </span>
+      <span className="text-green-600 font-semibold">Krashu</span>
+      <span className="text-orange-600 font-semibold">Ved</span>
+    </p>
+  );
+}
+
 export function SidebarNav() {
   const [location] = useLocation();
   const { t, language, toggleLanguage } = useTranslation();
   const { user, isAuthenticated, logout } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const { data: profile } = useQuery<{ farmerCode: string }>({
     queryKey: ["/api/farmer/profile"],
     enabled: isAuthenticated,
   });
 
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    if (profileOpen) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [profileOpen]);
+
   return (
-    <aside
-      className="hidden md:flex flex-col w-60 border-r bg-background h-screen sticky top-0 z-40 shrink-0"
+    <header
+      className="hidden md:flex items-center h-14 border-b bg-background/95 backdrop-blur sticky top-0 z-50 px-4 gap-4 shrink-0"
       data-testid="sidebar-nav"
     >
-      <div className="flex items-center gap-2.5 px-5 h-16 border-b shrink-0">
-        <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center">
-          <span className="text-primary-foreground text-sm font-bold">KM</span>
+      <Link href="/">
+        <div className="flex items-center gap-2 shrink-0 cursor-pointer mr-2">
+          <img src={logoPath} alt="Logo" className="w-8 h-8 rounded-full object-cover" />
+          <div className="leading-none">
+            <h1 className="text-sm font-bold leading-tight" data-testid="text-sidebar-app-name">{t("appName")}</h1>
+            <BrandingText language={language} />
+          </div>
         </div>
-        <div>
-          <h1 className="text-sm font-bold leading-tight" data-testid="text-sidebar-app-name">{t("appName")}</h1>
-          <p className="text-[10px] text-primary leading-tight">{t("appTagline")}</p>
-        </div>
-      </div>
+      </Link>
 
-      <nav className="flex-1 py-3 px-3 space-y-1 overflow-y-auto">
+      <nav className="flex items-center gap-1 flex-1 overflow-x-auto">
         {navItems.map(item => {
           const isActive = location === item.path;
           return (
             <Link key={item.path} href={item.path}>
               <button
                 aria-current={isActive ? "page" : undefined}
-                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
                   isActive
                     ? "bg-primary/10 text-primary font-semibold"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
                 data-testid={`sidebar-nav-${item.labelKey}`}
               >
-                <item.icon className={`w-5 h-5 ${isActive ? "stroke-[2.5px]" : ""}`} />
+                <item.icon className={`w-4 h-4 ${isActive ? "stroke-[2.5px]" : ""}`} />
                 <span>{t(item.labelKey)}</span>
               </button>
             </Link>
@@ -63,72 +95,87 @@ export function SidebarNav() {
           <Link href="/admin">
             <button
               aria-current={location === "/admin" ? "page" : undefined}
-              className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
                 location === "/admin"
                   ? "bg-primary/10 text-primary font-semibold"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
               data-testid="sidebar-nav-admin"
             >
-              <Shield className={`w-5 h-5 ${location === "/admin" ? "stroke-[2.5px]" : ""}`} />
+              <Shield className={`w-4 h-4 ${location === "/admin" ? "stroke-[2.5px]" : ""}`} />
               <span>{t("admin")}</span>
             </button>
           </Link>
         )}
       </nav>
 
-      <div className="px-3 pb-4 space-y-1 shrink-0">
-        <Separator className="mb-3" />
-
+      <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={toggleLanguage}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm hover:bg-muted transition-colors"
           data-testid="sidebar-language-toggle"
         >
-          <Globe className="w-5 h-5" />
-          <span>{language === "hi" ? "English" : "हिंदी"}</span>
+          <Globe className="w-4 h-4" />
+          <span className="font-medium">{language === "hi" ? "EN" : "हिंदी"}</span>
         </button>
 
-        {isAuthenticated ? (
-          <>
-            <Link href="/profile">
-              <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-muted transition-colors" data-testid="sidebar-profile-link">
-                <User className="w-5 h-5 text-primary" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate" data-testid="sidebar-username">
-                    {user?.firstName || user?.email || "User"}
-                  </p>
-                  {profile?.farmerCode && (
-                    <p className="text-[11px] text-primary font-medium truncate" data-testid="sidebar-farmer-code">
-                      {profile.farmerCode}
-                    </p>
-                  )}
-                  {user?.phoneNumber && (
-                    <p className="text-[11px] text-muted-foreground truncate">+91 {user.phoneNumber}</p>
-                  )}
-                </div>
-              </div>
-            </Link>
-            <button
-              onClick={() => logout()}
-              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors"
-              data-testid="sidebar-logout"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>{t("logout")}</span>
-            </button>
-          </>
-        ) : (
-          <Link
-            href="/auth"
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            data-testid="sidebar-login"
+        <div className="relative" ref={profileRef}>
+          <button
+            onClick={() => setProfileOpen(!profileOpen)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-md hover:bg-muted transition-colors"
+            data-testid="button-profile-menu"
           >
-            <User className="w-5 h-5 text-primary" />
-            <span>{t("login")}</span>
-          </Link>
-        )}
+            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+              <User className="w-4 h-4 text-primary" />
+            </div>
+            <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${profileOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {profileOpen && (
+            <div className="absolute right-0 top-full mt-1 w-56 bg-background border rounded-lg shadow-lg z-50 py-1" data-testid="profile-dropdown">
+              {isAuthenticated ? (
+                <>
+                  <Link href="/profile" onClick={() => setProfileOpen(false)}>
+                    <div className="px-3 py-2.5 hover:bg-muted cursor-pointer" data-testid="dropdown-profile-link">
+                      <p className="text-sm font-medium truncate">{user?.firstName || user?.email || "User"}</p>
+                      {profile?.farmerCode && (
+                        <p className="text-[11px] text-primary font-medium">{profile.farmerCode}</p>
+                      )}
+                      {user?.phoneNumber && (
+                        <p className="text-[11px] text-muted-foreground">+91 {user.phoneNumber}</p>
+                      )}
+                    </div>
+                  </Link>
+                  {user?.isAdmin && (
+                    <Link href="/admin" onClick={() => setProfileOpen(false)}>
+                      <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted cursor-pointer" data-testid="dropdown-admin-link">
+                        <Shield className="w-4 h-4" />
+                        <span>{t("admin")}</span>
+                      </div>
+                    </Link>
+                  )}
+                  <div className="border-t my-1" />
+                  <button
+                    onClick={() => { logout(); setProfileOpen(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                    data-testid="dropdown-logout"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>{t("logout")}</span>
+                  </button>
+                </>
+              ) : (
+                <Link href="/auth" onClick={() => setProfileOpen(false)}>
+                  <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted cursor-pointer" data-testid="dropdown-login">
+                    <User className="w-4 h-4 text-primary" />
+                    <span>{t("login")}</span>
+                  </div>
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </aside>
+    </header>
   );
 }
