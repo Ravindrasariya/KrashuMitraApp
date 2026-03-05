@@ -17,7 +17,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, User } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, User, Sprout, Leaf } from "lucide-react";
 import type { MarketplaceListing } from "@shared/schema";
 
 type ListingNoPhoto = Omit<MarketplaceListing, "photoData">;
@@ -196,11 +196,6 @@ export default function MarketplacePage() {
     return a.category.localeCompare(b.category);
   });
 
-  const categoryColor = (cat: string) =>
-    cat === "onion_seedling"
-      ? "bg-green-50/60 dark:bg-green-950/20 ring-1 ring-green-200 dark:ring-green-800"
-      : "bg-amber-50/60 dark:bg-amber-950/20 ring-1 ring-amber-200 dark:ring-amber-800";
-
   const categoryLabel = (cat: string) =>
     cat === "onion_seedling" ? t("onionSeedling") : t("potatoSeed");
 
@@ -210,9 +205,9 @@ export default function MarketplacePage() {
       : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-6 pb-24 md:pb-6" data-testid="page-marketplace">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold" data-testid="text-marketplace-title">{t("marketplace")}</h2>
+    <div className="max-w-5xl mx-auto px-3 py-4 pb-24 md:pb-6" data-testid="page-marketplace">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-bold" data-testid="text-marketplace-title">{t("marketplace")}</h2>
         {isAuthenticated && (
           <Button size="sm" onClick={() => setAddOpen(true)} data-testid="button-add-sale">
             <Plus className="w-4 h-4 mr-1" />
@@ -221,7 +216,7 @@ export default function MarketplacePage() {
         )}
       </div>
 
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      <div className="flex items-center gap-1.5 mb-3 flex-wrap">
         <div className="flex gap-1">
           {["all", "onion_seedling", "potato_seed"].map(cat => (
             <Button
@@ -242,7 +237,7 @@ export default function MarketplacePage() {
           className="ml-auto"
           data-testid="button-sort"
         >
-          <ArrowUpDown className="w-3.5 h-3.5 mr-1" />
+          <ArrowUpDown className="w-3 h-3 mr-1" />
           {sortBy === "latest" ? t("sortNearest") : t("sortLatest")}
         </Button>
       </div>
@@ -257,127 +252,131 @@ export default function MarketplacePage() {
           <p className="text-sm" data-testid="text-no-listings">{t("noListings")}</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3">
           {sortedListings.map(listing => {
             const dist = getDistanceKm(listing);
             const isOwner = user?.id === listing.sellerId;
+            const isOnion = listing.category === "onion_seedling";
             return (
-              <Card key={listing.id} className={`overflow-hidden ${categoryColor(listing.category)}`} data-testid={`card-listing-${listing.id}`}>
-                {listing.photoMime && (
+              <Card key={listing.id} className="overflow-hidden flex flex-col" data-testid={`card-listing-${listing.id}`}>
+                {listing.photoMime ? (
                   <img
                     src={`/api/marketplace/${listing.id}/image`}
                     alt=""
-                    className="w-full h-40 object-cover"
+                    className="w-full aspect-square object-cover"
                     data-testid={`img-listing-${listing.id}`}
                   />
+                ) : (
+                  <div className={`w-full aspect-square flex items-center justify-center ${isOnion ? "bg-green-50 dark:bg-green-950/30" : "bg-amber-50 dark:bg-amber-950/30"}`}>
+                    {isOnion ? (
+                      <Sprout className="w-12 h-12 text-green-300 dark:text-green-700" />
+                    ) : (
+                      <Leaf className="w-12 h-12 text-amber-300 dark:text-amber-700" />
+                    )}
+                  </div>
                 )}
-                <div className="p-3 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className={categoryBadgeColor(listing.category)} data-testid={`badge-category-${listing.id}`}>
+
+                <div className="p-2 flex flex-col flex-1 gap-1">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Badge className={`text-[10px] px-1.5 py-0 leading-4 ${categoryBadgeColor(listing.category)}`} data-testid={`badge-category-${listing.id}`}>
                       {categoryLabel(listing.category)}
                     </Badge>
                     {isOwner && (
-                      <Badge variant="outline" className="text-xs" data-testid={`badge-owner-${listing.id}`}>
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 leading-4" data-testid={`badge-owner-${listing.id}`}>
                         {t("myListing")}
                       </Badge>
                     )}
-                    <span className="ml-auto text-[10px] text-muted-foreground">
-                      {new Date(listing.createdAt).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN")}
-                    </span>
                   </div>
 
-                  <div className="space-y-1">
-                    {listing.category === "onion_seedling" && (
+                  <div className="flex-1 min-h-0">
+                    {isOnion ? (
                       <>
                         {listing.quantityBigha && (
-                          <p className="text-sm font-medium" data-testid={`text-qty-${listing.id}`}>
+                          <p className="text-sm font-semibold leading-tight" data-testid={`text-qty-${listing.id}`}>
                             {listing.quantityBigha} {t("bigha")}
                           </p>
                         )}
-                        {listing.availableAfterDays != null && (
-                          <p className="text-xs text-muted-foreground">
-                            {listing.availableAfterDays} {t("daysAvailable")}
-                          </p>
-                        )}
-                        {listing.onionType && (
-                          <p className="text-xs">{listing.onionType}</p>
-                        )}
+                        <p className="text-[11px] text-muted-foreground leading-tight truncate">
+                          {[
+                            listing.availableAfterDays != null ? `${listing.availableAfterDays} ${t("daysAvailable")}` : null,
+                            listing.onionType,
+                          ].filter(Boolean).join(" · ") || "—"}
+                        </p>
                       </>
-                    )}
-                    {listing.category === "potato_seed" && (
+                    ) : (
                       <>
                         {listing.quantityBags && (
-                          <p className="text-sm font-medium" data-testid={`text-qty-${listing.id}`}>
+                          <p className="text-sm font-semibold leading-tight" data-testid={`text-qty-${listing.id}`}>
                             {listing.quantityBags} {t("bags")}
                           </p>
                         )}
-                        {listing.potatoVariety && (
-                          <p className="text-xs">{t("potatoVariety")}: {listing.potatoVariety}</p>
-                        )}
-                        {listing.potatoBrand && (
-                          <p className="text-xs">{t("potatoBrand")}: {listing.potatoBrand}</p>
-                        )}
+                        <p className="text-[11px] text-muted-foreground leading-tight truncate">
+                          {[listing.potatoVariety, listing.potatoBrand].filter(Boolean).join(" · ") || "—"}
+                        </p>
                       </>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between pt-1 border-t border-border/50">
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPin className="w-3 h-3" />
-                      <span data-testid={`text-location-${listing.id}`}>
-                        {[listing.sellerVillage, listing.sellerTehsil, listing.sellerDistrict].filter(Boolean).join(", ") || "—"}
-                      </span>
-                      {dist !== null && (
-                        <span className="ml-1 text-primary font-medium">({Math.round(dist)} km)</span>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-0.5 text-[10px] text-muted-foreground mt-auto">
+                    <MapPin className="w-2.5 h-2.5 shrink-0" />
+                    <span className="truncate" data-testid={`text-location-${listing.id}`}>
+                      {[listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ") || "—"}
+                    </span>
+                    {dist !== null && (
+                      <span className="shrink-0 text-primary font-medium ml-0.5">({Math.round(dist)}km)</span>
+                    )}
+                  </div>
 
-                    <div className="flex items-center gap-1">
-                      {isAuthenticated ? (
-                        contactInfo[listing.id] ? (
-                          <div className="text-xs text-right" data-testid={`text-contact-${listing.id}`}>
-                            <p className="font-medium flex items-center gap-1">
-                              <User className="w-3 h-3" />
-                              {contactInfo[listing.id].name}
-                            </p>
-                            <a href={`tel:+91${contactInfo[listing.id].phone}`} className="text-primary flex items-center gap-1">
-                              <Phone className="w-3 h-3" />
-                              +91 {contactInfo[listing.id].phone}
-                            </a>
-                          </div>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleContactClick(listing.id)}
-                            disabled={contactLoading === listing.id}
-                            data-testid={`button-contact-${listing.id}`}
-                          >
-                            {contactLoading === listing.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Phone className="w-3.5 h-3.5 text-primary" />
-                            )}
-                          </Button>
-                        )
+                  <div className="text-[10px] text-muted-foreground">
+                    {new Date(listing.createdAt).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN")}
+                  </div>
+
+                  <div className="flex items-center gap-0.5 pt-1 border-t border-border/40">
+                    {isAuthenticated ? (
+                      contactInfo[listing.id] ? (
+                        <div className="text-[10px] flex-1 min-w-0" data-testid={`text-contact-${listing.id}`}>
+                          <p className="font-medium truncate">{contactInfo[listing.id].name}</p>
+                          <a href={`tel:+91${contactInfo[listing.id].phone}`} className="text-primary flex items-center gap-0.5">
+                            <Phone className="w-2.5 h-2.5 shrink-0" />
+                            <span className="truncate">{contactInfo[listing.id].phone}</span>
+                          </a>
+                        </div>
                       ) : (
-                        <span className="text-[10px] text-muted-foreground">{t("loginToContact")}</span>
-                      )}
-                      {isOwner && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => {
-                            if (confirm(t("deleteListingConfirm"))) {
-                              deleteMutation.mutate(listing.id);
-                            }
-                          }}
-                          data-testid={`button-delete-listing-${listing.id}`}
+                          onClick={() => handleContactClick(listing.id)}
+                          disabled={contactLoading === listing.id}
+                          data-testid={`button-contact-${listing.id}`}
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          {contactLoading === listing.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <>
+                              <Phone className="w-3 h-3 text-primary" />
+                              <span className="text-primary">{t("contact")}</span>
+                            </>
+                          )}
                         </Button>
-                      )}
-                    </div>
+                      )
+                    ) : (
+                      <span className="text-[9px] text-muted-foreground">{t("loginToContact")}</span>
+                    )}
+                    {isOwner && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="ml-auto"
+                        onClick={() => {
+                          if (confirm(t("deleteListingConfirm"))) {
+                            deleteMutation.mutate(listing.id);
+                          }
+                        }}
+                        data-testid={`button-delete-listing-${listing.id}`}
+                      >
+                        <Trash2 className="w-3 h-3 text-destructive" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>

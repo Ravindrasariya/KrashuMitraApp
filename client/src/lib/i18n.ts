@@ -400,6 +400,7 @@ const translations = {
   listingDeleted: { hi: "बिक्री सूची हटाई गई!", en: "Listing deleted!" },
   deleteListingConfirm: { hi: "क्या आप वाकई यह सूची हटाना चाहते हैं?", en: "Delete this listing?" },
   noListings: { hi: "कोई बिक्री सूची नहीं है", en: "No listings yet" },
+  contact: { hi: "संपर्क", en: "Contact" },
   contactSeller: { hi: "विक्रेता से संपर्क करें", en: "Contact Seller" },
   loginToContact: { hi: "संपर्क देखने के लिए लॉगिन करें", en: "Login to see contact" },
   allCategories: { hi: "सभी", en: "All" },
