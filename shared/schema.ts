@@ -185,6 +185,32 @@ export const insertChatImageSchema = createInsertSchema(chatImages).omit({
   createdAt: true,
 });
 
+export const serviceRequests = pgTable("service_requests", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  serviceType: text("service_type").notNull(),
+  status: text("status").notNull().default("open"),
+  farmerName: text("farmer_name"),
+  farmerPhone: text("farmer_phone"),
+  farmerCode: text("farmer_code"),
+  imageData: text("image_data"),
+  imageMimeType: text("image_mime_type"),
+  aiDiagnosis: text("ai_diagnosis"),
+  adminRemarks: text("admin_remarks"),
+  isArchived: boolean("is_archived").notNull().default(false),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertServiceRequestSchema = createInsertSchema(serviceRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ServiceRequest = typeof serviceRequests.$inferSelect;
+export type InsertServiceRequest = z.infer<typeof insertServiceRequestSchema>;
+
 export type ChatImage = typeof chatImages.$inferSelect;
 export type InsertChatImage = z.infer<typeof insertChatImageSchema>;
 

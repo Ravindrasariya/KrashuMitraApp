@@ -56,7 +56,7 @@ export default function HomePage() {
               </div>
               <h3 className="font-semibold text-sm md:text-base mb-1">{t("digitalClinic")}</h3>
               <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">
-                {t("comingSoon")}
+                {t("clinicServices")}
               </p>
             </Card>
           </Link>

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -48,6 +48,11 @@ export interface IStorage {
   accrueInterestAllLenden(): Promise<void>;
   saveChatImage(userId: string, imageData: string, mimeType: string): Promise<ChatImage>;
   getChatImage(id: number): Promise<ChatImage | undefined>;
+  createServiceRequest(data: InsertServiceRequest): Promise<ServiceRequest>;
+  getServiceRequestsByUser(userId: string): Promise<ServiceRequest[]>;
+  getAllServiceRequests(): Promise<ServiceRequest[]>;
+  getServiceRequest(id: number): Promise<ServiceRequest | undefined>;
+  updateServiceRequest(id: number, data: Partial<Pick<ServiceRequest, "status" | "adminRemarks" | "isArchived">>): Promise<ServiceRequest | undefined>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -521,6 +526,29 @@ class DatabaseStorage implements IStorage {
   async getChatImage(id: number): Promise<ChatImage | undefined> {
     const [image] = await db.select().from(chatImages).where(eq(chatImages.id, id));
     return image;
+  }
+
+  async createServiceRequest(data: InsertServiceRequest): Promise<ServiceRequest> {
+    const [req] = await db.insert(serviceRequests).values(data).returning();
+    return req;
+  }
+
+  async getServiceRequestsByUser(userId: string): Promise<ServiceRequest[]> {
+    return db.select().from(serviceRequests).where(eq(serviceRequests.userId, userId)).orderBy(desc(serviceRequests.createdAt));
+  }
+
+  async getAllServiceRequests(): Promise<ServiceRequest[]> {
+    return db.select().from(serviceRequests).orderBy(desc(serviceRequests.createdAt));
+  }
+
+  async getServiceRequest(id: number): Promise<ServiceRequest | undefined> {
+    const [req] = await db.select().from(serviceRequests).where(eq(serviceRequests.id, id));
+    return req;
+  }
+
+  async updateServiceRequest(id: number, data: Partial<Pick<ServiceRequest, "status" | "adminRemarks" | "isArchived">>): Promise<ServiceRequest | undefined> {
+    const [updated] = await db.update(serviceRequests).set({ ...data, updatedAt: new Date() }).where(eq(serviceRequests.id, id)).returning();
+    return updated;
   }
 }
 

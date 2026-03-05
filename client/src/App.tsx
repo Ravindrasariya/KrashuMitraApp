@@ -15,6 +15,7 @@ import AuthPage from "@/pages/auth-page";
 import PlaceholderPage from "@/pages/placeholder-page";
 import AdminPage from "@/pages/admin-page";
 import FarmKhataPage from "@/pages/farm-khata";
+import DigitalClinicPage from "@/pages/digital-clinic";
 
 function Router() {
   return (
@@ -22,9 +23,7 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/farm-management" component={FarmManagementPage} />
-      <Route path="/digital-clinic">
-        <PlaceholderPage titleKey="digitalClinic" />
-      </Route>
+      <Route path="/digital-clinic" component={DigitalClinicPage} />
       <Route path="/marketplace">
         <PlaceholderPage titleKey="marketplace" />
       </Route>

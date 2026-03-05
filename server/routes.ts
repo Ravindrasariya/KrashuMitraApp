@@ -492,6 +492,133 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/service-requests", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const user = await storage.getUserById(userId);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+      const { serviceType, imageData, imageMimeType } = req.body;
+      if (!serviceType || !["soil_test", "potato_seed_test", "crop_doctor"].includes(serviceType)) {
+        return res.status(400).json({ message: "Invalid service type" });
+      }
+
+      let aiDiagnosis: string | null = null;
+      if (serviceType === "crop_doctor") {
+        if (!imageData || !imageMimeType) {
+          return res.status(400).json({ message: "Image required for Crop Doctor" });
+        }
+        const base64Data = imageData.replace(/^data:[^;]+;base64,/, "");
+        const language = req.body.language || "hi";
+        const diagPrompt = language === "hi"
+          ? `आप एक कृषि विशेषज्ञ हैं। इस फसल/पौधे की तस्वीर का विश्लेषण करें और बताएं:
+1. क्या कोई रोग, कीट, या पोषक तत्व की कमी दिख रही है?
+2. अगर समस्या है तो उसका नाम और विवरण
+3. उपचार/समाधान के उपाय (दवा का नाम, मात्रा, छिड़काव का तरीका)
+4. रोकथाम के टिप्स
+संक्षिप्त बुलेट पॉइंट्स में जवाब दें।`
+          : `You are an agriculture expert. Analyze this crop/plant image and provide:
+1. Any visible disease, pest, or nutrient deficiency?
+2. If problem found: name and description
+3. Treatment/solution (medicine name, dosage, application method)
+4. Prevention tips
+Answer in concise bullet points.`;
+
+        try {
+          const result = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: [{
+              role: "user",
+              parts: [
+                { text: diagPrompt },
+                { inlineData: { mimeType: imageMimeType, data: base64Data } },
+              ],
+            }],
+            config: { maxOutputTokens: 4096 },
+          });
+          aiDiagnosis = result.text || null;
+        } catch (aiErr) {
+          console.error("Gemini crop doctor error:", aiErr);
+          aiDiagnosis = language === "hi" ? "AI विश्लेषण में त्रुटि हुई। कृपया पुनः प्रयास करें।" : "AI analysis failed. Please try again.";
+        }
+      }
+
+      const request = await storage.createServiceRequest({
+        userId,
+        serviceType,
+        farmerName: user.firstName || null,
+        farmerPhone: user.phoneNumber || null,
+        farmerCode: user.farmerCode || null,
+        imageData: serviceType === "crop_doctor" ? imageData : null,
+        imageMimeType: serviceType === "crop_doctor" ? imageMimeType : null,
+        aiDiagnosis,
+      });
+
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Error creating service request:", error);
+      res.status(500).json({ message: "Failed to create service request" });
+    }
+  });
+
+  app.get("/api/service-requests", isAuthenticated, async (req: any, res) => {
+    try {
+      const requests = await storage.getServiceRequestsByUser(req.session.userId);
+      res.json(requests);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch service requests" });
+    }
+  });
+
+  app.get("/api/service-requests/:id/image", isAuthenticated, async (req: any, res) => {
+    try {
+      const request = await storage.getServiceRequest(parseInt(req.params.id));
+      if (!request || !request.imageData) return res.status(404).json({ message: "Not found" });
+      const user = await storage.getUserById(req.session.userId);
+      if (request.userId !== req.session.userId && !user?.isAdmin) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const buffer = Buffer.from(request.imageData, "base64");
+      res.set("Content-Type", request.imageMimeType || "image/jpeg");
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch image" });
+    }
+  });
+
+  app.get("/api/admin/service-requests", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const requests = await storage.getAllServiceRequests();
+      res.json(requests);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch service requests" });
+    }
+  });
+
+  app.patch("/api/admin/service-requests/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { status, adminRemarks, isArchived } = req.body;
+      const data: any = {};
+      if (status !== undefined) {
+        if (!["open", "closed"].includes(status)) return res.status(400).json({ message: "Invalid status" });
+        data.status = status;
+      }
+      if (adminRemarks !== undefined) {
+        if (typeof adminRemarks !== "string") return res.status(400).json({ message: "Invalid remarks" });
+        data.adminRemarks = adminRemarks;
+      }
+      if (isArchived !== undefined) {
+        if (typeof isArchived !== "boolean") return res.status(400).json({ message: "Invalid isArchived" });
+        data.isArchived = isArchived;
+      }
+      const updated = await storage.updateServiceRequest(parseInt(req.params.id), data);
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update service request" });
+    }
+  });
+
   app.get("/api/suggestions", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
