@@ -119,6 +119,8 @@ const translations = {
   invalidPin: { hi: "कृपया 4 अंकों का पिन दर्ज करें", en: "Please enter a 4-digit PIN" },
   phoneExists: { hi: "यह फ़ोन नंबर पहले से रजिस्टर है", en: "This phone number is already registered" },
   ipLimitReached: { hi: "इस डिवाइस से अधिकतम 2 खाते बनाए जा सकते हैं", en: "Maximum 2 accounts can be registered from this device" },
+  captchaRequired: { hi: "कृपया कैप्चा पूरा करें", en: "Please complete the CAPTCHA" },
+  captchaFailed: { hi: "कैप्चा सत्यापन विफल। कृपया पुनः प्रयास करें।", en: "CAPTCHA verification failed. Please try again." },
   wrongCredentials: { hi: "गलत फ़ोन नंबर या पिन", en: "Wrong phone number or PIN" },
   accountNotFound: { hi: "यह फ़ोन नंबर रजिस्टर नहीं है", en: "This phone number is not registered" },
   unrecognizedDevice: { hi: "यह डिवाइस पहचाना नहीं गया। पिन रीसेट नहीं हो सकता।", en: "Unrecognized device. Cannot reset PIN." },

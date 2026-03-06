@@ -9,6 +9,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Sprout, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import ReCAPTCHA from "react-google-recaptcha";
+
+const RECAPTCHA_SITE_KEY = import.meta.env.DEV ? "" : (import.meta.env.VITE_RECAPTCHA_SITE_KEY || "");
 
 type AuthMode = "login" | "register" | "forgot" | "changePin";
 
@@ -86,6 +89,8 @@ export default function AuthPage() {
   const [firstName, setFirstName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [oldPin, setOldPin] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<ReCAPTCHA>(null);
 
   useEffect(() => {
     if (isAuthenticated && mode !== "changePin") {
@@ -100,6 +105,8 @@ export default function AuthPage() {
   const resetForm = () => {
     setPin("");
     setConfirmPin("");
+    setCaptchaToken(null);
+    captchaRef.current?.reset();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,10 +143,15 @@ export default function AuthPage() {
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         setLocation("/");
       } else if (mode === "login") {
+        if (RECAPTCHA_SITE_KEY && !captchaToken) {
+          toast({ title: t("captchaRequired"), variant: "destructive" });
+          setIsSubmitting(false);
+          return;
+        }
         const res = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phoneNumber: phone, pin }),
+          body: JSON.stringify({ phoneNumber: phone, pin, captchaToken: captchaToken || undefined }),
           credentials: "include",
         });
 
@@ -321,10 +333,21 @@ export default function AuthPage() {
               </div>
             )}
 
+            {mode === "login" && RECAPTCHA_SITE_KEY && (
+              <div className="flex justify-center" data-testid="captcha-container">
+                <ReCAPTCHA
+                  ref={captchaRef}
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  onChange={(token) => setCaptchaToken(token)}
+                  onExpired={() => setCaptchaToken(null)}
+                />
+              </div>
+            )}
+
             <Button
               type="submit"
               className="w-full"
-              disabled={!isValid || isSubmitting}
+              disabled={!isValid || isSubmitting || (mode === "login" && !!RECAPTCHA_SITE_KEY && !captchaToken)}
               data-testid="button-auth-submit"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}

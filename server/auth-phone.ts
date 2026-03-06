@@ -7,6 +7,22 @@ import { users, type User } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { storage } from "./storage";
 
+async function verifyCaptcha(token: string): Promise<boolean> {
+  const secret = process.env.RECAPTCHA_SECRET_KEY;
+  if (!secret) return true;
+  try {
+    const res = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(token)}`,
+    });
+    const data = await res.json() as { success: boolean };
+    return data.success;
+  } catch {
+    return false;
+  }
+}
+
 declare module "express-session" {
   interface SessionData {
     userId: string;
@@ -93,7 +109,18 @@ export function setupPhoneAuth(app: Express) {
 
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { phoneNumber, pin } = req.body;
+      const { phoneNumber, pin, captchaToken } = req.body;
+
+      const isDevelopment = process.env.NODE_ENV === "development";
+      if (process.env.RECAPTCHA_SECRET_KEY && !isDevelopment) {
+        if (!captchaToken) {
+          return res.status(400).json({ message: "captchaRequired" });
+        }
+        const captchaValid = await verifyCaptcha(captchaToken);
+        if (!captchaValid) {
+          return res.status(400).json({ message: "captchaFailed" });
+        }
+      }
 
       if (!phoneNumber || !pin) {
         return res.status(400).json({ message: "invalidCredentials" });
