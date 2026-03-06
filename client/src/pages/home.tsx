@@ -405,12 +405,15 @@ export default function HomePage() {
                 </div>
               )}
               {!isAuthenticated && !isLoading && (
-                <Link href="/auth">
-                  <Button size="sm" data-testid="button-hero-login">
-                    {t("getStarted")}
-                    <ArrowRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link href="/auth">
+                    <Button size="sm" data-testid="button-hero-login">
+                      {t("getStarted")}
+                      <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </Link>
+                  <span className="text-xs text-muted-foreground" data-testid="text-login-description">{t("loginDescription")}</span>
+                </div>
               )}
             </div>
             <WeatherWidget />
