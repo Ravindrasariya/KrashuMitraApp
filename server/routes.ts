@@ -1488,7 +1488,7 @@ Respond in this structure:
       const serviceRequests = await storage.getServiceRequestsByUser(userId);
       const farmerListings = await storage.getMarketplaceListings();
       const myListings = farmerListings.filter(l => l.sellerId === userId && l.isActive);
-      const priceCrops = await storage.getPriceCrops();
+      const priceCrops = await storage.getAllPriceCrops();
       const activePriceCrops = priceCrops.filter(c => c.isActive);
       let priceTrendsContext = "";
       for (const crop of activePriceCrops) {
