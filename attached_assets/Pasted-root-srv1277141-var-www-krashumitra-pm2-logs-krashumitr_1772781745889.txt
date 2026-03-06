@@ -1,0 +1,33 @@
+root@srv1277141:/var/www/krashumitra# pm2 logs krashumitra --lines 30 --err
+[TAILING] Tailing last 30 lines for [krashumitra] process (change the value with --lines option)
+/root/.pm2/logs/krashumitra-error.log last 30 lines:
+8|krashumi |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+8|krashumi |     at async /var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:12148:13
+8|krashumi |     at async Models.generateContent (/var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:13549:24)
+8|krashumi |     at async /var/www/krashumitra/dist/index.cjs:307:41 {
+8|krashumi |   status: 404
+8|krashumi | }
+8|krashumi | Gemini crop doctor error: ApiError: {"error":{"message":"","code":404,"status":"Not Found"}}
+8|krashumi |     at throwErrorIfNotOK (/var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:12445:30)
+8|krashumi |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+8|krashumi |     at async /var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:12148:13
+8|krashumi |     at async Models.generateContent (/var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:13549:24)
+8|krashumi |     at async /var/www/krashumitra/dist/index.cjs:307:41 {
+8|krashumi |   status: 404
+8|krashumi | }
+8|krashumi | Error fetching suggestions: ApiError: {"error":{"message":"","code":404,"status":"Not Found"}}
+8|krashumi |     at throwErrorIfNotOK (/var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:12445:30)
+8|krashumi |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+8|krashumi |     at async /var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:12148:13
+8|krashumi |     at async Models.generateContent (/var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:13549:24)
+8|krashumi |     at async /var/www/krashumitra/dist/index.cjs:255:73 {
+8|krashumi |   status: 404
+8|krashumi | }
+8|krashumi | Error in Krashuved chat: ApiError: {"error":{"message":"","code":404,"status":"Not Found"}}
+8|krashumi |     at throwErrorIfNotOK (/var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:12445:30)
+8|krashumi |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+8|krashumi |     at async /var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:12163:13
+8|krashumi |     at async Models.generateContentStream (/var/www/krashumitra/node_modules/@google/genai/dist/node/index.cjs:13642:24)
+8|krashumi |     at async /var/www/krashumitra/dist/index.cjs:717:621 {
+8|krashumi |   status: 404
+8|krashumi | }
