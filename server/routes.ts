@@ -1486,6 +1486,21 @@ Respond in this structure:
       const cardsWithEvents = await storage.getCropCardsWithEvents(userId);
       const khataRegisters = await storage.getKhataRegisters(userId, { showArchived: false });
       const serviceRequests = await storage.getServiceRequestsByUser(userId);
+      const farmerListings = await storage.getMarketplaceListings();
+      const myListings = farmerListings.filter(l => l.sellerId === userId && l.isActive);
+      const priceCrops = await storage.getPriceCrops();
+      const activePriceCrops = priceCrops.filter(c => c.isActive);
+      let priceTrendsContext = "";
+      for (const crop of activePriceCrops) {
+        const entries = await storage.getPriceEntries(crop.id, 20);
+        if (entries.length > 0) {
+          const recentDates = [...new Set(entries.map(e => e.date))].sort((a, b) => b.localeCompare(a)).slice(0, 3);
+          const recentEntries = entries.filter(e => recentDates.includes(e.date));
+          const districtPrices = recentEntries.map(e => `${e.district || e.market}:₹${e.modalPrice}(${e.date})`).join(", ");
+          priceTrendsContext += `\n• ${crop.nameHi}/${crop.nameEn}: ${districtPrices}`;
+          if (crop.recommendation) priceTrendsContext += ` [सुझाव/Advice: ${crop.recommendation}]`;
+        }
+      }
 
       let farmerContext = "";
       if (language === "hi") {
@@ -1531,6 +1546,22 @@ Respond in this structure:
         } else {
           farmerContext += "\n\nकिसान ने अभी तक कोई खाता नहीं बनाया है।";
         }
+
+        if (myListings.length > 0) {
+          const catLabels: Record<string, string> = { onion_seedling: "प्याज पौध", potato_seed: "आलू बीज" };
+          farmerContext += `\n\nकिसान की बाज़ार लिस्टिंग (${myListings.length}):\n`;
+          for (const l of myListings) {
+            farmerContext += `\n• ${catLabels[l.category] || l.category}`;
+            if (l.quantityBigha) farmerContext += ` | ${l.quantityBigha} बीघा`;
+            if (l.quantityBags) farmerContext += ` | ${l.quantityBags} बैग`;
+            if (l.sellerVillage) farmerContext += ` | गाँव: ${l.sellerVillage}`;
+            if (l.sellerDistrict) farmerContext += ` | जिला: ${l.sellerDistrict}`;
+          }
+        }
+
+        if (priceTrendsContext) {
+          farmerContext += `\n\n--- मूल्य रुझान (हाल के भाव) ---${priceTrendsContext}`;
+        }
       } else {
         farmerContext = `\n\n--- Farmer Profile ---\nFarmer ID: ${farmerCode}\nName: ${user?.firstName || ""} ${user?.lastName || ""}\n`;
         if (cardsWithEvents.length > 0) {
@@ -1573,6 +1604,22 @@ Respond in this structure:
           }
         } else {
           farmerContext += "\n\nFarmer has no khata registers yet.";
+        }
+
+        if (myListings.length > 0) {
+          const catLabels: Record<string, string> = { onion_seedling: "Onion Seedling", potato_seed: "Potato Seeds" };
+          farmerContext += `\n\nFarmer's marketplace listings (${myListings.length}):\n`;
+          for (const l of myListings) {
+            farmerContext += `\n• ${catLabels[l.category] || l.category}`;
+            if (l.quantityBigha) farmerContext += ` | ${l.quantityBigha} Bigha`;
+            if (l.quantityBags) farmerContext += ` | ${l.quantityBags} Bags`;
+            if (l.sellerVillage) farmerContext += ` | Village: ${l.sellerVillage}`;
+            if (l.sellerDistrict) farmerContext += ` | District: ${l.sellerDistrict}`;
+          }
+        }
+
+        if (priceTrendsContext) {
+          farmerContext += `\n\n--- Price Trends (Recent Prices) ---${priceTrendsContext}`;
         }
       }
 
@@ -1683,6 +1730,30 @@ ${farmerContext}
 - अगर किसान कहे "plowing" या "जुताई" तो rentalMachinery = "tractor" और rentalFarmWork = "जुताई/plowing" समझो
 - दर और मात्रा से कुल राशि गणना करो
 - अगर तारीख नहीं बताई तो आज (${today}) रखो
+
+--- बाज़ार (Marketplace) ---
+
+तुम किसानों को बाज़ार में अपनी फसल/बीज बेचने की लिस्टिंग बनाने में भी मदद करती हो। 2 श्रेणियाँ हैं:
+
+1. **प्याज पौध (onion_seedling)**: प्याज की पौध बेचने के लिए। ज़रूरी जानकारी: कितने बीघा (quantityBigha), कितने दिन बाद उपलब्ध (availableAfterDays), प्याज का प्रकार (onionType - जैसे "Red/लाल", "White/सफेद"), गाँव (sellerVillage), जिला (sellerDistrict)।
+2. **आलू बीज (potato_seed)**: आलू के बीज बेचने के लिए। ज़रूरी जानकारी: कितने बैग (quantityBags), किस्म (potatoVariety - जैसे "Pukhraj/पुखराज", "Chipsona"), ब्रांड (potatoBrand - वैकल्पिक), गाँव (sellerVillage), जिला (sellerDistrict)।
+
+जब किसान बाज़ार में कुछ बेचना चाहे:
+- पहले पूछो कि प्याज पौध बेचनी है या आलू बीज
+- फिर ज़रूरी जानकारी प्राकृतिक बातचीत में पूछो
+- जानकारी मिलने पर JSON ब्लॉक दो:
+\`\`\`json
+{"type":"marketplace_listing_draft","category":"onion_seedling|potato_seed","quantityBigha":"3 (प्याज के लिए)","availableAfterDays":10,"onionType":"Red (प्याज के लिए)","quantityBags":"100 (आलू के लिए)","potatoVariety":"Pukhraj (आलू के लिए)","potatoBrand":"ब्रांड (वैकल्पिक, आलू के लिए)","sellerVillage":"गाँव","sellerDistrict":"जिला"}
+\`\`\`
+- श्रेणी के अनुसार केवल relevant fields भरो (प्याज के लिए quantityBigha/availableAfterDays/onionType, आलू के लिए quantityBags/potatoVariety/potatoBrand)
+
+--- मूल्य रुझान (Price Trends) ---
+
+तुम्हारे पास फसलों के हाल के मंडी भावों की जानकारी है (ऊपर किसान डेटा में "मूल्य रुझान" सेक्शन देखो)। जब किसान किसी फसल का भाव या ट्रेंड पूछे:
+- हाल के भाव बताओ (जिला और तारीख के साथ)
+- भाव बढ़ रहे हैं या घट रहे हैं, यह बताओ
+- अगर सुझाव उपलब्ध है (hold/sale) तो बताओ
+- किसान को याद दिलाओ कि यह सिर्फ सुझाव है, अंतिम निर्णय उनका है
 
 --- डिजिटल क्लिनिक (Digital Clinic) ---
 
@@ -1834,6 +1905,30 @@ Khata creation rules:
 - If farmer says "plowing" or "jotai", set rentalMachinery = "tractor" and rentalFarmWork = "plowing"
 - Calculate totals from rate × quantity
 - If no date specified, use today (${today})
+
+--- Marketplace ---
+
+You also help farmers create marketplace listings to sell their produce/seeds. There are 2 categories:
+
+1. **Onion Seedling (onion_seedling)**: For selling onion seedlings. Required info: how many bigha (quantityBigha), available after how many days (availableAfterDays), onion type (onionType - e.g., "Red", "White"), village (sellerVillage), district (sellerDistrict).
+2. **Potato Seeds (potato_seed)**: For selling potato seeds. Required info: how many bags (quantityBags), variety (potatoVariety - e.g., "Pukhraj", "Chipsona"), brand (potatoBrand - optional), village (sellerVillage), district (sellerDistrict).
+
+When a farmer wants to sell something in the marketplace:
+- First ask whether they want to sell onion seedlings or potato seeds
+- Then ask for required details conversationally
+- Once you have the info, output the JSON block:
+\`\`\`json
+{"type":"marketplace_listing_draft","category":"onion_seedling|potato_seed","quantityBigha":"3 (for onion)","availableAfterDays":10,"onionType":"Red (for onion)","quantityBags":"100 (for potato)","potatoVariety":"Pukhraj (for potato)","potatoBrand":"brand (optional, for potato)","sellerVillage":"village","sellerDistrict":"district"}
+\`\`\`
+- Only include fields relevant to the category (onion: quantityBigha/availableAfterDays/onionType, potato: quantityBags/potatoVariety/potatoBrand)
+
+--- Price Trends ---
+
+You have access to recent market prices for crops (see "Price Trends" section in the farmer data above). When a farmer asks about crop prices or trends:
+- Share recent prices with district and date details
+- Indicate whether prices are rising or falling
+- If a recommendation (hold/sale) is available, share it
+- Remind the farmer that this is just advice and the final decision is theirs
 
 --- Digital Clinic ---
 

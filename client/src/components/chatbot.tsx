@@ -66,7 +66,20 @@ interface ServiceRequestDraft {
   serviceType: "soil_test" | "potato_seed_test" | "crop_doctor";
 }
 
-type Draft = CropCardDraft | CropCardEditDraft | KhataCreateDraft | KhataAddItemDraft | ServiceRequestDraft;
+interface MarketplaceListingDraft {
+  type: "marketplace_listing_draft";
+  category: "onion_seedling" | "potato_seed";
+  quantityBigha?: string;
+  availableAfterDays?: number;
+  onionType?: string;
+  quantityBags?: string;
+  potatoVariety?: string;
+  potatoBrand?: string;
+  sellerVillage?: string;
+  sellerDistrict?: string;
+}
+
+type Draft = CropCardDraft | CropCardEditDraft | KhataCreateDraft | KhataAddItemDraft | ServiceRequestDraft | MarketplaceListingDraft;
 
 const CHAT_STORAGE_KEY = "krashu-chat-history";
 const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
@@ -74,7 +87,7 @@ const CHAT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 function stripJsonFromMessage(text: string): string {
   let cleaned = text.replace(/```json\s*[\s\S]*?```/g, "").trim();
   cleaned = cleaned.replace(/```\s*[\s\S]*?```/g, "").trim();
-  cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft)|service_request_draft)"[\s\S]*\}/g, "").trim();
+  cleaned = cleaned.replace(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft)|service_request_draft|marketplace_listing_draft)"[\s\S]*\}/g, "").trim();
   cleaned = cleaned.replace(/\[IMG:\s*.+?\]/g, "").trim();
   cleaned = cleaned.split("\n").filter(line => !/^\s*[*\-•]\s*$/.test(line)).join("\n");
   cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
@@ -105,7 +118,7 @@ function saveMessages(messages: ChatMessage[]) {
   } catch {}
 }
 
-const DRAFT_TYPES = ["crop_card_draft", "crop_card_edit_draft", "khata_create_draft", "khata_add_item_draft", "service_request_draft"];
+const DRAFT_TYPES = ["crop_card_draft", "crop_card_edit_draft", "khata_create_draft", "khata_add_item_draft", "service_request_draft", "marketplace_listing_draft"];
 
 function tryParseDraft(text: string): Draft | null {
   try {
@@ -122,7 +135,7 @@ function tryParseDraft(text: string): Draft | null {
   } catch {}
 
   try {
-    const rawMatch = text.match(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft)|service_request_draft)"[\s\S]*\}/);
+    const rawMatch = text.match(/\{[\s\S]*"type"\s*:\s*"(crop_card_(draft|edit_draft)|khata_(create_draft|add_item_draft)|service_request_draft|marketplace_listing_draft)"[\s\S]*\}/);
     if (rawMatch) {
       const parsed = JSON.parse(rawMatch[0]);
       return parsed;
@@ -610,6 +623,29 @@ export function Chatbot() {
           role: "assistant",
           content: language === "hi" ? "खाते में एंट्री सफलतापूर्वक जोड़ दी गई!" : "Entry added to khata successfully!"
         }]);
+      } else if (draft.type === "marketplace_listing_draft") {
+        const payload: Record<string, any> = {
+          category: draft.category,
+          sellerVillage: draft.sellerVillage || "",
+          sellerDistrict: draft.sellerDistrict || "",
+        };
+        if (draft.category === "onion_seedling") {
+          payload.quantityBigha = draft.quantityBigha || "";
+          payload.availableAfterDays = draft.availableAfterDays || 0;
+          payload.onionType = draft.onionType || "";
+        } else {
+          payload.quantityBags = draft.quantityBags || "";
+          payload.potatoVariety = draft.potatoVariety || "";
+          payload.potatoBrand = draft.potatoBrand || "";
+        }
+        await apiRequest("POST", "/api/marketplace", payload);
+        queryClient.invalidateQueries({ queryKey: ["/api/marketplace"] });
+        toast({ title: language === "hi" ? "लिस्टिंग बन गई!" : "Listing created!" });
+        setDraft(null);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: language === "hi" ? "बाज़ार में आपकी लिस्टिंग सफलतापूर्वक बन गई! आप इसे बाज़ार टैब में देख सकते हैं।" : "Your marketplace listing has been created successfully! You can view it in the Market tab."
+        }]);
       }
     } catch (error: any) {
       console.error("Draft approval error:", error);
@@ -670,6 +706,7 @@ export function Chatbot() {
   const khataAddItemDraft = isKhataAddItemDraft ? (draft as KhataAddItemDraft) : null;
   const createDraft = draft?.type === "crop_card_draft" ? (draft as CropCardDraft) : null;
   const serviceRequestDraft = draft?.type === "service_request_draft" ? (draft as ServiceRequestDraft) : null;
+  const marketplaceDraft = draft?.type === "marketplace_listing_draft" ? (draft as MarketplaceListingDraft) : null;
 
   const KHATA_TYPE_LABELS: Record<string, Record<string, string>> = {
     rental: { hi: "किराया खाता", en: "Rental Khata" },
@@ -1035,6 +1072,48 @@ export function Chatbot() {
                 )}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setDraft(null)} disabled={isApprovingService} data-testid="button-reject-service">
+                <X className="w-3 h-3 mr-1" />
+                {t("reject")}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {marketplaceDraft && (
+          <Card className="p-3 border-green-500/30 bg-green-50 dark:bg-green-950/20" data-testid="marketplace-draft-card">
+            <h4 className="text-sm font-bold mb-2 text-green-800 dark:text-green-300">
+              {language === "hi" ? "बाज़ार लिस्टिंग" : "Marketplace Listing"}
+            </h4>
+            <div className="space-y-1 mb-2 text-sm">
+              <p>
+                <span className="text-muted-foreground">{language === "hi" ? "श्रेणी:" : "Category:"} </span>
+                <span className="font-medium text-green-700 dark:text-green-400">
+                  {marketplaceDraft.category === "onion_seedling" ? (language === "hi" ? "प्याज पौध" : "Onion Seedling") : (language === "hi" ? "आलू बीज" : "Potato Seeds")}
+                </span>
+              </p>
+              {marketplaceDraft.category === "onion_seedling" && (
+                <>
+                  {marketplaceDraft.quantityBigha && <p><span className="text-muted-foreground">{language === "hi" ? "मात्रा:" : "Quantity:"} </span>{marketplaceDraft.quantityBigha} {language === "hi" ? "बीघा" : "Bigha"}</p>}
+                  {marketplaceDraft.availableAfterDays != null && <p><span className="text-muted-foreground">{language === "hi" ? "उपलब्धता:" : "Available:"} </span>{marketplaceDraft.availableAfterDays} {language === "hi" ? "दिन बाद" : "days"}</p>}
+                  {marketplaceDraft.onionType && <p><span className="text-muted-foreground">{language === "hi" ? "प्रकार:" : "Type:"} </span>{marketplaceDraft.onionType}</p>}
+                </>
+              )}
+              {marketplaceDraft.category === "potato_seed" && (
+                <>
+                  {marketplaceDraft.quantityBags && <p><span className="text-muted-foreground">{language === "hi" ? "मात्रा:" : "Quantity:"} </span>{marketplaceDraft.quantityBags} {language === "hi" ? "बैग" : "Bags"}</p>}
+                  {marketplaceDraft.potatoVariety && <p><span className="text-muted-foreground">{language === "hi" ? "किस्म:" : "Variety:"} </span>{marketplaceDraft.potatoVariety}</p>}
+                  {marketplaceDraft.potatoBrand && <p><span className="text-muted-foreground">{language === "hi" ? "ब्रांड:" : "Brand:"} </span>{marketplaceDraft.potatoBrand}</p>}
+                </>
+              )}
+              {marketplaceDraft.sellerVillage && <p><span className="text-muted-foreground">{language === "hi" ? "गाँव:" : "Village:"} </span>{marketplaceDraft.sellerVillage}</p>}
+              {marketplaceDraft.sellerDistrict && <p><span className="text-muted-foreground">{language === "hi" ? "जिला:" : "District:"} </span>{marketplaceDraft.sellerDistrict}</p>}
+            </div>
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" onClick={approveDraft} data-testid="button-approve-listing">
+                <Check className="w-3 h-3 mr-1" />
+                {language === "hi" ? "लिस्ट करें" : "List It"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="button-reject-listing">
                 <X className="w-3 h-3 mr-1" />
                 {t("reject")}
               </Button>
