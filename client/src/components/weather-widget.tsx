@@ -7,9 +7,26 @@ import {
 } from "lucide-react";
 
 const CACHE_KEY = "krashu-weather-cache";
+const LOCATION_CACHE_KEY = "krashu-location-cache";
 const CACHE_DURATION_MS = 30 * 60 * 1000;
 const DEFAULT_LAT = 28.6139;
 const DEFAULT_LNG = 77.2090;
+
+function getCachedLocation(): { lat: number; lng: number } | null {
+  try {
+    const raw = localStorage.getItem(LOCATION_CACHE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (data.lat && data.lng) return data;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedLocation(lat: number, lng: number) {
+  localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify({ lat, lng }));
+}
 
 interface WeatherData {
   current: {
@@ -127,13 +144,26 @@ export function WeatherWidget() {
       return;
     }
 
+    const cachedLoc = getCachedLocation();
+    if (cachedLoc) {
+      fetchWeather(cachedLoc.lat, cachedLoc.lng);
+      return;
+    }
+
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-        () => fetchWeather(DEFAULT_LAT, DEFAULT_LNG),
+        (pos) => {
+          setCachedLocation(pos.coords.latitude, pos.coords.longitude);
+          fetchWeather(pos.coords.latitude, pos.coords.longitude);
+        },
+        () => {
+          setCachedLocation(DEFAULT_LAT, DEFAULT_LNG);
+          fetchWeather(DEFAULT_LAT, DEFAULT_LNG);
+        },
         { timeout: 5000 }
       );
     } else {
+      setCachedLocation(DEFAULT_LAT, DEFAULT_LNG);
       fetchWeather(DEFAULT_LAT, DEFAULT_LNG);
     }
   }, [fetchWeather]);
