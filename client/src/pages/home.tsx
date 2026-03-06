@@ -41,7 +41,7 @@ function BannerCarousel({ banners, language }: { banners: BannerWithImage[]; lan
       <div className="relative min-h-[180px] md:min-h-[253px]">
         {banner.type === "text" ? (
           <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-background px-6 py-8 md:px-12 md:py-10 min-h-[180px] md:min-h-[253px] flex flex-col justify-center">
-            <h2 className="text-2xl md:text-3xl font-bold leading-tight mb-2 text-foreground" data-testid="text-banner-heading">
+            <h2 className="text-xl md:text-2xl font-bold leading-tight mb-2 text-foreground" data-testid="text-banner-heading">
               {language === "hi" ? banner.headingHi : banner.headingEn}
             </h2>
             {(banner.subHeadingHi || banner.subHeadingEn) && (
