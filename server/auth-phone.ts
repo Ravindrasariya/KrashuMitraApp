@@ -62,6 +62,14 @@ export function setupPhoneAuth(app: Express) {
       const hashedPin = await bcrypt.hash(pin, 10);
       const clientIp = req.ip || req.socket.remoteAddress || "unknown";
 
+      const [ipCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(users)
+        .where(sql`${users.knownIps} @> ARRAY[${clientIp}]::text[]`);
+      if (ipCount && Number(ipCount.count) >= 2) {
+        return res.status(429).json({ message: "ipLimitReached" });
+      }
+
       const [user] = await db
         .insert(users)
         .values({
