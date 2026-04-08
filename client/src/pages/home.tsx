@@ -355,7 +355,7 @@ function PriceTrendsSection({ language }: { language: string }) {
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">{totalVotes}</span>
+                    {totalVotes >= 20 && <span className="text-[10px] text-muted-foreground whitespace-nowrap">{totalVotes}</span>}
                   </div>
                 ) : (
                   !isAuthenticated && (
