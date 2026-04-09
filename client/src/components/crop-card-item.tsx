@@ -112,7 +112,7 @@ export function CropCardItem({ card, onDelete, onArchive }: CropCardItemProps) {
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card className={`relative ${card.isArchived ? "opacity-60" : ""}`} data-testid={`card-crop-${card.id}`}>
-        <CollapsibleTrigger className="w-full text-left" data-testid={`button-expand-crop-${card.id}`}>
+        <CollapsibleTrigger className={`w-full text-left ${isOpen ? "sticky top-16 md:top-0 z-10 bg-card rounded-t-xl shadow-sm" : ""}`} data-testid={`button-expand-crop-${card.id}`}>
           <div className="p-4">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-3 min-w-0">
