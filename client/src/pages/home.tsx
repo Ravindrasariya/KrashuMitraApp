@@ -230,7 +230,7 @@ function PriceTrendsSection({ language }: { language: string }) {
               {t("priceTrends")}
             </h2>
             <Select value={selectedCropId} onValueChange={setSelectedCropId}>
-              <SelectTrigger className="w-[140px] md:w-[180px] bg-green-600 text-white border-green-600 hover:bg-green-700 [&>svg]:text-white font-bold text-base" data-testid="select-crop">
+              <SelectTrigger className="w-[140px] md:w-auto bg-green-600 text-white border-green-600 hover:bg-green-700 [&>svg]:text-white font-bold text-base" data-testid="select-crop">
                 <SelectValue placeholder={t("selectCrop")} />
               </SelectTrigger>
               <SelectContent>
