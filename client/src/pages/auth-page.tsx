@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import ReCAPTCHA from "react-google-recaptcha";
 
-const RECAPTCHA_SITE_KEY = import.meta.env.DEV ? "" : (import.meta.env.VITE_RECAPTCHA_SITE_KEY || "");
+const RECAPTCHA_SITE_KEY = import.meta.env.DEV ? "" : "6LfDSIIsAAAAAKaKfw8TBpyhYXde06X7cjQjBU_V";
 
 type AuthMode = "login" | "register" | "forgot" | "changePin";
 
