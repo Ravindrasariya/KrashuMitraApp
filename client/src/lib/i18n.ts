@@ -429,6 +429,7 @@ const translations = {
   locationDetected: { hi: "स्थान पहचाना गया!", en: "Location detected!" },
   locationDenied: { hi: "स्थान की अनुमति नहीं दी गई", en: "Location permission denied" },
   locationError: { hi: "स्थान पता नहीं लग पाया", en: "Could not detect location" },
+  updateAddressFirst: { hi: "कृपया पहले प्रोफ़ाइल में अपना पता अपडेट करें", en: "Please update your address in Profile first" },
   profileUpdated: { hi: "प्रोफ़ाइल अपडेट की गई!", en: "Profile updated!" },
   profileUpdateFailed: { hi: "प्रोफ़ाइल अपडेट विफल", en: "Profile update failed" },
   tehsil: { hi: "तहसील", en: "Tehsil" },

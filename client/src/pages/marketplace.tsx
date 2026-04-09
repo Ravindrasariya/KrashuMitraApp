@@ -307,7 +307,13 @@ export default function MarketplacePage() {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-bold" data-testid="text-marketplace-title">{t("marketplace")}</h2>
         {isAuthenticated && (
-          <Button size="sm" onClick={() => setAddOpen(true)} data-testid="button-add-sale">
+          <Button size="sm" onClick={() => {
+            if (!user?.village || !user?.district) {
+              toast({ title: t("updateAddressFirst"), variant: "destructive" });
+              return;
+            }
+            setAddOpen(true);
+          }} data-testid="button-add-sale">
             <Plus className="w-4 h-4 mr-1" />
             {t("addSale")}
           </Button>
