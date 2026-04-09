@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -84,6 +84,9 @@ export interface IStorage {
   upsertPricePoll(cropId: number, userId: string, vote: string): Promise<PricePoll>;
   getPricePollResults(cropId: number): Promise<{ hold: number; sale: number }>;
   getUserPollVote(cropId: number, userId: string): Promise<PricePoll | undefined>;
+  recordSiteVisit(visitorId: string, ip?: string): Promise<void>;
+  getTotalUniqueVisitors(): Promise<number>;
+  getTodayUniqueVisitors(): Promise<number>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -784,6 +787,27 @@ class DatabaseStorage implements IStorage {
     const [poll] = await db.select().from(pricePolls)
       .where(and(eq(pricePolls.cropId, cropId), eq(pricePolls.userId, userId)));
     return poll;
+  }
+
+  async recordSiteVisit(visitorId: string, ip?: string): Promise<void> {
+    const today = new Date().toISOString().split("T")[0];
+    const existing = await db.execute(sql`
+      SELECT id FROM site_visits WHERE visitor_id = ${visitorId} AND created_at::date = ${today}::date LIMIT 1
+    `);
+    if (existing.rows.length === 0) {
+      await db.insert(siteVisits).values({ visitorId, ip: ip || null });
+    }
+  }
+
+  async getTotalUniqueVisitors(): Promise<number> {
+    const result = await db.execute(sql`SELECT COUNT(DISTINCT visitor_id)::int as count FROM site_visits`);
+    return (result.rows[0] as any)?.count || 0;
+  }
+
+  async getTodayUniqueVisitors(): Promise<number> {
+    const today = new Date().toISOString().split("T")[0];
+    const result = await db.execute(sql`SELECT COUNT(DISTINCT visitor_id)::int as count FROM site_visits WHERE created_at::date = ${today}::date`);
+    return (result.rows[0] as any)?.count || 0;
   }
 }
 

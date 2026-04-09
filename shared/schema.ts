@@ -372,3 +372,14 @@ export const insertPricePollSchema = createInsertSchema(pricePolls).omit({
 
 export type PricePoll = typeof pricePolls.$inferSelect;
 export type InsertPricePoll = z.infer<typeof insertPricePollSchema>;
+
+export const siteVisits = pgTable("site_visits", {
+  id: serial("id").primaryKey(),
+  visitorId: varchar("visitor_id").notNull(),
+  ip: varchar("ip"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  uniqueIndex("site_visits_visitor_date_idx").on(table.visitorId, table.createdAt),
+]);
+
+export type SiteVisit = typeof siteVisits.$inferSelect;

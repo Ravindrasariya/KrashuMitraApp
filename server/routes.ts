@@ -689,6 +689,33 @@ Rules:
     next();
   };
 
+  app.post("/api/track-visit", async (req, res) => {
+    try {
+      const { visitorId } = req.body;
+      if (!visitorId || typeof visitorId !== "string") {
+        return res.status(400).json({ message: "Invalid visitorId" });
+      }
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "";
+      await storage.recordSiteVisit(visitorId, ip);
+      res.json({ ok: true });
+    } catch {
+      res.json({ ok: true });
+    }
+  });
+
+  app.get("/api/admin/stats", isAdmin, async (req: any, res) => {
+    try {
+      const [totalVisitors, todayVisitors, allUsers] = await Promise.all([
+        storage.getTotalUniqueVisitors(),
+        storage.getTodayUniqueVisitors(),
+        storage.getAllUsers(),
+      ]);
+      res.json({ totalVisitors, todayVisitors, totalUsers: allUsers.length });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to get stats" });
+    }
+  });
+
   app.get("/api/admin/users", isAdmin, async (req: any, res) => {
     try {
       const allUsers = await storage.getAllUsers();

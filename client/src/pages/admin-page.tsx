@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Pencil, KeyRound, Check, X, Users, Loader2, Phone, Mail, User as UserIcon, Calendar, Stethoscope, FlaskConical, Leaf, Camera, Archive, ArchiveRestore, MessageSquare, Save, Image, Trash2, ChevronUp, ChevronDown, Plus, Eye, EyeOff, TrendingUp, Upload, FileSpreadsheet } from "lucide-react";
+import { Search, Pencil, KeyRound, Check, X, Users, Loader2, Phone, Mail, User as UserIcon, Calendar, Stethoscope, FlaskConical, Leaf, Camera, Archive, ArchiveRestore, MessageSquare, Save, Image, Trash2, ChevronUp, ChevronDown, Plus, Eye, EyeOff, TrendingUp, Upload, FileSpreadsheet, Globe, UserCheck } from "lucide-react";
 import type { ServiceRequest, Banner, PriceCrop } from "@shared/schema";
 
 interface AdminUser {
@@ -63,6 +63,11 @@ export default function AdminPage() {
 
   const { data: users = [], isLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/admin/users"],
+    enabled: isAuthenticated,
+  });
+
+  const { data: stats } = useQuery<{ totalVisitors: number; todayVisitors: number; totalUsers: number }>({
+    queryKey: ["/api/admin/stats"],
     enabled: isAuthenticated,
   });
 
@@ -477,6 +482,42 @@ export default function AdminPage() {
 
       {activeTab === "users" ? (
         <>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <Card className="overflow-hidden" data-testid="card-total-visitors">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                  <Globe className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg font-bold leading-tight">{stats?.totalVisitors ?? "—"}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("totalVisitors")}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="overflow-hidden" data-testid="card-today-visitors">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                  <Eye className="w-4 h-4 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg font-bold leading-tight">{stats?.todayVisitors ?? "—"}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("todayVisitors")}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="overflow-hidden" data-testid="card-total-users">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shrink-0">
+                  <UserCheck className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg font-bold leading-tight">{stats?.totalUsers ?? "—"}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight truncate">{t("registeredUsers")}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input

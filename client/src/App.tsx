@@ -92,6 +92,19 @@ function AppFooter() {
 }
 
 function AppContent() {
+  useEffect(() => {
+    let vid = localStorage.getItem("krashu-visitor-id");
+    if (!vid) {
+      vid = crypto.randomUUID();
+      localStorage.setItem("krashu-visitor-id", vid);
+    }
+    fetch("/api/track-visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visitorId: vid }),
+    }).catch(() => {});
+  }, []);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <SidebarNav />
