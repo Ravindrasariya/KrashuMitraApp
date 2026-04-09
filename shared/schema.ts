@@ -383,3 +383,46 @@ export const siteVisits = pgTable("site_visits", {
 ]);
 
 export type SiteVisit = typeof siteVisits.$inferSelect;
+
+export const weatherLogs = pgTable("weather_logs", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  latitude: numeric("latitude").notNull(),
+  longitude: numeric("longitude").notNull(),
+  locationLabel: text("location_label"),
+  tempMax: numeric("temp_max"),
+  tempMin: numeric("temp_min"),
+  tempMean: numeric("temp_mean"),
+  apparentTempMax: numeric("apparent_temp_max"),
+  apparentTempMin: numeric("apparent_temp_min"),
+  precipitationSum: numeric("precipitation_sum"),
+  rainSum: numeric("rain_sum"),
+  weatherCode: integer("weather_code"),
+  windSpeedMax: numeric("wind_speed_max"),
+  windGustsMax: numeric("wind_gusts_max"),
+  humidityMean: numeric("humidity_mean"),
+  dewPointMean: numeric("dew_point_mean"),
+  pressureMean: numeric("pressure_mean"),
+  soilTemp0to7: numeric("soil_temp_0_to_7"),
+  soilTemp7to28: numeric("soil_temp_7_to_28"),
+  soilTemp28to100: numeric("soil_temp_28_to_100"),
+  soilMoisture0to7: numeric("soil_moisture_0_to_7"),
+  soilMoisture7to28: numeric("soil_moisture_7_to_28"),
+  soilMoisture28to100: numeric("soil_moisture_28_to_100"),
+  et0Evapotranspiration: numeric("et0_evapotranspiration"),
+  uvIndexMax: numeric("uv_index_max"),
+  sunrise: text("sunrise"),
+  sunset: text("sunset"),
+  daylightDuration: numeric("daylight_duration"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  uniqueIndex("weather_logs_date_lat_lng_idx").on(table.date, table.latitude, table.longitude),
+]);
+
+export const insertWeatherLogSchema = createInsertSchema(weatherLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WeatherLog = typeof weatherLogs.$inferSelect;
+export type InsertWeatherLog = z.infer<typeof insertWeatherLogSchema>;

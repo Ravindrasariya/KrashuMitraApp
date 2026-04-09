@@ -703,6 +703,15 @@ Rules:
     }
   });
 
+  app.post("/api/admin/weather-log-now", isAdmin, async (req: any, res) => {
+    try {
+      const count = await storage.fetchAndLogWeather();
+      res.json({ message: `Weather logged for ${count} locations`, count });
+    } catch (err) {
+      res.status(500).json({ message: "Weather logging failed" });
+    }
+  });
+
   app.get("/api/admin/stats", isAdmin, async (req: any, res) => {
     try {
       const [totalVisitors, todayVisitors, allUsers] = await Promise.all([

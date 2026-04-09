@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -808,6 +808,120 @@ class DatabaseStorage implements IStorage {
     const today = new Date().toISOString().split("T")[0];
     const result = await db.execute(sql`SELECT COUNT(DISTINCT visitor_id)::int as count FROM site_visits WHERE created_at::date = ${today}::date`);
     return (result.rows[0] as any)?.count || 0;
+  }
+
+  async insertWeatherLog(log: InsertWeatherLog): Promise<void> {
+    await db.insert(weatherLogs).values(log).onConflictDoNothing();
+  }
+
+  async getDistinctUserLocations(): Promise<Array<{ latitude: string; longitude: string; label: string }>> {
+    const result = await db.execute(sql`
+      SELECT DISTINCT
+        ROUND(latitude::numeric, 2)::text as latitude,
+        ROUND(longitude::numeric, 2)::text as longitude,
+        COALESCE(district, village, 'Unknown') as label
+      FROM users
+      WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+        AND latitude != '' AND longitude != ''
+    `);
+    return result.rows as any[];
+  }
+
+  async fetchAndLogWeather(): Promise<number> {
+    const userLocations = await this.getDistinctUserLocations();
+    const defaultLocations = [
+      { latitude: "28.61", longitude: "77.21", label: "Delhi" },
+      { latitude: "26.85", longitude: "80.91", label: "Lucknow" },
+      { latitude: "27.18", longitude: "78.02", label: "Agra" },
+      { latitude: "26.45", longitude: "80.33", label: "Kanpur" },
+      { latitude: "25.32", longitude: "82.99", label: "Varanasi" },
+      { latitude: "23.26", longitude: "77.41", label: "Bhopal" },
+      { latitude: "22.72", longitude: "75.86", label: "Indore" },
+      { latitude: "21.15", longitude: "79.09", label: "Nagpur" },
+      { latitude: "19.08", longitude: "72.88", label: "Mumbai" },
+      { latitude: "18.52", longitude: "73.86", label: "Pune" },
+      { latitude: "12.97", longitude: "77.59", label: "Bangalore" },
+      { latitude: "17.39", longitude: "78.49", label: "Hyderabad" },
+      { latitude: "21.17", longitude: "72.83", label: "Surat" },
+      { latitude: "25.61", longitude: "85.14", label: "Patna" },
+      { latitude: "30.73", longitude: "76.78", label: "Chandigarh" },
+      { latitude: "26.92", longitude: "75.79", label: "Jaipur" },
+    ];
+    const seen = new Set(userLocations.map(l => `${l.latitude},${l.longitude}`));
+    const locations = [...userLocations];
+    for (const dl of defaultLocations) {
+      if (!seen.has(`${dl.latitude},${dl.longitude}`)) {
+        locations.push(dl);
+        seen.add(`${dl.latitude},${dl.longitude}`);
+      }
+    }
+    if (locations.length === 0) return 0;
+
+    let logged = 0;
+    for (const loc of locations) {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}`
+          + `&daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,apparent_temperature_max,apparent_temperature_min`
+          + `,precipitation_sum,rain_sum,weather_code,wind_speed_10m_max,wind_gusts_10m_max`
+          + `,et0_fao_evapotranspiration,uv_index_max,sunrise,sunset,daylight_duration`
+          + `&hourly=relative_humidity_2m,dew_point_2m,pressure_msl,soil_temperature_0_to_7cm,soil_temperature_7_to_28cm`
+          + `,soil_temperature_28_to_100cm,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm,soil_moisture_28_to_100cm`
+          + `&timezone=Asia%2FKolkata&past_days=1&forecast_days=1`;
+
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const json = await res.json();
+
+        const yesterdayIdx = 0;
+        const d = json.daily;
+        const dateStr = d.time[yesterdayIdx];
+
+        const hourlyStart = yesterdayIdx * 24;
+        const hourlyEnd = hourlyStart + 24;
+        const h = json.hourly;
+
+        const avg = (arr: number[], start: number, end: number) => {
+          const slice = arr.slice(start, end).filter((v: any) => v != null);
+          if (slice.length === 0) return null;
+          return Math.round((slice.reduce((a: number, b: number) => a + b, 0) / slice.length) * 100) / 100;
+        };
+
+        await this.insertWeatherLog({
+          date: dateStr,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          locationLabel: loc.label,
+          tempMax: d.temperature_2m_max?.[yesterdayIdx]?.toString() ?? null,
+          tempMin: d.temperature_2m_min?.[yesterdayIdx]?.toString() ?? null,
+          tempMean: d.temperature_2m_mean?.[yesterdayIdx]?.toString() ?? null,
+          apparentTempMax: d.apparent_temperature_max?.[yesterdayIdx]?.toString() ?? null,
+          apparentTempMin: d.apparent_temperature_min?.[yesterdayIdx]?.toString() ?? null,
+          precipitationSum: d.precipitation_sum?.[yesterdayIdx]?.toString() ?? null,
+          rainSum: d.rain_sum?.[yesterdayIdx]?.toString() ?? null,
+          weatherCode: d.weather_code?.[yesterdayIdx] ?? null,
+          windSpeedMax: d.wind_speed_10m_max?.[yesterdayIdx]?.toString() ?? null,
+          windGustsMax: d.wind_gusts_10m_max?.[yesterdayIdx]?.toString() ?? null,
+          humidityMean: avg(h.relative_humidity_2m, hourlyStart, hourlyEnd)?.toString() ?? null,
+          dewPointMean: avg(h.dew_point_2m, hourlyStart, hourlyEnd)?.toString() ?? null,
+          pressureMean: avg(h.pressure_msl, hourlyStart, hourlyEnd)?.toString() ?? null,
+          soilTemp0to7: avg(h.soil_temperature_0_to_7cm, hourlyStart, hourlyEnd)?.toString() ?? null,
+          soilTemp7to28: avg(h.soil_temperature_7_to_28cm, hourlyStart, hourlyEnd)?.toString() ?? null,
+          soilTemp28to100: avg(h.soil_temperature_28_to_100cm, hourlyStart, hourlyEnd)?.toString() ?? null,
+          soilMoisture0to7: avg(h.soil_moisture_0_to_7cm, hourlyStart, hourlyEnd)?.toString() ?? null,
+          soilMoisture7to28: avg(h.soil_moisture_7_to_28cm, hourlyStart, hourlyEnd)?.toString() ?? null,
+          soilMoisture28to100: avg(h.soil_moisture_28_to_100cm, hourlyStart, hourlyEnd)?.toString() ?? null,
+          et0Evapotranspiration: d.et0_fao_evapotranspiration?.[yesterdayIdx]?.toString() ?? null,
+          uvIndexMax: d.uv_index_max?.[yesterdayIdx]?.toString() ?? null,
+          sunrise: d.sunrise?.[yesterdayIdx] ?? null,
+          sunset: d.sunset?.[yesterdayIdx] ?? null,
+          daylightDuration: d.daylight_duration?.[yesterdayIdx]?.toString() ?? null,
+        });
+        logged++;
+      } catch (err) {
+        console.error(`Weather log failed for ${loc.label} (${loc.latitude},${loc.longitude}):`, err);
+      }
+    }
+    return logged;
   }
 }
 

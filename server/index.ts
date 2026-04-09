@@ -113,6 +113,17 @@ app.use((req, res, next) => {
         }
       });
       log("Lenden interest accrual cron scheduled (midnight IST)");
+
+      cron.schedule('30 19 * * *', async () => {
+        try {
+          log("Running daily weather logging (1:00 AM IST)...", "cron");
+          const count = await storage.fetchAndLogWeather();
+          log(`Weather logged for ${count} locations`, "cron");
+        } catch (error) {
+          console.error("Cron weather log error:", error);
+        }
+      });
+      log("Daily weather logging cron scheduled (1:00 AM IST)");
     },
   );
 })();
