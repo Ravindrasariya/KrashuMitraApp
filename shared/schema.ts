@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, serial, integer, text, varchar, timestamp, boolean, date, uniqueIndex, numeric } from "drizzle-orm/pg-core";
+import { pgTable, pgSequence, serial, integer, text, varchar, timestamp, boolean, date, uniqueIndex, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -7,6 +7,8 @@ export * from "./models/auth";
 export * from "./models/chat";
 
 import { users } from "./models/auth";
+
+export const globalUniqueIdSeq = pgSequence("global_unique_id_seq");
 
 export const cropCards = pgTable("crop_cards", {
   id: serial("id").primaryKey(),
