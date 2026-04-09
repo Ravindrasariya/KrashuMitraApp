@@ -63,7 +63,7 @@ interface KhataAddItemDraft {
 
 interface ServiceRequestDraft {
   type: "service_request_draft";
-  serviceType: "soil_test" | "potato_seed_test" | "crop_doctor";
+  serviceType: "soil_test" | "potato_perishability_test" | "crop_doctor";
 }
 
 interface MarketplaceListingDraft {
@@ -551,7 +551,7 @@ export function Chatbot() {
         try {
           const SERVICE_LABELS: Record<string, Record<string, string>> = {
             soil_test: { hi: "मिट्टी जाँच", en: "Soil Test" },
-            potato_seed_test: { hi: "आलू बीज जाँच", en: "Potato Seed Test" },
+            potato_perishability_test: { hi: "आलू फसल नश्वरता परीक्षण", en: "Potato Harvest Perishability Test" },
             crop_doctor: { hi: "फसल डॉक्टर AI", en: "Crop Doctor AI" },
           };
           const serviceLabel = SERVICE_LABELS[draft.serviceType]?.[language] || draft.serviceType;
@@ -1031,7 +1031,7 @@ export function Chatbot() {
               <p className="text-sm font-medium">
                 <span className="text-teal-700 dark:text-teal-400">
                   {serviceRequestDraft.serviceType === "soil_test" && t("soilTest")}
-                  {serviceRequestDraft.serviceType === "potato_seed_test" && t("potatoSeedTest")}
+                  {serviceRequestDraft.serviceType === "potato_perishability_test" && t("potatoPerishTest")}
                   {serviceRequestDraft.serviceType === "crop_doctor" && t("cropDoctorAI")}
                 </span>
               </p>

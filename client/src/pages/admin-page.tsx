@@ -29,7 +29,7 @@ interface AdminUser {
 
 const SERVICE_TYPE_CONFIG: Record<string, { icon: typeof FlaskConical; color: string; label: string }> = {
   soil_test: { icon: FlaskConical, color: "text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400", label: "soilTest" },
-  potato_seed_test: { icon: Leaf, color: "text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400", label: "potatoSeedTest" },
+  potato_perishability_test: { icon: Leaf, color: "text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400", label: "potatoPerishTest" },
   crop_doctor: { icon: Camera, color: "text-purple-600 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400", label: "cropDoctorAI" },
 };
 
@@ -645,7 +645,7 @@ export default function AdminPage() {
               <SelectContent>
                 <SelectItem value="all">{t("allTypes")}</SelectItem>
                 <SelectItem value="soil_test">{t("soilTest")}</SelectItem>
-                <SelectItem value="potato_seed_test">{t("potatoSeedTest")}</SelectItem>
+                <SelectItem value="potato_perishability_test">{t("potatoPerishTest")}</SelectItem>
                 <SelectItem value="crop_doctor">{t("cropDoctorAI")}</SelectItem>
               </SelectContent>
             </Select>

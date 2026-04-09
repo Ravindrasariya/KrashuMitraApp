@@ -751,7 +751,7 @@ Rules:
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
       const { serviceType, imageData, imageMimeType } = req.body;
-      if (!serviceType || !["soil_test", "potato_seed_test", "crop_doctor"].includes(serviceType)) {
+      if (!serviceType || !["soil_test", "potato_perishability_test", "crop_doctor"].includes(serviceType)) {
         return res.status(400).json({ message: "Invalid service type" });
       }
 
@@ -1526,7 +1526,7 @@ Respond in this structure:
         }
         if (serviceRequests.length > 0) {
           const recentReqs = serviceRequests.slice(0, 10);
-          const typeLabelsHi: Record<string, string> = { soil_test: "मिट्टी जाँच", potato_seed_test: "आलू बीज जाँच", crop_doctor: "फसल डॉक्टर" };
+          const typeLabelsHi: Record<string, string> = { soil_test: "मिट्टी जाँच", potato_perishability_test: "आलू फसल नश्वरता परीक्षण", crop_doctor: "फसल डॉक्टर" };
           farmerContext += `\n\nकिसान की डिजिटल क्लिनिक रिक्वेस्ट (${serviceRequests.length}):\n`;
           for (const sr of recentReqs) {
             farmerContext += `\n• ${typeLabelsHi[sr.serviceType] || sr.serviceType} | स्थिति: ${sr.status === "open" ? "खुला" : "बंद"} | तारीख: ${sr.createdAt ? new Date(sr.createdAt).toISOString().split("T")[0] : ""}`;
@@ -1585,7 +1585,7 @@ Respond in this structure:
         }
         if (serviceRequests.length > 0) {
           const recentReqs = serviceRequests.slice(0, 10);
-          const typeLabelsEn: Record<string, string> = { soil_test: "Soil Test", potato_seed_test: "Potato Seed Test", crop_doctor: "Crop Doctor" };
+          const typeLabelsEn: Record<string, string> = { soil_test: "Soil Test", potato_perishability_test: "Potato Harvest Perishability Test", crop_doctor: "Crop Doctor" };
           farmerContext += `\n\nFarmer's Digital Clinic requests (${serviceRequests.length}):\n`;
           for (const sr of recentReqs) {
             farmerContext += `\n• ${typeLabelsEn[sr.serviceType] || sr.serviceType} | Status: ${sr.status} | Date: ${sr.createdAt ? new Date(sr.createdAt).toISOString().split("T")[0] : ""}`;
@@ -1762,7 +1762,7 @@ ${farmerContext}
 तुम किसानों को 3 क्लिनिक सेवाएँ बुक करने में भी मदद करती हो:
 
 1. **मिट्टी जाँच (soil_test)**: मिट्टी की गुणवत्ता, pH, पोषक तत्वों की जाँच। हमारी टीम नमूना लेकर जाँच करती है।
-2. **आलू बीज जाँच (potato_seed_test)**: आलू बीज की शुद्धता और गुणवत्ता की जाँच। प्रमाणित बीज से बेहतर उपज।
+2. **आलू फसल नश्वरता परीक्षण (potato_perishability_test)**: अपने आलू लॉट की भंडारण और शेल्फ लाइफ जानने के लिए। आलू कितने दिन तक सुरक्षित रहेगा।
 3. **फसल डॉक्टर AI (crop_doctor)**: फसल/पौधे की फोटो से AI रोग पहचान और उपचार सुझाव।
 
 जब किसान इनमें से कोई सेवा बुक करना चाहे:
@@ -1770,7 +1770,7 @@ ${farmerContext}
 - किसान की पुष्टि माँगो
 - फिर JSON ब्लॉक दो:
 \`\`\`json
-{"type":"service_request_draft","serviceType":"soil_test|potato_seed_test|crop_doctor"}
+{"type":"service_request_draft","serviceType":"soil_test|potato_perishability_test|crop_doctor"}
 \`\`\`
 
 **फसल डॉक्टर के लिए विशेष नियम:**
@@ -1940,7 +1940,7 @@ You have access to recent market prices for crops (see "Price Trends" section in
 You also help farmers book 3 clinic services:
 
 1. **Soil Test (soil_test)**: Soil quality, pH, nutrient analysis. Our team collects samples and tests.
-2. **Potato Seed Test (potato_seed_test)**: Seed purity and quality testing. Certified seeds for better yield.
+2. **Potato Harvest Perishability Test (potato_perishability_test)**: To know the shelf life and storage life of your potato lots. How long your potatoes will stay safe.
 3. **Crop Doctor AI (crop_doctor)**: AI-powered crop disease identification and treatment advice from photos.
 
 When a farmer wants to book any of these:
@@ -1948,7 +1948,7 @@ When a farmer wants to book any of these:
 - Ask for confirmation
 - Then output the JSON block:
 \`\`\`json
-{"type":"service_request_draft","serviceType":"soil_test|potato_seed_test|crop_doctor"}
+{"type":"service_request_draft","serviceType":"soil_test|potato_perishability_test|crop_doctor"}
 \`\`\`
 
 **Crop Doctor special rules:**

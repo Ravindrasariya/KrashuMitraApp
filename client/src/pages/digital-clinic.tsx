@@ -155,7 +155,7 @@ export default function DigitalClinicPage() {
 
   const serviceLabel = (type: string) => {
     if (type === "soil_test") return t("soilTest");
-    if (type === "potato_seed_test") return t("potatoSeedTest");
+    if (type === "potato_perishability_test") return t("potatoPerishTest");
     if (type === "crop_doctor") return t("cropDoctorAI");
     return type;
   };
@@ -199,11 +199,11 @@ export default function DigitalClinicPage() {
               <Leaf className="w-5 h-5 text-green-600 dark:text-green-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-base mb-1">{t("potatoSeedTest")}</h3>
-              <p className="text-sm text-muted-foreground mb-3">{t("potatoSeedDesc")}</p>
+              <h3 className="font-semibold text-base mb-1">{t("potatoPerishTest")}</h3>
+              <p className="text-sm text-muted-foreground mb-3">{t("potatoPerishDesc")}</p>
               <Button
                 data-testid="button-book-potato-seed-test"
-                onClick={() => setBookingType("potato_seed_test")}
+                onClick={() => setBookingType("potato_perishability_test")}
               >
                 {t("bookNow")}
               </Button>
