@@ -583,15 +583,15 @@ export function Chatbot() {
             setMessages(prev => [...prev, {
               role: "assistant",
               content: language === "hi"
-                ? `**${serviceLabel} रिपोर्ट:**\n\n${result.aiDiagnosis}\n\n🔎 क्या आप मिट्टी जाँच भी करवाना चाहेंगे?`
-                : `**${serviceLabel} Report:**\n\n${result.aiDiagnosis}\n\n🔎 Would you like to book a soil test as well?`
+                ? `**${serviceLabel} रिपोर्ट:**\n\n${result.aiDiagnosis}`
+                : `**${serviceLabel} Report:**\n\n${result.aiDiagnosis}`
             }]);
           } else {
             setMessages(prev => [...prev, {
               role: "assistant",
               content: language === "hi"
-                ? `${serviceLabel} की बुकिंग सफलतापूर्वक हो गई! हमारी टीम जल्द आपसे संपर्क करेगी।\n\n🔎 क्या आप कोई और सेवा बुक करना चाहेंगे?`
-                : `${serviceLabel} booked successfully! Our team will contact you soon.\n\n🔎 Would you like to book another service?`
+                ? `${serviceLabel} की बुकिंग सफलतापूर्वक हो गई! हमारी टीम जल्द आपसे संपर्क करेगी।`
+                : `${serviceLabel} booked successfully! Our team will contact you soon.`
             }]);
           }
           toast({ title: language === "hi" ? "बुकिंग सफल!" : "Booking successful!" });
@@ -788,33 +788,24 @@ export function Chatbot() {
                   )}
                   {msg.content && <div className="whitespace-pre-wrap break-words">{msg.content}</div>}
                 </div>
-              ) : (() => {
-                const lines = msg.content.split("\n");
-                const suggestionIdx = lines.findIndex(l => l.trimStart().startsWith("🔎"));
-                const mainLines = suggestionIdx >= 0 ? lines.slice(0, suggestionIdx) : lines;
-                const suggestionLines = suggestionIdx >= 0 ? lines.slice(suggestionIdx) : [];
-                const mainText = mainLines.join("\n").trimEnd();
-                const suggestText = suggestionLines.join("\n").trimStart();
-                return (
-                  <>
-                    {mainText && <div className="break-words">{renderFormattedText(mainText)}</div>}
-                    {msg.images && msg.images.length > 0 && (
-                      <div className="mt-2 space-y-2" data-testid={`chat-images-${i}`}>
-                        {msg.images.map((imgSrc, imgIdx) => (
-                          <img
-                            key={imgIdx}
-                            src={imgSrc}
-                            alt={language === "hi" ? "सहायक चित्र" : "Helpful illustration"}
-                            className="rounded-lg max-w-full w-full object-cover border border-border/50"
-                            data-testid={`chat-image-${i}-${imgIdx}`}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {suggestText && <div className="break-words mt-2 pt-2 border-t border-border/30">{renderFormattedText(suggestText)}</div>}
-                  </>
-                );
-              })()}
+              ) : (
+                <>
+                  {msg.content && <div className="break-words">{renderFormattedText(msg.content)}</div>}
+                  {msg.images && msg.images.length > 0 && (
+                    <div className="mt-2 space-y-2" data-testid={`chat-images-${i}`}>
+                      {msg.images.map((imgSrc, imgIdx) => (
+                        <img
+                          key={imgIdx}
+                          src={imgSrc}
+                          alt={language === "hi" ? "सहायक चित्र" : "Helpful illustration"}
+                          className="rounded-lg max-w-full w-full object-cover border border-border/50"
+                          data-testid={`chat-image-${i}-${imgIdx}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
               {msg.role === "assistant" && msg.content && (
                 <button
                   onClick={() => speakText(msg.content, language, () => setIsSpeaking(true), () => setIsSpeaking(false))}
