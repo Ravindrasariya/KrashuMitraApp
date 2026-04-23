@@ -6,6 +6,27 @@ import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
 import { insertCropCardSchema, insertCropEventSchema, insertKhataRegisterSchema, insertKhataItemSchema, insertPanatPaymentSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
+
+const onionResultSchema = z.object({
+  lot_analysis: z.object({
+    overall_score: z.number().min(1).max(5),
+    benchmark_used: z.string().optional(),
+    parameters: z.object({
+      neck_rating: z.number().int().min(1).max(5),
+      shoulder_geometry: z.enum(["Flat", "Convex", "Tapered"]),
+      skin_quality: z.number().int().min(1).max(5),
+      uniformity: z.number().int().min(1).max(5),
+    }),
+    valuation: z.object({
+      expected_rate: z.string(),
+      price_delta: z.string(),
+      commercial_verdict: z.enum(["Store Long-term", "Sell Immediate", "Reject"]),
+      ltv_recommendation: z.string().optional().default(""),
+      summary: z.string().optional().default(""),
+    }),
+  }),
+});
 
 const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
@@ -872,8 +893,21 @@ If the image does not appear to be onions, return:
           let raw = (result.text || "").trim();
           raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
           try {
-            JSON.parse(raw);
-            aiDiagnosis = raw;
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === "object" && parsed.error === "image_not_onion") {
+              aiDiagnosis = JSON.stringify(parsed);
+            } else {
+              const validated = onionResultSchema.safeParse(parsed);
+              if (validated.success) {
+                aiDiagnosis = JSON.stringify(validated.data);
+              } else {
+                aiDiagnosis = JSON.stringify({
+                  error: "invalid_shape",
+                  message: "AI returned an unexpected response. Please try again.",
+                  raw,
+                });
+              }
+            }
           } catch {
             aiDiagnosis = JSON.stringify({ error: "parse_failed", raw });
           }

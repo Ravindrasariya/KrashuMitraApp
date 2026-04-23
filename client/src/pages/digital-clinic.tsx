@@ -295,7 +295,7 @@ export default function DigitalClinicPage() {
                       }
                       onionMutation.mutate();
                     }}
-                    disabled={onionMutation.isPending || !onionImageBase64 || !onionBenchmark}
+                    disabled={onionMutation.isPending || !onionImageBase64 || !(Number(onionBenchmark) > 0)}
                     data-testid="button-analyze-onion"
                   >
                     {onionMutation.isPending ? (
