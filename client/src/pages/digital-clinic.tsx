@@ -623,7 +623,7 @@ function OnionResultView({ raw }: { raw: string }) {
     return <p className="text-sm whitespace-pre-wrap" data-testid="text-onion-raw">{raw}</p>;
   }
   if (parsed.error) {
-    const msg = parsed.error === "image_not_onion" ? t("notOnionImage") : (parsed.message || t("onionAnalysisFailed"));
+    const msg = parsed.error === "image_not_onion" ? t("notOnionImage") : t("onionAnalysisFailed");
     return <p className="text-sm text-red-600 dark:text-red-400" data-testid="text-onion-error">{msg}</p>;
   }
   const la = parsed.lot_analysis;
