@@ -786,13 +786,102 @@ Rules:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { serviceType, imageData, imageMimeType } = req.body;
-      if (!serviceType || !["soil_test", "potato_perishability_test", "crop_doctor"].includes(serviceType)) {
+      const { serviceType, imageData, imageMimeType, benchmarkRate } = req.body;
+      if (!serviceType || !["soil_test", "potato_perishability_test", "crop_doctor", "onion_price_predictor"].includes(serviceType)) {
         return res.status(400).json({ message: "Invalid service type" });
       }
 
       let aiDiagnosis: string | null = null;
-      if (serviceType === "crop_doctor") {
+      let inputData: string | null = null;
+
+      if (serviceType === "onion_price_predictor") {
+        const benchmark = Number(benchmarkRate);
+        if (!imageData || !imageMimeType) {
+          return res.status(400).json({ message: "Image required for Onion Price Predictor" });
+        }
+        if (!benchmark || benchmark <= 0 || !Number.isFinite(benchmark)) {
+          return res.status(400).json({ message: "Valid benchmark rate required" });
+        }
+
+        inputData = JSON.stringify({ benchmarkRate: benchmark });
+        const base64Data = imageData.replace(/^data:[^;]+;base64,/, "");
+
+        const kqvPrompt = `# Role: KrashuVed Quality Vision (KQV) Agent
+You are an expert Agri-Commodity Underwriter for KrashuVed. You analyze onion lots to provide a 1–5 Quality Score and calculate "Expected Mandi Rates" based on a user-provided benchmark for top-tier (10–15%) lots.
+
+# Pricing Logic (The Anchor Method)
+The User has provided a Premium_Benchmark_Rate of INR ${benchmark} (price per quintal for top 10-15% quality). Use the following multipliers to calculate the Expected Rate for the lot:
+- Score 5 (Elite Storage): 100% to 110% of Benchmark. (Reserved for exceptional 'AAA' lots that exceed the top 10-15% standard).
+- Score 4 (Premium Commercial): 85% to 95% of Benchmark. (Standard high-quality discount).
+- Score 3 (Standard/Domestic): 70% to 80% of Benchmark. (Medium-grade valuation).
+- Score 2 (High Risk/Puffy): 50% to 65% of Benchmark. (Significant penalty for structural risk).
+- Score 1 (Distress/Reject): 30% to 45% of Benchmark. (Value limited to processing/liquidation).
+
+# Core Parameters for Analysis
+1. Neck Integrity (Dormancy): Target = Paper-thin/Dry. Risk = Fleshy/Open.
+2. Shoulder Geometry (Density): Target = Sharp 90° Flat. Risk = Convex/Bulging (Puffy).
+3. Parda (Skin) & Luster: Target = 2-3 layers + Waxy Shine. Risk = Peeling (Kattar).
+4. Shape & Roundness: Target = Globe. Risk = Elongated/Pear-shaped.
+5. Uniformity: Target = Consistent sizing (e.g., 45-60mm). Risk = Mixed field-run.
+
+# Scoring Matrix (1 to 5)
+- Score 5: Elite quality, flat shoulders, dry necks, triple skin, high uniformity.
+- Score 4: High commercial value, mostly round, stable necks.
+- Score 3: Average Mandi stock, standard domestic grade.
+- Score 2: Structurally weak, convex/puffy, fleshy necks. (VERDICT: SELL NOW)
+- Score 1: Rot, sprouting, or severe damage. (VERDICT: REJECT)
+
+# Output Format (Mandatory JSON — return ONLY the JSON object, no markdown, no commentary)
+Use the midpoint of the multiplier band for expected_rate. Compute price_delta as a signed percentage like "-15%" or "+5%".
+
+{
+  "lot_analysis": {
+    "overall_score": <float 1-5>,
+    "benchmark_used": "INR ${benchmark}",
+    "parameters": {
+      "neck_rating": <integer 1-5>,
+      "shoulder_geometry": "Flat" | "Convex" | "Tapered",
+      "skin_quality": <integer 1-5>,
+      "uniformity": <integer 1-5>
+    },
+    "valuation": {
+      "expected_rate": "INR <number>",
+      "price_delta": "<signed percentage vs benchmark>",
+      "commercial_verdict": "Store Long-term" | "Sell Immediate" | "Reject",
+      "ltv_recommendation": "<percentage>",
+      "summary": "<one short sentence reason for the verdict>"
+    }
+  }
+}
+
+If the image does not appear to be onions, return:
+{ "error": "image_not_onion", "message": "The uploaded image does not appear to be an onion lot. Please upload a clear photo of onions." }`;
+
+        try {
+          const result = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: [{
+              role: "user",
+              parts: [
+                { text: kqvPrompt },
+                { inlineData: { mimeType: imageMimeType, data: base64Data } },
+              ],
+            }],
+            config: { maxOutputTokens: 2048, responseMimeType: "application/json" },
+          });
+          let raw = (result.text || "").trim();
+          raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+          try {
+            JSON.parse(raw);
+            aiDiagnosis = raw;
+          } catch {
+            aiDiagnosis = JSON.stringify({ error: "parse_failed", raw });
+          }
+        } catch (aiErr) {
+          console.error("Gemini onion predictor error:", aiErr);
+          aiDiagnosis = JSON.stringify({ error: "ai_failed", message: "AI analysis failed. Please try again." });
+        }
+      } else if (serviceType === "crop_doctor") {
         if (!imageData || !imageMimeType) {
           return res.status(400).json({ message: "Image required for Crop Doctor" });
         }

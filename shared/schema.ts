@@ -198,6 +198,7 @@ export const serviceRequests = pgTable("service_requests", {
   imageData: text("image_data"),
   imageMimeType: text("image_mime_type"),
   aiDiagnosis: text("ai_diagnosis"),
+  inputData: text("input_data"),
   adminRemarks: text("admin_remarks"),
   isArchived: boolean("is_archived").notNull().default(false),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
