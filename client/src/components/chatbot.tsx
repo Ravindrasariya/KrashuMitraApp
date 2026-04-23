@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2, VolumeX, Square, ImagePlus } from "lucide-react";
+import { MessageCircle, Send, Mic, MicOff, X, Check, Sprout, Loader2, Pencil, Volume2, VolumeX, Square, ImagePlus, Camera } from "lucide-react";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -241,6 +241,7 @@ export function Chatbot() {
   const [isUploading, setIsUploading] = useState(false);
   const [isApprovingService, setIsApprovingService] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -334,6 +335,7 @@ export function Chatbot() {
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (galleryInputRef.current) galleryInputRef.current.value = "";
     }
   }, [language, toast]);
 
@@ -1151,6 +1153,14 @@ export function Chatbot() {
           className="hidden"
           data-testid="input-file-attachment"
         />
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageSelect}
+          className="hidden"
+          data-testid="input-gallery-attachment"
+        />
         <div className="flex items-end gap-2 max-w-lg mx-auto">
           <Button
             size="icon"
@@ -1158,6 +1168,17 @@ export function Chatbot() {
             onClick={() => fileInputRef.current?.click()}
             disabled={isStreaming || isUploading}
             data-testid="button-attach-image"
+            title={language === "hi" ? "फोटो लें" : "Take photo"}
+          >
+            <Camera className="w-4 h-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => galleryInputRef.current?.click()}
+            disabled={isStreaming || isUploading}
+            data-testid="button-attach-gallery"
+            title={language === "hi" ? "गैलरी से चुनें" : "Choose from gallery"}
           >
             <ImagePlus className="w-4 h-4" />
           </Button>
