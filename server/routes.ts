@@ -962,15 +962,17 @@ Respond in this structure:
         }
       }
 
+      const savesImage = serviceType === "crop_doctor" || serviceType === "onion_price_predictor";
       const request = await storage.createServiceRequest({
         userId,
         serviceType,
         farmerName: user.firstName || null,
         farmerPhone: user.phoneNumber || null,
         farmerCode: user.farmerCode || null,
-        imageData: serviceType === "crop_doctor" ? imageData : null,
-        imageMimeType: serviceType === "crop_doctor" ? imageMimeType : null,
+        imageData: savesImage ? imageData : null,
+        imageMimeType: savesImage ? imageMimeType : null,
         aiDiagnosis,
+        inputData,
       });
 
       res.status(201).json(request);
