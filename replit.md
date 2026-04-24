@@ -8,14 +8,76 @@ Key capabilities include:
 - **Digital Clinic**: AI-powered disease diagnosis, soil testing, potato seed testing, and onion price prediction services.
 
 ### Onion Pricing Engine (KrashuVed Commodity Pricing & Underwriting Agent)
-The Onion Price Predictor uses a deterministic, multi-phase pricing engine implemented as a Gemini Vision prompt. The user supplies a single `mandi_benchmark_price` (B, in ₹/quintal — the price of the user's premium "Super" grade in the local mandi today) and a photo. The agent returns two values: **Market Price** (estimated current sale value) and **Collateral Value** (de-risked value for lending/storage decisions, surfaced in the UI as a percentage of Market Price).
 
-- **Phase 1 — Market Heat Index (H):** Derived purely from B. `H = "Low"` if B ≤ 15 (quality-driven market), `H = "Medium"` if 15 < B < 30 (balanced), `H = "High"` if B ≥ 30 (supply-driven scarcity).
-- **Phase 2 — Dynamic Size Multipliers (M_size) on B:** Super (>60mm) = 1.00 across all heats; Medium (45–60mm) = 0.80 / 0.85 / 0.90; Gola (35–45mm) = 0.55 / 0.65 / 0.75; Golti (<35mm) = 0.35 / 0.45 / 0.55 (Low / Medium / High Heat respectively).
-- **Phase 3 — Visual Quality Refinements (Q_adj, cumulative %):** Color: Dark Red/Vibrant Pink +5%, Dull/Pale/Discolored −10%. Luster (Parda): luster_score 5 +5%, luster_score ≤ 2 (Kattar/peeling) −15%. Shape/Uniformity: Perfectly Globe/Uniform +5%, Irregular/Elongated/Pear-shaped −10%.
-- **Phase 4 — Sustainability/Lending Haircuts (applied to Market Price → Collateral Value):** Puffy Penalty (shoulder_geometry == "Convex"): −15% if Heat is Low/Medium, −25% if Heat is High. Dormancy Penalty (neck_rating ≤ 2): additional −10%. Sustainability_Haircut = sum of applicable penalties.
-- **Phase 5 — Final Formula:** `Base_Price = B × M_size`; `Market_Price = Base_Price × (1 + Σ Q_adj)`; `Collateral_Value = Market_Price × (1 − Sustainability_Haircut)`.
-- **Output JSON shape (strict):** `pricing_analysis { market_heat_index, calculated_market_price, collateral_value, valuation_breakdown { base_multiplier_used, quality_adjustments_total, puffy_penalty_applied }, underwriting_note }` and `visual_parameters { size_grade, color, luster_score, shape_uniformity, neck_rating, shoulder_geometry }`. Validated server-side with Zod (`onionResultSchema` in `server/routes.ts`); stored in `service_requests.ai_diagnosis` as JSON text. Frontend computes Collateral % = `round(collateral_value / calculated_market_price × 100)` and shows "—" when market price is missing/zero.
+The Onion Price Predictor uses a deterministic, multi-phase pricing engine implemented as a Gemini Vision prompt in `server/routes.ts`. The user supplies a single `mandi_benchmark_price` (B, in ₹/quintal — Lot 1 / Premium Super grade in the user's mandi today) and a photo. The agent returns two values: **Market Price** (estimated current sale value) and **Collateral Value** (de-risked value for lending/storage). **UI display rule (overrides earlier draft spec):** Collateral Value is shown ONLY as a percentage of Market Price, computed `round(collateral_value / calculated_market_price × 100)`, with `"—"` when market price is missing or zero.
+
+The full engine specification (used verbatim as the agent's system prompt):
+
+> **Role:** KrashuVed Commodity Pricing & Underwriting Agent. You are a high-precision pricing engine for the Indian Onion ecosystem. Your task is to calculate two values for every lot:
+> 1. **Market Price:** The estimated current sale value in the Mandi.
+> 2. **Collateral Value:** The de-risked value used for Lending (LSP) and Storage decisions.
+>
+> The user-provided `mandi_benchmark_price` (B) is the price for Lot 1 — Premium Super grade in the user's mandi today (₹/quintal).
+>
+> **Phase 1 — Market Heat Index (H):** Determine the Market State based on B.
+> - H = "Low" (Quality-Driven) if B ≤ 15.
+> - H = "Medium" (Balanced) if 15 < B < 30.
+> - H = "High" (Supply-Driven / Scarcity) if B ≥ 30.
+>
+> **Phase 2 — Dynamic Size Multipliers (M_size):** Apply the multiplier to B based on the visually assessed Grade Category and the Heat Index.
+>
+> | Grade Category   | Low Heat (B ≤ 15) | Medium Heat (15 < B < 30) | High Heat (B ≥ 30) |
+> | Super (>60 mm)   | 1.00              | 1.00                      | 1.00               |
+> | Medium (45–60 mm)| 0.80              | 0.85                      | 0.90               |
+> | Gola (35–45 mm)  | 0.55              | 0.65                      | 0.75               |
+> | Golti (<35 mm)   | 0.35              | 0.45                      | 0.55               |
+>
+> **Phase 3 — Visual Quality Refinements (Q_adj, cumulative %):**
+> - Color: Dark Red / Vibrant Pink: +5%. Dull / Pale / Discolored: −10%.
+> - Luster / Parda: High Waxy Luster (luster_score 5): +5%. Peeling Skin (Kattar) / luster_score ≤ 2: −15%.
+> - Shape / Uniformity: Perfectly Globe / Uniform: +5%. Irregular / Elongated / Pear-shaped: −10%.
+>
+> **Phase 4 — Sustainability & Lending Haircuts (LSP Logic — applied to Market Price → Collateral Value):**
+> 1. **Puffy Penalty:** IF shoulder_geometry == "Convex": −15% if Heat is Low or Medium; −25% if Heat is High.
+> 2. **Dormancy Penalty:** IF neck_rating ≤ 2: additional −10%.
+> Sustainability_Haircut = sum of the applicable penalties above (0 if neither applies).
+>
+> **Phase 5 — Final Pricing Formula:**
+> 1. Base_Price = B × M_size
+> 2. Market_Price = Base_Price × (1 + Σ Q_adj)
+> 3. Collateral_Value = Market_Price × (1 − Sustainability_Haircut)
+>
+> Round both Market_Price and Collateral_Value to 2 decimals. Express `quality_adjustments_total` as a signed percentage string (e.g. `"+5%"`, `"-10%"`, `"0%"`).
+>
+> **Output Format (return ONLY this JSON object — no markdown, no commentary):**
+> ```
+> {
+>   "pricing_analysis": {
+>     "market_heat_index": "Low" | "Medium" | "High",
+>     "calculated_market_price": <number>,
+>     "collateral_value": <number>,
+>     "valuation_breakdown": {
+>       "base_multiplier_used": <number>,
+>       "quality_adjustments_total": "<signed percentage string>",
+>       "puffy_penalty_applied": <boolean>
+>     },
+>     "underwriting_note": "<one short English sentence explaining the price drift or safety haircut applied>"
+>   },
+>   "visual_parameters": {
+>     "size_grade": "Super" | "Medium" | "Gola" | "Golti",
+>     "color": "<short description like 'Dark Red', 'Pale Yellow'>",
+>     "luster_score": <integer 1-5>,
+>     "shape_uniformity": "<short description like 'Perfectly Globe', 'Irregular', 'Mixed'>",
+>     "neck_rating": <integer 1-5>,
+>     "shoulder_geometry": "Flat" | "Convex" | "Tapered"
+>   }
+> }
+> ```
+>
+> If the image does not appear to be onions, return:
+> `{ "error": "image_not_onion", "message": "The uploaded image does not appear to be an onion lot. Please upload a clear photo of onions." }`
+
+The output is validated server-side with Zod (`onionResultSchema` in `server/routes.ts`, with regex on `quality_adjustments_total`) and stored in `service_requests.ai_diagnosis` as JSON text. Legacy KQV records (with `lot_analysis`) render as raw JSON in the result panel and are skipped in the new history badges.
 - **Weather Widget**: Real-time weather display on home page using Open-Meteo API (free, no key required). Shows current temperature with weather icon; click to expand for humidity, wind, and 3-day forecast.
 - **Weather Data Logging**: Daily historical weather data logged to `weather_logs` table via cron job (1:00 AM IST). Logs for all registered user locations + 16 default Indian agricultural cities. Data points: temp (max/min/mean/apparent), precipitation, rain, weather code, wind speed/gusts, humidity, dew point, pressure, soil temperature & moisture (3 depths), ET0 evapotranspiration, UV index, sunrise/sunset, daylight duration. Source: Open-Meteo API. Admin can trigger manual logging via `POST /api/admin/weather-log-now`. Unique index on (date, latitude, longitude) prevents duplicates.
 - **Marketplace**: Buy/sell platform for agricultural products (Onion Seedlings, Potato Seeds). Amazon-style grid layout (2 cols mobile, 5 cols desktop). Multi-photo upload (max 3), clickable cards open detail dialog with photo carousel. Sort by Latest/Nearest/Oldest. GPS-based distance sorting, seller location display, and contact info visible only to logged-in users. Photos stored in separate `marketplace_photos` table. Star rating system: buyers can rate listings 1-5 stars (one rating per user per listing, atomic upsert), listing avg rating shown on cards and detail dialog, seller avg rating shown when contact info is revealed. Self-rating prevented. Ratings stored in `marketplace_ratings` table with unique constraint on (listing_id, user_id).

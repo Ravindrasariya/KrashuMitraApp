@@ -371,7 +371,7 @@ const translations = {
   cropDoctorDesc: { hi: "फसल की फोटो अपलोड करें और AI से रोग की पहचान पाएं", en: "Upload a crop photo and get AI-powered disease diagnosis" },
   onionPricePredictor: { hi: "प्याज मूल्य अनुमान", en: "Onion Price Predictor" },
   onionPricePredictorDesc: { hi: "अपने प्याज लॉट की फोटो और आज का मंडी बेंचमार्क रेट डालें — AI बाज़ार मूल्य और गिरवी मूल्य (%) देगा", en: "Upload your onion lot photo and today's mandi benchmark rate — AI returns Market Price and Collateral Value (%)" },
-  benchmarkRateLabel: { hi: "मंडी बेंचमार्क रेट (₹/क्विंटल)", en: "Mandi Benchmark Rate (₹/quintal)" },
+  benchmarkRateLabel: { hi: "मंडी बेंचमार्क रेट (₹/क्विंटल) — लॉट 1 / प्रीमियम सुपर ग्रेड", en: "Mandi Benchmark Rate (₹/quintal) — for Lot 1 (Premium Super)" },
   benchmarkRatePlaceholder: { hi: "जैसे: 25", en: "e.g. 25" },
   uploadOnionPhoto: { hi: "प्याज लॉट की फोटो अपलोड करें", en: "Upload Onion Lot Photo" },
   onionResult: { hi: "प्याज विश्लेषण रिपोर्ट", en: "Onion Analysis Report" },
