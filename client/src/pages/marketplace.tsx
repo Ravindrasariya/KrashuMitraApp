@@ -60,6 +60,8 @@ const ONION_SEED_BRANDS = [
   "Others",
 ];
 
+const SOYABEAN_DURATIONS = ["Long", "Short"] as const;
+
 const HINDI_NAMES: Record<string, string> = {
   CS3: "सीएस3", CS1: "सीएस1", Torus: "टोरस", Pukhraj: "पुखराज",
   Jyoti: "ज्योति", Lakar: "लकड़", Others: "अन्य",
@@ -216,6 +218,9 @@ export default function MarketplacePage() {
   const [onionSeedVariety, setOnionSeedVariety] = useState("");
   const [onionSeedBrand, setOnionSeedBrand] = useState("");
   const [onionSeedPricePerKg, setOnionSeedPricePerKg] = useState("");
+  const [soyabeanDuration, setSoyabeanDuration] = useState("");
+  const [soyabeanVariety, setSoyabeanVariety] = useState("");
+  const [soyabeanPricePerQuintal, setSoyabeanPricePerQuintal] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"latest" | "nearest" | "oldest">("latest");
   const [sortOpen, setSortOpen] = useState(false);
@@ -300,6 +305,9 @@ export default function MarketplacePage() {
     setOnionSeedVariety("");
     setOnionSeedBrand("");
     setOnionSeedPricePerKg("");
+    setSoyabeanDuration("");
+    setSoyabeanVariety("");
+    setSoyabeanPricePerQuintal("");
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -350,6 +358,14 @@ export default function MarketplacePage() {
       data.onionSeedVariety = onionSeedVariety;
       data.onionSeedBrand = onionSeedBrand && onionSeedBrand !== "none" ? onionSeedBrand : null;
       data.onionSeedPricePerKg = onionSeedPricePerKg ? parseInt(onionSeedPricePerKg, 10) : null;
+    } else if (category === "soyabean_seed") {
+      if (!soyabeanVariety.trim()) {
+        toast({ title: t("soyabeanVariety"), variant: "destructive" });
+        return;
+      }
+      data.soyabeanSeedDuration = soyabeanDuration || null;
+      data.soyabeanSeedVariety = soyabeanVariety.trim();
+      data.soyabeanSeedPricePerQuintal = soyabeanPricePerQuintal ? parseInt(soyabeanPricePerQuintal, 10) : null;
     }
     createMutation.mutate(data);
   }
@@ -429,6 +445,7 @@ export default function MarketplacePage() {
     cat === "onion_seedling" ? t("onionSeedling")
       : cat === "potato_seed" ? t("potatoSeed")
       : cat === "onion_seed" ? t("onionSeed")
+      : cat === "soyabean_seed" ? t("soyabeanSeed")
       : cat;
 
   const categoryBadgeColor = (cat: string) =>
@@ -436,14 +453,18 @@ export default function MarketplacePage() {
       ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
       : cat === "potato_seed"
       ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-      : "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300";
+      : cat === "onion_seed"
+      ? "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
+      : "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300";
 
   const categoryPlaceholderBg = (cat: string) =>
     cat === "onion_seedling"
       ? "bg-green-50 dark:bg-green-950/30"
       : cat === "potato_seed"
       ? "bg-amber-50 dark:bg-amber-950/30"
-      : "bg-rose-50 dark:bg-rose-950/30";
+      : cat === "onion_seed"
+      ? "bg-rose-50 dark:bg-rose-950/30"
+      : "bg-violet-50 dark:bg-violet-950/30";
 
   const renderPlaceholderIcon = (cat: string, size: "sm" | "lg") => {
     const cls = size === "sm" ? "w-10 h-10" : "w-16 h-16";
@@ -453,12 +474,26 @@ export default function MarketplacePage() {
     if (cat === "potato_seed") {
       return <Leaf className={`${cls} text-amber-300 dark:text-amber-700`} />;
     }
-    return <Sprout className={`${cls} text-rose-300 dark:text-rose-700`} />;
+    if (cat === "onion_seed") {
+      return <Sprout className={`${cls} text-rose-300 dark:text-rose-700`} />;
+    }
+    return <Sprout className={`${cls} text-violet-300 dark:text-violet-700`} />;
   };
 
   const formatPrice = (n: number | null | undefined) => {
     if (n == null) return null;
     return language === "hi" ? `₹${n} / किलो` : `₹${n} / kg`;
+  };
+
+  const formatPricePerQuintal = (n: number | null | undefined) => {
+    if (n == null) return null;
+    return language === "hi" ? `₹${n} / क्विंटल` : `₹${n} / quintal`;
+  };
+
+  const soyabeanDurationLabel = (val: string | null | undefined) => {
+    if (val === "Long") return t("soyabeanDurationLong");
+    if (val === "Short") return t("soyabeanDurationShort");
+    return val || "";
   };
 
   const hn = (val: string | null | undefined) => {
@@ -496,6 +531,7 @@ export default function MarketplacePage() {
             <SelectItem value="onion_seedling" data-testid="filter-onion_seedling">{t("onionSeedling")}</SelectItem>
             <SelectItem value="potato_seed" data-testid="filter-potato_seed">{t("potatoSeed")}</SelectItem>
             <SelectItem value="onion_seed" data-testid="filter-onion_seed">{t("onionSeed")}</SelectItem>
+            <SelectItem value="soyabean_seed" data-testid="filter-soyabean_seed">{t("soyabeanSeed")}</SelectItem>
           </SelectContent>
         </Select>
         <div className="ml-auto relative">
@@ -548,6 +584,7 @@ export default function MarketplacePage() {
             const isOwner = user?.id === listing.sellerId;
             const isOnion = listing.category === "onion_seedling";
             const isOnionSeed = listing.category === "onion_seed";
+            const isSoyabeanSeed = listing.category === "soyabean_seed";
             const hasPhoto = listing.photoCount > 0 || listing.photoMime;
             return (
               <Card
@@ -590,7 +627,7 @@ export default function MarketplacePage() {
                         </p>
                       </>
                     )}
-                    {!isOnion && !isOnionSeed && (
+                    {!isOnion && !isOnionSeed && !isSoyabeanSeed && (
                       <>
                         {listing.quantityBags && (
                           <p className="text-sm font-bold leading-snug" data-testid={`text-qty-${listing.id}`}>
@@ -611,6 +648,18 @@ export default function MarketplacePage() {
                         </p>
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[hn(listing.onionSeedType), hn(listing.onionSeedVariety), hn(listing.onionSeedBrand)].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                      </>
+                    )}
+                    {isSoyabeanSeed && (
+                      <>
+                        <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {listing.soyabeanSeedPricePerQuintal != null
+                            ? formatPricePerQuintal(listing.soyabeanSeedPricePerQuintal)
+                            : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
+                        </p>
+                        <p className="text-xs font-medium text-foreground leading-snug truncate">
+                          {[soyabeanDurationLabel(listing.soyabeanSeedDuration), listing.soyabeanSeedVariety].filter(Boolean).join(" · ") || "—"}
                         </p>
                       </>
                     )}
@@ -716,6 +765,7 @@ export default function MarketplacePage() {
                   <SelectItem value="onion_seedling">{t("onionSeedling")}</SelectItem>
                   <SelectItem value="potato_seed">{t("potatoSeed")}</SelectItem>
                   <SelectItem value="onion_seed">{t("onionSeed")}</SelectItem>
+                  <SelectItem value="soyabean_seed">{t("soyabeanSeed")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -886,6 +936,48 @@ export default function MarketplacePage() {
                 </div>
               </>
             )}
+
+            {category === "soyabean_seed" && (
+              <>
+                <div>
+                  <Label className="text-sm">{t("pricePerQuintal")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={999999}
+                    value={soyabeanPricePerQuintal}
+                    onChange={(e) => setSoyabeanPricePerQuintal(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-soyabean-price"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("soyabeanDuration")}</Label>
+                  <Select value={soyabeanDuration} onValueChange={setSoyabeanDuration}>
+                    <SelectTrigger data-testid="select-soyabean-duration">
+                      <SelectValue placeholder={t("selectOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SOYABEAN_DURATIONS.map(v => (
+                        <SelectItem key={v} value={v} data-testid={`option-soyabean-duration-${v}`}>
+                          {soyabeanDurationLabel(v)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm">{t("soyabeanVariety")}</Label>
+                  <Input
+                    value={soyabeanVariety}
+                    onChange={(e) => setSoyabeanVariety(e.target.value)}
+                    placeholder={t("soyabeanVariety")}
+                    data-testid="input-soyabean-variety"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <DialogFooter>
@@ -910,6 +1002,7 @@ export default function MarketplacePage() {
                 const listing = detailListing;
                 const isOnion = listing.category === "onion_seedling";
                 const isOnionSeed = listing.category === "onion_seed";
+                const isSoyabeanSeed = listing.category === "soyabean_seed";
                 const totalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
                 const hasPhotos = totalPhotos > 0;
                 const dist = getDistanceKm(listing);
@@ -978,7 +1071,7 @@ export default function MarketplacePage() {
                           )}
                         </div>
                       )}
-                      {!isOnion && !isOnionSeed && (
+                      {!isOnion && !isOnionSeed && !isSoyabeanSeed && (
                         <div>
                           {listing.quantityBags && (
                             <p className="text-xl font-bold">{listing.quantityBags} {t("bags")}</p>
@@ -1006,6 +1099,21 @@ export default function MarketplacePage() {
                           )}
                           {listing.onionSeedBrand && (
                             <p className="text-sm font-medium">{t("onionSeedBrand")}: {hn(listing.onionSeedBrand)}</p>
+                          )}
+                        </div>
+                      )}
+                      {isSoyabeanSeed && (
+                        <div>
+                          <p className="text-xl font-bold" data-testid="text-detail-price">
+                            {listing.soyabeanSeedPricePerQuintal != null
+                              ? formatPricePerQuintal(listing.soyabeanSeedPricePerQuintal)
+                              : <span className="text-foreground/70">{t("contactForPrice")}</span>}
+                          </p>
+                          {listing.soyabeanSeedDuration && (
+                            <p className="text-sm font-medium">{t("soyabeanDuration")}: {soyabeanDurationLabel(listing.soyabeanSeedDuration)}</p>
+                          )}
+                          {listing.soyabeanSeedVariety && (
+                            <p className="text-sm font-medium">{t("soyabeanVariety")}: {listing.soyabeanSeedVariety}</p>
                           )}
                         </div>
                       )}
