@@ -557,6 +557,7 @@ const translations = {
   contactSeller: { hi: "विक्रेता से संपर्क करें", en: "Contact Seller" },
   previousPhoto: { hi: "पिछली फोटो", en: "Previous photo" },
   nextPhoto: { hi: "अगली फोटो", en: "Next photo" },
+  zoom: { hi: "ज़ूम करें", en: "Zoom" },
   close: { hi: "बंद करें", en: "Close" },
   loginToContact: { hi: "संपर्क देखने के लिए लॉगिन करें", en: "Login to see contact" },
   allCategories: { hi: "सभी", en: "All" },

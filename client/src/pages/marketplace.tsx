@@ -19,7 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import {
@@ -214,6 +214,8 @@ export default function MarketplacePage() {
   const [detailListing, setDetailListing] = useState<ListingNoPhoto | null>(null);
   const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxListing, setLightboxListing] = useState<ListingNoPhoto | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const [cardPhotoIndex, setCardPhotoIndex] = useState<Record<number, number>>({});
   const cardSwipeRef = useRef<Map<number, { startX: number; startY: number; swiped: boolean }>>(new Map());
 
@@ -750,6 +752,21 @@ export default function MarketplacePage() {
                         >
                           <ChevronRight className="w-4 h-4" />
                         </button>
+                        <button
+                          type="button"
+                          aria-label={t("zoom")}
+                          className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cardSwipeRef.current.delete(listing.id);
+                            setLightboxListing(listing);
+                            setLightboxIndex(cardIdx);
+                            setLightboxOpen(true);
+                          }}
+                          data-testid={`button-card-photo-zoom-${listing.id}`}
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                        </button>
                         <div
                           className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-full pointer-events-none"
                           data-testid={`text-card-photo-counter-${listing.id}`}
@@ -1179,7 +1196,7 @@ export default function MarketplacePage() {
       </Dialog>
 
       {detailListing && (
-        <Dialog open={!!detailListing} onOpenChange={(open) => { if (!open) { setDetailListing(null); setLightboxOpen(false); } }}>
+        <Dialog open={!!detailListing} onOpenChange={(open) => { if (!open) { setDetailListing(null); } }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0">
             <div>
               {(() => {
@@ -1200,7 +1217,11 @@ export default function MarketplacePage() {
                           src={`/api/marketplace/${listing.id}/image?index=${detailPhotoIndex}`}
                           alt=""
                           className="w-full aspect-[4/3] object-cover cursor-zoom-in"
-                          onClick={() => setLightboxOpen(true)}
+                          onClick={() => {
+                            setLightboxListing(listing);
+                            setLightboxIndex(detailPhotoIndex);
+                            setLightboxOpen(true);
+                          }}
                           data-testid="img-detail-photo"
                         />
                       ) : (
@@ -1412,17 +1433,22 @@ export default function MarketplacePage() {
         </Dialog>
       )}
 
-      {detailListing && (() => {
-        const total = detailListing.photoCount || (detailListing.photoMime ? 1 : 0);
+      {lightboxListing && (() => {
+        const total = lightboxListing.photoCount || (lightboxListing.photoMime ? 1 : 0);
         if (total === 0) return null;
-        const safeIndex = Math.min(Math.max(detailPhotoIndex, 0), total - 1);
+        const safeIndex = Math.min(Math.max(lightboxIndex, 0), total - 1);
         return (
           <PhotoLightbox
             open={lightboxOpen}
             index={safeIndex}
             total={total}
-            srcFor={(i) => `/api/marketplace/${detailListing.id}/image?index=${i}`}
-            onIndexChange={setDetailPhotoIndex}
+            srcFor={(i) => `/api/marketplace/${lightboxListing.id}/image?index=${i}`}
+            onIndexChange={(i) => {
+              setLightboxIndex(i);
+              if (detailListing && detailListing.id === lightboxListing.id) {
+                setDetailPhotoIndex(i);
+              }
+            }}
             onClose={() => setLightboxOpen(false)}
           />
         );
