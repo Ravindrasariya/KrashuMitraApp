@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { FlaskConical, Leaf, Camera, Loader2, ClipboardList, ChevronDown, ChevronUp, Sparkles, Star } from "lucide-react";
+import { FlaskConical, Leaf, Camera, Loader2, ClipboardList, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import type { ServiceRequest } from "@shared/schema";
 
 function MarkdownText({ text, className = "" }: { text: string; className?: string }) {
@@ -88,8 +88,7 @@ export default function DigitalClinicPage() {
   const [expandedRequestId, setExpandedRequestId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const onionFileInputRef = useRef<HTMLInputElement>(null);
-  const [onionBenchmarkMin, setOnionBenchmarkMin] = useState<string>("");
-  const [onionBenchmarkMax, setOnionBenchmarkMax] = useState<string>("");
+  const [onionBenchmark, setOnionBenchmark] = useState<string>("");
   const [onionImageBase64, setOnionImageBase64] = useState<string | null>(null);
   const [onionImageMime, setOnionImageMime] = useState<string>("");
   const [onionImagePreview, setOnionImagePreview] = useState<string | null>(null);
@@ -143,8 +142,7 @@ export default function DigitalClinicPage() {
         serviceType: "onion_price_predictor",
         imageData: onionImageBase64,
         imageMimeType: onionImageMime,
-        benchmarkRateMin: Number(onionBenchmarkMin),
-        benchmarkRateMax: Number(onionBenchmarkMax),
+        benchmarkRate: Number(onionBenchmark),
       });
       return res.json() as Promise<ServiceRequest>;
     },
@@ -250,41 +248,18 @@ export default function DigitalClinicPage() {
               <p className="text-sm text-muted-foreground mb-3">{t("onionPricePredictorDesc")}</p>
               <div className="space-y-3">
                 <div>
-                  <Label className="text-xs">{t("benchmarkRateLabel")}</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <div>
-                      <Label htmlFor="onion-benchmark-min" className="text-[11px] text-muted-foreground">
-                        {t("benchmarkRateMin")}
-                      </Label>
-                      <Input
-                        id="onion-benchmark-min"
-                        type="number"
-                        min={1}
-                        inputMode="numeric"
-                        placeholder={t("benchmarkRateMinPlaceholder")}
-                        value={onionBenchmarkMin}
-                        onChange={(e) => setOnionBenchmarkMin(e.target.value)}
-                        className="mt-1"
-                        data-testid="input-onion-benchmark-min"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="onion-benchmark-max" className="text-[11px] text-muted-foreground">
-                        {t("benchmarkRateMax")}
-                      </Label>
-                      <Input
-                        id="onion-benchmark-max"
-                        type="number"
-                        min={1}
-                        inputMode="numeric"
-                        placeholder={t("benchmarkRateMaxPlaceholder")}
-                        value={onionBenchmarkMax}
-                        onChange={(e) => setOnionBenchmarkMax(e.target.value)}
-                        className="mt-1"
-                        data-testid="input-onion-benchmark-max"
-                      />
-                    </div>
-                  </div>
+                  <Label htmlFor="onion-benchmark" className="text-xs">{t("benchmarkRateLabel")}</Label>
+                  <Input
+                    id="onion-benchmark"
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    placeholder={t("benchmarkRatePlaceholder")}
+                    value={onionBenchmark}
+                    onChange={(e) => setOnionBenchmark(e.target.value)}
+                    className="mt-1"
+                    data-testid="input-onion-benchmark"
+                  />
                 </div>
                 <input
                   ref={onionFileInputRef}
@@ -314,25 +289,14 @@ export default function DigitalClinicPage() {
                   </Button>
                   <Button
                     onClick={() => {
-                      const minN = Number(onionBenchmarkMin);
-                      const maxN = Number(onionBenchmarkMax);
-                      if (!onionImageBase64 || !(minN > 0) || !(maxN > 0)) {
+                      const b = Number(onionBenchmark);
+                      if (!onionImageBase64 || !(b > 0)) {
                         toast({ title: t("benchmarkRequired"), variant: "destructive" });
-                        return;
-                      }
-                      if (maxN < minN) {
-                        toast({ title: t("benchmarkMaxLessThanMin"), variant: "destructive" });
                         return;
                       }
                       onionMutation.mutate();
                     }}
-                    disabled={
-                      onionMutation.isPending ||
-                      !onionImageBase64 ||
-                      !(Number(onionBenchmarkMin) > 0) ||
-                      !(Number(onionBenchmarkMax) > 0) ||
-                      Number(onionBenchmarkMax) < Number(onionBenchmarkMin)
-                    }
+                    disabled={onionMutation.isPending || !onionImageBase64 || !(Number(onionBenchmark) > 0)}
                     data-testid="button-analyze-onion"
                   >
                     {onionMutation.isPending ? (
@@ -432,8 +396,13 @@ export default function DigitalClinicPage() {
               const isExpandable = isCropDoctor || isOnion;
               const isExpanded = expandedRequestId === req.id;
               const onionParsed = isOnion ? safeParseOnion(req.aiDiagnosis!) : null;
-              const onionScore = onionParsed?.lot_analysis?.overall_score;
-              const onionVerdict = onionParsed?.lot_analysis?.valuation?.commercial_verdict;
+              const onionHeat = onionParsed?.pricing_analysis?.market_heat_index;
+              const onionMarketPrice = onionParsed?.pricing_analysis?.calculated_market_price;
+              const onionCollateral = onionParsed?.pricing_analysis?.collateral_value;
+              const onionCollateralPct =
+                onionMarketPrice && onionMarketPrice > 0 && onionCollateral != null
+                  ? Math.round((onionCollateral / onionMarketPrice) * 100)
+                  : null;
               return (
                 <Card
                   key={req.id}
@@ -461,15 +430,14 @@ export default function DigitalClinicPage() {
                         >
                           {req.status === "open" ? t("open") : t("closed")}
                         </Badge>
-                        {isOnion && onionScore != null && (
-                          <Badge variant="outline" className="gap-1" data-testid={`badge-onion-score-${req.id}`}>
-                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                            {Number(onionScore).toFixed(1)}
+                        {isOnion && onionHeat && (
+                          <Badge className={heatColor(onionHeat)} data-testid={`badge-onion-heat-${req.id}`}>
+                            {heatLabel(onionHeat, t)}
                           </Badge>
                         )}
-                        {isOnion && onionVerdict && (
-                          <Badge className={verdictColor(onionVerdict)} data-testid={`badge-onion-verdict-${req.id}`}>
-                            {verdictLabel(onionVerdict, t)}
+                        {isOnion && onionParsed?.pricing_analysis && (
+                          <Badge variant="outline" className="gap-1 tabular-nums" data-testid={`badge-onion-collateral-${req.id}`}>
+                            {onionCollateralPct != null ? `${onionCollateralPct}%` : "—"}
                           </Badge>
                         )}
                         {isExpandable && (
@@ -592,22 +560,24 @@ export default function DigitalClinicPage() {
 }
 
 type OnionParsed = {
-  lot_analysis?: {
-    overall_score?: number;
-    benchmark_used?: string;
-    parameters?: {
-      neck_rating?: number;
-      shoulder_geometry?: string;
-      skin_quality?: number;
-      uniformity?: number;
+  pricing_analysis?: {
+    market_heat_index?: string;
+    calculated_market_price?: number;
+    collateral_value?: number;
+    valuation_breakdown?: {
+      base_multiplier_used?: number;
+      quality_adjustments_total?: string;
+      puffy_penalty_applied?: boolean;
     };
-    valuation?: {
-      expected_rate?: string;
-      price_delta?: string;
-      commercial_verdict?: string;
-      ltv_recommendation?: string;
-      summary?: string;
-    };
+    underwriting_note?: string;
+  };
+  visual_parameters?: {
+    size_grade?: string;
+    color?: string;
+    luster_score?: number;
+    shape_uniformity?: string;
+    neck_rating?: number;
+    shoulder_geometry?: string;
   };
   error?: string;
   message?: string;
@@ -622,34 +592,34 @@ function safeParseOnion(raw: string): OnionParsed | null {
   }
 }
 
-function verdictColor(verdict: string): string {
-  const v = verdict.toLowerCase();
-  if (v.includes("store")) return "bg-green-600 hover:bg-green-700 text-white";
-  if (v.includes("sell")) return "bg-amber-500 hover:bg-amber-600 text-white";
-  if (v.includes("reject")) return "bg-red-600 hover:bg-red-700 text-white";
+function heatColor(heat: string): string {
+  const h = heat.toLowerCase();
+  if (h === "low") return "bg-blue-600 hover:bg-blue-700 text-white";
+  if (h === "medium") return "bg-amber-500 hover:bg-amber-600 text-white";
+  if (h === "high") return "bg-red-600 hover:bg-red-700 text-white";
   return "";
 }
 
-function verdictLabel(verdict: string, t: (k: any) => string): string {
-  const v = verdict.toLowerCase();
-  if (v.includes("store")) return t("verdictStore");
-  if (v.includes("sell")) return t("verdictSell");
-  if (v.includes("reject")) return t("verdictReject");
-  return verdict;
+function heatLabel(heat: string, t: (k: any) => string): string {
+  const h = heat.toLowerCase();
+  if (h === "low") return t("heatLow");
+  if (h === "medium") return t("heatMedium");
+  if (h === "high") return t("heatHigh");
+  return heat;
 }
 
-function StarBar({ value, max = 5 }: { value: number; max?: number }) {
-  const filled = Math.round(value);
-  return (
-    <div className="flex gap-0.5" data-testid="stars-onion">
-      {Array.from({ length: max }).map((_, i) => (
-        <Star
-          key={i}
-          className={`w-4 h-4 ${i < filled ? "fill-amber-500 text-amber-500" : "text-muted-foreground/30"}`}
-        />
-      ))}
-    </div>
-  );
+function sizeGradeLabel(grade: string, t: (k: any) => string): string {
+  const g = (grade || "").toLowerCase();
+  if (g === "super") return t("sizeSuper");
+  if (g === "medium") return t("sizeMedium");
+  if (g === "gola") return t("sizeGola");
+  if (g === "golti") return t("sizeGolti");
+  return grade || "-";
+}
+
+function formatINR(n: number): string {
+  if (!Number.isFinite(n)) return "-";
+  return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
 function OnionResultView({ raw }: { raw: string }) {
@@ -663,87 +633,108 @@ function OnionResultView({ raw }: { raw: string }) {
     const msg = parsed.error === "image_not_onion" ? t("notOnionImage") : t("onionAnalysisFailed");
     return <p className="text-sm text-red-600 dark:text-red-400" data-testid="text-onion-error">{msg}</p>;
   }
-  const la = parsed.lot_analysis;
-  if (!la) return <p className="text-sm whitespace-pre-wrap">{raw}</p>;
+  const pa = parsed.pricing_analysis;
+  const vp = parsed.visual_parameters;
+  if (!pa || !vp) {
+    return <pre className="text-xs whitespace-pre-wrap break-all" data-testid="text-onion-raw">{raw}</pre>;
+  }
 
-  const score = Number(la.overall_score ?? 0);
-  const v = la.valuation || {};
-  const p = la.parameters || {};
-  const delta = (v.price_delta || "").trim();
-  const deltaSigns = Array.from(delta.matchAll(/([+-])\s*\d/g)).map((m) => m[1]);
-  const allPositive = deltaSigns.length > 0 && deltaSigns.every((s) => s === "+");
-  const allNegative = deltaSigns.length > 0 && deltaSigns.every((s) => s === "-");
+  const market = Number(pa.calculated_market_price ?? 0);
+  const collateral = Number(pa.collateral_value ?? 0);
+  const collateralPct = market > 0 ? Math.round((collateral / market) * 100) : null;
+  const heat = pa.market_heat_index || "";
+  const vb = pa.valuation_breakdown || {};
+  const qadj = (vb.quality_adjustments_total || "").trim();
+  const qadjSign = qadj.startsWith("+") ? "text-green-600" : qadj.startsWith("-") ? "text-red-600" : "";
+  const collateralPctClass =
+    collateralPct == null
+      ? ""
+      : collateralPct >= 90
+        ? "text-green-600"
+        : collateralPct >= 75
+          ? "text-amber-600"
+          : "text-red-600";
 
   return (
     <Card className="p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800" data-testid="card-onion-result-view">
-      <h4 className="font-semibold text-sm mb-3">{t("onionResult")}</h4>
-
-      <div className="flex items-center gap-3 mb-4">
-        <div className="text-3xl font-bold tabular-nums" data-testid="text-onion-score">{score.toFixed(1)}</div>
-        <div className="flex flex-col">
-          <span className="text-xs text-muted-foreground">{t("qualityScore")}</span>
-          <StarBar value={score} />
-        </div>
-      </div>
-
-      {la.benchmark_used && (
-        <div className="mb-3 text-xs">
-          <span className="text-muted-foreground">{t("benchmarkUsed")}: </span>
-          <span className="font-medium" data-testid="text-onion-benchmark-used">{la.benchmark_used}</span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-        <div>
-          <div className="text-xs text-muted-foreground">{t("expectedRate")}</div>
-          <div className="font-semibold" data-testid="text-onion-rate">{v.expected_rate || "-"}</div>
-        </div>
-        <div>
-          <div className="text-xs text-muted-foreground">{t("priceDelta")}</div>
-          <div
-            className={`font-semibold ${allPositive ? "text-green-600" : allNegative ? "text-red-600" : ""}`}
-            data-testid="text-onion-delta"
-          >
-            {delta || "-"}
-          </div>
-        </div>
-        {v.commercial_verdict && (
-          <div className="col-span-2">
-            <div className="text-xs text-muted-foreground mb-1">{t("commercialVerdict")}</div>
-            <Badge className={verdictColor(v.commercial_verdict)} data-testid="badge-onion-verdict-main">
-              {verdictLabel(v.commercial_verdict, t)}
-            </Badge>
-          </div>
-        )}
-        {v.ltv_recommendation && (
-          <div className="col-span-2">
-            <div className="text-xs text-muted-foreground">{t("ltvRecommendation")}</div>
-            <div className="font-medium" data-testid="text-onion-ltv">{v.ltv_recommendation}</div>
-          </div>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h4 className="font-semibold text-sm">{t("onionResult")}</h4>
+        {heat && (
+          <Badge className={heatColor(heat)} data-testid="badge-onion-heat-main">
+            {t("marketHeatIndex")}: {heatLabel(heat, t)}
+          </Badge>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="bg-background/60 rounded p-3">
+          <div className="text-xs text-muted-foreground">{t("marketPrice")}</div>
+          <div className="text-2xl font-bold tabular-nums" data-testid="text-onion-market-price">
+            {formatINR(market)}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">{t("perQuintal")}</div>
+        </div>
+        <div className="bg-background/60 rounded p-3">
+          <div className="text-xs text-muted-foreground">{t("collateralValue")}</div>
+          <div className={`text-2xl font-bold tabular-nums ${collateralPctClass}`} data-testid="text-onion-collateral-pct">
+            {collateralPct != null ? `${collateralPct}%` : "—"}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">{t("ofMarketPrice")}</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-4 text-xs">
+        <div className="bg-background/50 rounded p-2">
+          <div className="text-muted-foreground">{t("baseMultiplier")}</div>
+          <div className="font-semibold tabular-nums" data-testid="text-onion-base-mult">
+            {vb.base_multiplier_used != null ? Number(vb.base_multiplier_used).toFixed(2) : "-"}
+          </div>
+        </div>
+        <div className="bg-background/50 rounded p-2">
+          <div className="text-muted-foreground">{t("qualityAdjustments")}</div>
+          <div className={`font-semibold ${qadjSign}`} data-testid="text-onion-qadj">{qadj || "-"}</div>
+        </div>
+        <div className="bg-background/50 rounded p-2">
+          <div className="text-muted-foreground">{t("puffyPenaltyApplied")}</div>
+          <div className="font-semibold" data-testid="text-onion-puffy">
+            {vb.puffy_penalty_applied ? t("yes") : t("no")}
+          </div>
+        </div>
+      </div>
+
+      <div className="text-xs font-medium mb-2 text-muted-foreground">{t("visualParameters")}</div>
+      <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+        <div className="bg-background/50 rounded p-2">
+          <div className="text-muted-foreground">{t("sizeGrade")}</div>
+          <div className="font-semibold" data-testid="text-onion-size-grade">{sizeGradeLabel(vp.size_grade || "", t)}</div>
+        </div>
+        <div className="bg-background/50 rounded p-2">
+          <div className="text-muted-foreground">{t("color")}</div>
+          <div className="font-semibold">{vp.color || "-"}</div>
+        </div>
+        <div className="bg-background/50 rounded p-2">
+          <div className="text-muted-foreground">{t("luster")}</div>
+          <div className="font-semibold">{vp.luster_score != null ? `${vp.luster_score}/5` : "-"}</div>
+        </div>
+        <div className="bg-background/50 rounded p-2">
+          <div className="text-muted-foreground">{t("shapeUniformity")}</div>
+          <div className="font-semibold">{vp.shape_uniformity || "-"}</div>
+        </div>
         <div className="bg-background/50 rounded p-2">
           <div className="text-muted-foreground">{t("paramNeck")}</div>
-          <div className="font-semibold">{p.neck_rating ?? "-"}/5</div>
+          <div className="font-semibold">{vp.neck_rating != null ? `${vp.neck_rating}/5` : "-"}</div>
         </div>
         <div className="bg-background/50 rounded p-2">
           <div className="text-muted-foreground">{t("paramShoulder")}</div>
-          <div className="font-semibold">{p.shoulder_geometry ?? "-"}</div>
-        </div>
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("paramSkin")}</div>
-          <div className="font-semibold">{p.skin_quality ?? "-"}/5</div>
-        </div>
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("paramUniformity")}</div>
-          <div className="font-semibold">{p.uniformity ?? "-"}/5</div>
+          <div className="font-semibold">{vp.shoulder_geometry || "-"}</div>
         </div>
       </div>
 
-      {v.summary && (
-        <p className="text-sm mt-3 text-muted-foreground" data-testid="text-onion-summary">{v.summary}</p>
+      {pa.underwriting_note && (
+        <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">{t("underwritingNote")}</div>
+          <p className="text-xs" data-testid="text-onion-underwriting-note">{pa.underwriting_note}</p>
+        </div>
       )}
     </Card>
   );

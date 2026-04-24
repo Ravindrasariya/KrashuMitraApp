@@ -9,22 +9,24 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 const onionResultSchema = z.object({
-  lot_analysis: z.object({
-    overall_score: z.number().min(1).max(5),
-    benchmark_used: z.string().min(1).optional(),
-    parameters: z.object({
-      neck_rating: z.number().int().min(1).max(5),
-      shoulder_geometry: z.enum(["Flat", "Convex", "Tapered"]),
-      skin_quality: z.number().int().min(1).max(5),
-      uniformity: z.number().int().min(1).max(5),
+  pricing_analysis: z.object({
+    market_heat_index: z.enum(["Low", "Medium", "High"]),
+    calculated_market_price: z.number().positive(),
+    collateral_value: z.number().positive(),
+    valuation_breakdown: z.object({
+      base_multiplier_used: z.number().positive(),
+      quality_adjustments_total: z.string().regex(/^[+-]?\d+(\.\d+)?%$/),
+      puffy_penalty_applied: z.boolean(),
     }).strict(),
-    valuation: z.object({
-      expected_rate: z.string().min(1),
-      price_delta: z.string().min(1),
-      commercial_verdict: z.enum(["Store Long-term", "Sell Immediate", "Reject"]),
-      ltv_recommendation: z.string().optional().default(""),
-      summary: z.string().optional().default(""),
-    }).strict(),
+    underwriting_note: z.string().min(1),
+  }).strict(),
+  visual_parameters: z.object({
+    size_grade: z.enum(["Super", "Medium", "Gola", "Golti"]),
+    color: z.string().min(1),
+    luster_score: z.number().int().min(1).max(5),
+    shape_uniformity: z.string().min(1),
+    neck_rating: z.number().int().min(1).max(5),
+    shoulder_geometry: z.enum(["Flat", "Convex", "Tapered"]),
   }).strict(),
 }).strict();
 
@@ -807,7 +809,7 @@ Rules:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { serviceType, imageData, imageMimeType, benchmarkRate, benchmarkRateMin, benchmarkRateMax } = req.body;
+      const { serviceType, imageData, imageMimeType, benchmarkRate } = req.body;
       if (!serviceType || !["soil_test", "potato_perishability_test", "crop_doctor", "onion_price_predictor"].includes(serviceType)) {
         return res.status(400).json({ message: "Invalid service type" });
       }
@@ -819,76 +821,76 @@ Rules:
         if (!imageData || !imageMimeType) {
           return res.status(400).json({ message: "Image required for Onion Price Predictor" });
         }
-        let bMin = Number(benchmarkRateMin);
-        let bMax = Number(benchmarkRateMax);
-        if (!Number.isFinite(bMin) || bMin <= 0 || !Number.isFinite(bMax) || bMax <= 0) {
-          const legacy = Number(benchmarkRate);
-          if (Number.isFinite(legacy) && legacy > 0) {
-            bMin = legacy;
-            bMax = legacy;
-          } else {
-            return res.status(400).json({ message: "Valid benchmark rate range required" });
-          }
-        }
-        if (bMax < bMin) {
-          return res.status(400).json({ message: "Max benchmark rate must be ≥ Min" });
+        const B = Number(benchmarkRate);
+        if (!Number.isFinite(B) || B <= 0) {
+          return res.status(400).json({ message: "Valid mandi benchmark price required" });
         }
 
-        inputData = JSON.stringify({ benchmarkRateMin: bMin, benchmarkRateMax: bMax });
+        inputData = JSON.stringify({ benchmarkRate: B });
         const base64Data = imageData.replace(/^data:[^;]+;base64,/, "");
-        const benchmarkLabel = bMin === bMax ? `INR ${bMin}` : `INR ${bMin}-${bMax}`;
 
-        const kqvPrompt = `# Role: KrashuVed Quality Vision (KQV) Agent
-You are an expert Agri-Commodity Underwriter for KrashuVed. You analyze onion lots to provide a 1–5 Quality Score and calculate an "Expected Mandi Rate Range" based on a user-provided benchmark range for top-tier (10–15%) lots.
+        const kqvPrompt = `# Role: KrashuVed Commodity Pricing & Underwriting Agent
+You are a high-precision pricing engine for the Indian Onion ecosystem. Your task is to calculate two values for every lot:
+1. **Market Price:** The estimated current sale value in the Mandi.
+2. **Collateral Value:** The de-risked value used for Lending (LSP) and Storage decisions.
 
-# Pricing Logic (The Anchor Method)
-The User has provided a Premium_Benchmark_Rate range of INR ${bMin} (low) to INR ${bMax} (high) per quintal for top 10-15% quality. For the assigned score's multiplier band, compute the expected rate range as:
-- low_expected  = round(lower_multiplier × ${bMin})
-- high_expected = round(upper_multiplier × ${bMax})
-The benchmark midpoint for delta calculation is ${(bMin + bMax) / 2}.
+The user-provided mandi_benchmark_price (B) for this lot is: INR ${B} per quintal (this is the price for Lot 1 — Premium Super grade in the user's mandi today).
 
-Multiplier bands:
-- Score 5 (Elite Storage): 100% to 110% of Benchmark.
-- Score 4 (Premium Commercial): 85% to 95% of Benchmark.
-- Score 3 (Standard/Domestic): 70% to 80% of Benchmark.
-- Score 2 (High Risk/Puffy): 50% to 65% of Benchmark.
-- Score 1 (Distress/Reject): 30% to 45% of Benchmark.
+# Phase 1: Market Heat Index (H) Calculation
+Determine the Market State based on B:
+- **H = "Low" (Quality-Driven):** If B <= 15.
+- **H = "Medium" (Balanced):** If 15 < B < 30.
+- **H = "High" (Supply-Driven/Scarcity):** If B >= 30.
 
-# Core Parameters for Analysis
-1. Neck Integrity (Dormancy): Target = Paper-thin/Dry. Risk = Fleshy/Open.
-2. Shoulder Geometry (Density): Target = Sharp 90° Flat. Risk = Convex/Bulging (Puffy).
-3. Parda (Skin) & Luster: Target = 2-3 layers + Waxy Shine. Risk = Peeling (Kattar).
-4. Shape & Roundness: Target = Globe. Risk = Elongated/Pear-shaped.
-5. Uniformity: Target = Consistent sizing (e.g., 45-60mm). Risk = Mixed field-run.
+# Phase 2: Dynamic Size Multipliers (M_size)
+Apply the multiplier to B based on the visually assessed Grade Category and the Heat Index:
 
-# Scoring Matrix (1 to 5)
-- Score 5: Elite quality, flat shoulders, dry necks, triple skin, high uniformity.
-- Score 4: High commercial value, mostly round, stable necks.
-- Score 3: Average Mandi stock, standard domestic grade.
-- Score 2: Structurally weak, convex/puffy, fleshy necks. (VERDICT: SELL NOW)
-- Score 1: Rot, sprouting, or severe damage. (VERDICT: REJECT)
+| Grade Category   | Low Heat (B<=15) | Medium Heat (15<B<30) | High Heat (B>=30) |
+| Super (>60mm)    | 1.00             | 1.00                  | 1.00              |
+| Medium (45-60mm) | 0.80             | 0.85                  | 0.90              |
+| Gola (35-45mm)   | 0.55             | 0.65                  | 0.75              |
+| Golti (<35mm)    | 0.35             | 0.45                  | 0.55              |
 
-# Output Format (Mandatory JSON — return ONLY the JSON object, no markdown, no commentary)
-Express expected_rate as a range string like "INR 720-900" (no decimals).
-Express price_delta as a signed-percentage range vs the benchmark midpoint, like "-15% to -5%" or "+5% to +12%". Use the same sign convention on both ends.
+# Phase 3: Visual Quality Refinements (Q_adj)
+Adjust the resulting price by these cumulative percentages based on visual parameters:
+- **Color:** Dark Red / Vibrant Pink: +5%. Dull / Pale / Discolored: -10%.
+- **Luster/Parda:** High Waxy Luster (luster_score 5): +5%. Peeling Skin (Kattar) / luster_score <= 2: -15%.
+- **Shape/Uniformity:** Perfectly Globe/Uniform: +5%. Irregular / Elongated / Pear-shaped: -10%.
 
+# Phase 4: Sustainability & Lending Haircuts (the LSP Logic — applied to Market Price to derive Collateral Value)
+1. **Puffy Penalty:** IF shoulder_geometry == "Convex":
+   - If Heat is Low or Medium: -15% on Market Price.
+   - If Heat is High: -25% on Market Price.
+2. **Dormancy Penalty:** IF neck_rating <= 2: additional -10%.
+Sustainability_Haircut = sum of the applicable penalties above (0 if neither applies).
+
+# Phase 5: Final Pricing Formula
+1. Base_Price = B × M_size
+2. Market_Price = Base_Price × (1 + sum(Q_adj))
+3. Collateral_Value = Market_Price × (1 - Sustainability_Haircut)
+
+Round both Market_Price and Collateral_Value to 2 decimals. Express quality_adjustments_total as a signed percentage string (e.g. "+5%", "-10%", "0%").
+
+# Output Format (return ONLY this JSON object — no markdown, no commentary)
 {
-  "lot_analysis": {
-    "overall_score": <float 1-5>,
-    "benchmark_used": "${benchmarkLabel}",
-    "parameters": {
-      "neck_rating": <integer 1-5>,
-      "shoulder_geometry": "Flat" | "Convex" | "Tapered",
-      "skin_quality": <integer 1-5>,
-      "uniformity": <integer 1-5>
+  "pricing_analysis": {
+    "market_heat_index": "Low" | "Medium" | "High",
+    "calculated_market_price": <number>,
+    "collateral_value": <number>,
+    "valuation_breakdown": {
+      "base_multiplier_used": <number>,
+      "quality_adjustments_total": "<signed percentage string>",
+      "puffy_penalty_applied": <boolean>
     },
-    "valuation": {
-      "expected_rate": "INR <low>-<high>",
-      "price_delta": "<signed % low> to <signed % high>",
-      "commercial_verdict": "Store Long-term" | "Sell Immediate" | "Reject",
-      "ltv_recommendation": "<percentage>",
-      "summary": "<one short sentence reason for the verdict>"
-    }
+    "underwriting_note": "<one short English sentence explaining the price drift or safety haircut applied>"
+  },
+  "visual_parameters": {
+    "size_grade": "Super" | "Medium" | "Gola" | "Golti",
+    "color": "<short description like 'Dark Red', 'Pale Yellow'>",
+    "luster_score": <integer 1-5>,
+    "shape_uniformity": "<short description like 'Perfectly Globe', 'Irregular', 'Mixed'>",
+    "neck_rating": <integer 1-5>,
+    "shoulder_geometry": "Flat" | "Convex" | "Tapered"
   }
 }
 
