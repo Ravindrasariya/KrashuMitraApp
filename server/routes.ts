@@ -7,6 +7,25 @@ import { GoogleGenAI } from "@google/genai";
 import { insertCropCardSchema, insertCropEventSchema, insertKhataRegisterSchema, insertKhataItemSchema, insertPanatPaymentSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import sharp from "sharp";
+
+async function compressOnionImageForStorage(
+  base64Data: string,
+  mimeType: string,
+): Promise<{ data: string; mime: string }> {
+  try {
+    const inputBuffer = Buffer.from(base64Data, "base64");
+    const outputBuffer = await sharp(inputBuffer, { failOn: "none" })
+      .rotate()
+      .resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 75, mozjpeg: true })
+      .toBuffer();
+    return { data: outputBuffer.toString("base64"), mime: "image/jpeg" };
+  } catch (err) {
+    console.error("Onion image compression failed, falling back to original:", err);
+    return { data: base64Data, mime: mimeType };
+  }
+}
 
 const onionResultSchema = z.object({
   pricing_analysis: z.object({
@@ -1175,11 +1194,19 @@ Respond in this structure:
 
       const savesImage = serviceType === "crop_doctor" || serviceType === "onion_price_predictor";
       const isOnionSave = serviceType === "onion_price_predictor" && onionImagesForStorage.length > 0;
+
+      let onionImagesForDb: { data: string; mime: string }[] = [];
+      if (isOnionSave) {
+        onionImagesForDb = await Promise.all(
+          onionImagesForStorage.map((img) => compressOnionImageForStorage(img.data, img.mime)),
+        );
+      }
+
       const primaryImageData = isOnionSave
-        ? onionImagesForStorage[0].data
+        ? onionImagesForDb[0].data
         : (savesImage ? imageData : null);
       const primaryImageMime = isOnionSave
-        ? onionImagesForStorage[0].mime
+        ? onionImagesForDb[0].mime
         : (savesImage ? imageMimeType : null);
       const request = await storage.createServiceRequest({
         userId,
@@ -1189,8 +1216,8 @@ Respond in this structure:
         farmerCode: user.farmerCode || null,
         imageData: primaryImageData,
         imageMimeType: primaryImageMime,
-        imageDataList: isOnionSave ? onionImagesForStorage.map((i) => i.data) : null,
-        imageMimeTypeList: isOnionSave ? onionImagesForStorage.map((i) => i.mime) : null,
+        imageDataList: isOnionSave ? onionImagesForDb.map((i) => i.data) : null,
+        imageMimeTypeList: isOnionSave ? onionImagesForDb.map((i) => i.mime) : null,
         declaredSizeBand: serviceType === "onion_price_predictor" ? (declaredSizeBand ?? null) : null,
         aiDiagnosis,
         inputData,
