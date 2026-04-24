@@ -860,16 +860,14 @@ function StorageRecommendationBlock({
   const riskLabel = STORAGE_RISK_KEYS[rec.risk] ? t(STORAGE_RISK_KEYS[rec.risk] as any) : rec.risk;
   return (
     <div
-      className="bg-background/60 rounded p-3 flex items-center justify-between flex-wrap gap-2"
+      className="bg-background/60 rounded p-3 h-full flex flex-col"
       data-testid="card-onion-storage"
     >
-      <div>
-        <div className="text-xs text-muted-foreground">{t("sellingRecommendation")}</div>
-        <div className="text-base font-bold" data-testid="text-storage-action">
-          {actionLabel}
-        </div>
+      <div className="text-xs text-muted-foreground">{t("sellingRecommendation")}</div>
+      <div className="text-base font-bold leading-tight" data-testid="text-storage-action">
+        {actionLabel}
       </div>
-      <Badge className={storageRiskClass(rec.risk)} data-testid="badge-storage-risk">
+      <Badge className={`${storageRiskClass(rec.risk)} self-start mt-1`} data-testid="badge-storage-risk">
         {t("storageRiskLabel")}: {riskLabel}
       </Badge>
     </div>
