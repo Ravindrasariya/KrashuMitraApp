@@ -16,8 +16,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Package } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { MarketplaceListing } from "@shared/schema";
 
 type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & { photoCount: number; avgRating: number; ratingCount: number };
@@ -26,12 +29,130 @@ const POTATO_VARIETIES = ["CS3", "CS1", "Torus", "Pukhraj", "Jyoti", "Lakar", "O
 const POTATO_BRANDS = ["Merino", "Technico", "Uttkal", "Jain", "Jalandhar", "Merath"];
 const MAX_PHOTOS = 3;
 
+// Onion-seed dropdown values: alphabetised, with "Others" pinned at the bottom.
+const ONION_SEED_TYPES = ["Nafed", "Nasik", "Others"];
+const ONION_SEED_VARIETIES = [
+  "Agriwell",
+  "Kalash",
+  "Nasik Fursungi",
+  "Nasik Red (N-53)",
+  "NHRDF Red / L-28",
+  "Others",
+];
+const ONION_SEED_BRANDS = [
+  "Deepak",
+  "Divya Seeds",
+  "East-West Seed",
+  "Ellora",
+  "Farmson Biotech",
+  "Indo-American Hybrid Seeds (IAHS)",
+  "Jindal Seeds",
+  "Kalash Seeds",
+  "Malav Seeds",
+  "Mukund",
+  "Namdhari Seeds",
+  "Prashant",
+  "Rudraksh Seeds",
+  "Sarpan Hybrid Seeds",
+  "Seminis (Bayer)",
+  "Syngenta",
+  "Urja Seeds",
+  "Others",
+];
+
 const HINDI_NAMES: Record<string, string> = {
   CS3: "सीएस3", CS1: "सीएस1", Torus: "टोरस", Pukhraj: "पुखराज",
   Jyoti: "ज्योति", Lakar: "लकड़", Others: "अन्य",
   Merino: "मेरिनो", Technico: "टेक्निको", Uttkal: "उत्कल",
   Jain: "जैन", Jalandhar: "जालंधर", Merath: "मेरठ",
+  Nafed: "नाफेड", Nasik: "नासिक",
+  Agriwell: "एग्रीवेल", Kalash: "कलश",
+  "Nasik Fursungi": "नासिक फुरसुंगी",
+  "Nasik Red (N-53)": "नासिक रेड (एन-53)",
+  "NHRDF Red / L-28": "एनएचआरडीएफ रेड / एल-28",
+  Deepak: "दीपक",
+  "Divya Seeds": "दिव्य सीड्स",
+  "East-West Seed": "ईस्ट-वेस्ट सीड",
+  Ellora: "एलोरा",
+  "Farmson Biotech": "फार्मसन बायोटेक",
+  "Indo-American Hybrid Seeds (IAHS)": "इंडो-अमेरिकन हाइब्रिड सीड्स (IAHS)",
+  "Jindal Seeds": "जिंदल सीड्स",
+  "Kalash Seeds": "कलश सीड्स",
+  "Malav Seeds": "मालव सीड्स",
+  Mukund: "मुकुंद",
+  "Namdhari Seeds": "नामधारी सीड्स",
+  Prashant: "प्रशांत",
+  "Rudraksh Seeds": "रुद्राक्ष सीड्स",
+  "Sarpan Hybrid Seeds": "सर्पन हाइब्रिड सीड्स",
+  "Seminis (Bayer)": "सेमिनिस (बेयर)",
+  Syngenta: "सिंजेंटा",
+  "Urja Seeds": "ऊर्जा सीड्स",
 };
+
+function SearchableSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  searchPlaceholder,
+  emptyText,
+  hn,
+  testId,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder: string;
+  searchPlaceholder: string;
+  emptyText: string;
+  hn: (v: string) => string;
+  testId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+          data-testid={testId}
+        >
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
+            {value ? hn(value) : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} data-testid={`${testId}-search`} />
+          <CommandList>
+            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandGroup>
+              {options.map(opt => (
+                <CommandItem
+                  key={opt}
+                  value={opt}
+                  onSelect={() => {
+                    onChange(opt);
+                    setOpen(false);
+                  }}
+                  data-testid={`${testId}-option-${opt}`}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === opt ? "opacity-100" : "opacity-0")} />
+                  {hn(opt)}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function StarDisplay({ avg, count, size = "sm" }: { avg: number; count: number; size?: "sm" | "md" }) {
   const sizeClass = size === "sm" ? "w-3 h-3" : "w-4 h-4";
@@ -91,6 +212,10 @@ export default function MarketplacePage() {
   const [quantityBags, setQuantityBags] = useState("");
   const [potatoVariety, setPotatoVariety] = useState("");
   const [potatoBrand, setPotatoBrand] = useState("");
+  const [onionSeedType, setOnionSeedType] = useState("");
+  const [onionSeedVariety, setOnionSeedVariety] = useState("");
+  const [onionSeedBrand, setOnionSeedBrand] = useState("");
+  const [onionSeedPricePerKg, setOnionSeedPricePerKg] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"latest" | "nearest" | "oldest">("latest");
   const [sortOpen, setSortOpen] = useState(false);
@@ -171,6 +296,10 @@ export default function MarketplacePage() {
     setQuantityBags("");
     setPotatoVariety("");
     setPotatoBrand("");
+    setOnionSeedType("");
+    setOnionSeedVariety("");
+    setOnionSeedBrand("");
+    setOnionSeedPricePerKg("");
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -208,10 +337,19 @@ export default function MarketplacePage() {
       data.quantityBigha = quantityBigha;
       data.availableAfterDays = availableDays;
       data.onionType = onionType;
-    } else {
+    } else if (category === "potato_seed") {
       data.quantityBags = quantityBags;
       data.potatoVariety = potatoVariety;
       data.potatoBrand = potatoBrand;
+    } else if (category === "onion_seed") {
+      if (!onionSeedVariety) {
+        toast({ title: t("onionSeedVariety"), variant: "destructive" });
+        return;
+      }
+      data.onionSeedType = onionSeedType || null;
+      data.onionSeedVariety = onionSeedVariety;
+      data.onionSeedBrand = onionSeedBrand && onionSeedBrand !== "none" ? onionSeedBrand : null;
+      data.onionSeedPricePerKg = onionSeedPricePerKg ? parseInt(onionSeedPricePerKg, 10) : null;
     }
     createMutation.mutate(data);
   }
@@ -288,12 +426,40 @@ export default function MarketplacePage() {
   });
 
   const categoryLabel = (cat: string) =>
-    cat === "onion_seedling" ? t("onionSeedling") : t("potatoSeed");
+    cat === "onion_seedling" ? t("onionSeedling")
+      : cat === "potato_seed" ? t("potatoSeed")
+      : cat === "onion_seed" ? t("onionSeed")
+      : cat;
 
   const categoryBadgeColor = (cat: string) =>
     cat === "onion_seedling"
       ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
-      : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+      : cat === "potato_seed"
+      ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+      : "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300";
+
+  const categoryPlaceholderBg = (cat: string) =>
+    cat === "onion_seedling"
+      ? "bg-green-50 dark:bg-green-950/30"
+      : cat === "potato_seed"
+      ? "bg-amber-50 dark:bg-amber-950/30"
+      : "bg-rose-50 dark:bg-rose-950/30";
+
+  const renderPlaceholderIcon = (cat: string, size: "sm" | "lg") => {
+    const cls = size === "sm" ? "w-10 h-10" : "w-16 h-16";
+    if (cat === "onion_seedling") {
+      return <Sprout className={`${cls} text-green-300 dark:text-green-700`} />;
+    }
+    if (cat === "potato_seed") {
+      return <Leaf className={`${cls} text-amber-300 dark:text-amber-700`} />;
+    }
+    return <Package className={`${cls} text-rose-300 dark:text-rose-700`} />;
+  };
+
+  const formatPrice = (n: number | null | undefined) => {
+    if (n == null) return null;
+    return language === "hi" ? `₹${n} / किलो` : `₹${n} / kg`;
+  };
 
   const hn = (val: string | null | undefined) => {
     if (!val) return val;
@@ -329,6 +495,7 @@ export default function MarketplacePage() {
             <SelectItem value="all" data-testid="filter-all">{t("allCategories")}</SelectItem>
             <SelectItem value="onion_seedling" data-testid="filter-onion_seedling">{t("onionSeedling")}</SelectItem>
             <SelectItem value="potato_seed" data-testid="filter-potato_seed">{t("potatoSeed")}</SelectItem>
+            <SelectItem value="onion_seed" data-testid="filter-onion_seed">{t("onionSeed")}</SelectItem>
           </SelectContent>
         </Select>
         <div className="ml-auto relative">
@@ -380,6 +547,7 @@ export default function MarketplacePage() {
             const dist = getDistanceKm(listing);
             const isOwner = user?.id === listing.sellerId;
             const isOnion = listing.category === "onion_seedling";
+            const isOnionSeed = listing.category === "onion_seed";
             const hasPhoto = listing.photoCount > 0 || listing.photoMime;
             return (
               <Card
@@ -396,12 +564,8 @@ export default function MarketplacePage() {
                     data-testid={`img-listing-${listing.id}`}
                   />
                 ) : (
-                  <div className={`w-full aspect-[4/3] flex items-center justify-center ${isOnion ? "bg-green-50 dark:bg-green-950/30" : "bg-amber-50 dark:bg-amber-950/30"}`}>
-                    {isOnion ? (
-                      <Sprout className="w-10 h-10 text-green-300 dark:text-green-700" />
-                    ) : (
-                      <Leaf className="w-10 h-10 text-amber-300 dark:text-amber-700" />
-                    )}
+                  <div className={`w-full aspect-[4/3] flex items-center justify-center ${categoryPlaceholderBg(listing.category)}`}>
+                    {renderPlaceholderIcon(listing.category, "sm")}
                   </div>
                 )}
 
@@ -411,7 +575,7 @@ export default function MarketplacePage() {
                   </Badge>
 
                   <div className="flex-1 min-h-0">
-                    {isOnion ? (
+                    {isOnion && (
                       <>
                         {listing.quantityBigha && (
                           <p className="text-sm font-bold leading-snug" data-testid={`text-qty-${listing.id}`}>
@@ -425,7 +589,8 @@ export default function MarketplacePage() {
                           ].filter(Boolean).join(" · ") || "—"}
                         </p>
                       </>
-                    ) : (
+                    )}
+                    {!isOnion && !isOnionSeed && (
                       <>
                         {listing.quantityBags && (
                           <p className="text-sm font-bold leading-snug" data-testid={`text-qty-${listing.id}`}>
@@ -434,6 +599,18 @@ export default function MarketplacePage() {
                         )}
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[hn(listing.potatoVariety), hn(listing.potatoBrand)].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                      </>
+                    )}
+                    {isOnionSeed && (
+                      <>
+                        <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {listing.onionSeedPricePerKg != null
+                            ? formatPrice(listing.onionSeedPricePerKg)
+                            : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
+                        </p>
+                        <p className="text-xs font-medium text-foreground leading-snug truncate">
+                          {[hn(listing.onionSeedType), hn(listing.onionSeedVariety), hn(listing.onionSeedBrand)].filter(Boolean).join(" · ") || "—"}
                         </p>
                       </>
                     )}
@@ -538,6 +715,7 @@ export default function MarketplacePage() {
                 <SelectContent>
                   <SelectItem value="onion_seedling">{t("onionSeedling")}</SelectItem>
                   <SelectItem value="potato_seed">{t("potatoSeed")}</SelectItem>
+                  <SelectItem value="onion_seed">{t("onionSeed")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -651,6 +829,63 @@ export default function MarketplacePage() {
                 </div>
               </>
             )}
+
+            {category === "onion_seed" && (
+              <>
+                <div>
+                  <Label className="text-sm">{t("pricePerKg")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={999999}
+                    value={onionSeedPricePerKg}
+                    onChange={(e) => setOnionSeedPricePerKg(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-onion-seed-price"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("onionSeedType")}</Label>
+                  <Select value={onionSeedType} onValueChange={setOnionSeedType}>
+                    <SelectTrigger data-testid="select-onion-seed-type">
+                      <SelectValue placeholder={t("selectOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ONION_SEED_TYPES.map(v => (
+                        <SelectItem key={v} value={v} data-testid={`option-onion-seed-type-${v}`}>{hn(v)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm">{t("onionSeedVariety")}</Label>
+                  <SearchableSelect
+                    value={onionSeedVariety}
+                    onChange={setOnionSeedVariety}
+                    options={ONION_SEED_VARIETIES}
+                    placeholder={t("selectOption")}
+                    searchPlaceholder={t("searchPlaceholder")}
+                    emptyText={t("noResults")}
+                    hn={(v) => hn(v) || v}
+                    testId="select-onion-seed-variety"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("onionSeedBrand")}</Label>
+                  <SearchableSelect
+                    value={onionSeedBrand}
+                    onChange={setOnionSeedBrand}
+                    options={["none", ...ONION_SEED_BRANDS]}
+                    placeholder={t("selectOption")}
+                    searchPlaceholder={t("searchPlaceholder")}
+                    emptyText={t("noResults")}
+                    hn={(v) => v === "none" ? t("noBrand") : (hn(v) || v)}
+                    testId="select-onion-seed-brand"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <DialogFooter>
@@ -674,6 +909,7 @@ export default function MarketplacePage() {
               {(() => {
                 const listing = detailListing;
                 const isOnion = listing.category === "onion_seedling";
+                const isOnionSeed = listing.category === "onion_seed";
                 const totalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
                 const hasPhotos = totalPhotos > 0;
                 const dist = getDistanceKm(listing);
@@ -690,12 +926,8 @@ export default function MarketplacePage() {
                           data-testid="img-detail-photo"
                         />
                       ) : (
-                        <div className={`w-full aspect-[4/3] flex items-center justify-center ${isOnion ? "bg-green-50 dark:bg-green-950/30" : "bg-amber-50 dark:bg-amber-950/30"}`}>
-                          {isOnion ? (
-                            <Sprout className="w-16 h-16 text-green-300 dark:text-green-700" />
-                          ) : (
-                            <Leaf className="w-16 h-16 text-amber-300 dark:text-amber-700" />
-                          )}
+                        <div className={`w-full aspect-[4/3] flex items-center justify-center ${categoryPlaceholderBg(listing.category)}`}>
+                          {renderPlaceholderIcon(listing.category, "lg")}
                         </div>
                       )}
                       {totalPhotos > 1 && (
@@ -733,7 +965,7 @@ export default function MarketplacePage() {
                         )}
                       </div>
 
-                      {isOnion ? (
+                      {isOnion && (
                         <div>
                           {listing.quantityBigha && (
                             <p className="text-xl font-bold">{listing.quantityBigha} {t("bigha")}</p>
@@ -745,7 +977,8 @@ export default function MarketplacePage() {
                             <p className="text-sm font-medium">{t("onionType")}: {listing.onionType}</p>
                           )}
                         </div>
-                      ) : (
+                      )}
+                      {!isOnion && !isOnionSeed && (
                         <div>
                           {listing.quantityBags && (
                             <p className="text-xl font-bold">{listing.quantityBags} {t("bags")}</p>
@@ -755,6 +988,24 @@ export default function MarketplacePage() {
                           )}
                           {listing.potatoBrand && (
                             <p className="text-sm font-medium">{t("potatoBrand")}: {hn(listing.potatoBrand)}</p>
+                          )}
+                        </div>
+                      )}
+                      {isOnionSeed && (
+                        <div>
+                          <p className="text-xl font-bold" data-testid="text-detail-price">
+                            {listing.onionSeedPricePerKg != null
+                              ? formatPrice(listing.onionSeedPricePerKg)
+                              : <span className="text-foreground/70">{t("contactForPrice")}</span>}
+                          </p>
+                          {listing.onionSeedType && (
+                            <p className="text-sm font-medium">{t("onionSeedType")}: {hn(listing.onionSeedType)}</p>
+                          )}
+                          {listing.onionSeedVariety && (
+                            <p className="text-sm font-medium">{t("onionSeedVariety")}: {hn(listing.onionSeedVariety)}</p>
+                          )}
+                          {listing.onionSeedBrand && (
+                            <p className="text-sm font-medium">{t("onionSeedBrand")}: {hn(listing.onionSeedBrand)}</p>
                           )}
                         </div>
                       )}

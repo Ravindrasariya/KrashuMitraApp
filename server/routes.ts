@@ -1718,8 +1718,8 @@ Respond in this structure:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand } = req.body || {};
-      if (!category || !["onion_seedling", "potato_seed"].includes(category)) {
+      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg } = req.body || {};
+      if (!category || !["onion_seedling", "potato_seed", "onion_seed"].includes(category)) {
         return res.status(400).json({ message: "Invalid category" });
       }
       if (category === "onion_seedling" && !quantityBigha) {
@@ -1728,18 +1728,50 @@ Respond in this structure:
       if (category === "potato_seed" && !quantityBags) {
         return res.status(400).json({ message: "quantityBags required for potato_seed" });
       }
+      if (category === "onion_seed" && !onionSeedVariety) {
+        return res.status(400).json({ message: "onionSeedVariety required for onion_seed" });
+      }
+
+      const ONION_SEED_TYPES_ALLOWED = ["Nafed", "Nasik", "Others"];
+      const ONION_SEED_VARIETIES_ALLOWED = ["Agriwell", "Kalash", "Nasik Fursungi", "Nasik Red (N-53)", "NHRDF Red / L-28", "Others"];
+      const ONION_SEED_BRANDS_ALLOWED = ["Deepak", "Divya Seeds", "East-West Seed", "Ellora", "Farmson Biotech", "Indo-American Hybrid Seeds (IAHS)", "Jindal Seeds", "Kalash Seeds", "Malav Seeds", "Mukund", "Namdhari Seeds", "Prashant", "Rudraksh Seeds", "Sarpan Hybrid Seeds", "Seminis (Bayer)", "Syngenta", "Urja Seeds", "Others"];
+
+      if (category === "onion_seed") {
+        if (onionSeedType && !ONION_SEED_TYPES_ALLOWED.includes(String(onionSeedType))) {
+          return res.status(400).json({ message: "Invalid onionSeedType" });
+        }
+        if (!ONION_SEED_VARIETIES_ALLOWED.includes(String(onionSeedVariety))) {
+          return res.status(400).json({ message: "Invalid onionSeedVariety" });
+        }
+        if (onionSeedBrand && !ONION_SEED_BRANDS_ALLOWED.includes(String(onionSeedBrand))) {
+          return res.status(400).json({ message: "Invalid onionSeedBrand" });
+        }
+      }
+
+      let parsedPricePerKg: number | null = null;
+      if (category === "onion_seed" && onionSeedPricePerKg !== undefined && onionSeedPricePerKg !== null && String(onionSeedPricePerKg).trim() !== "") {
+        const n = parseInt(String(onionSeedPricePerKg), 10);
+        if (Number.isNaN(n) || n < 0 || n > 999999) {
+          return res.status(400).json({ message: "Invalid price per kg" });
+        }
+        parsedPricePerKg = n;
+      }
 
       const listing = await storage.createMarketplaceListing({
         sellerId: userId,
         category,
         photoData: null,
         photoMime: null,
-        quantityBigha: quantityBigha ? String(quantityBigha).slice(0, 20) : null,
-        availableAfterDays: availableAfterDays ? Math.max(0, parseInt(String(availableAfterDays)) || 0) : null,
-        onionType: onionType ? String(onionType).slice(0, 100) : null,
-        quantityBags: quantityBags ? String(quantityBags).slice(0, 20) : null,
-        potatoVariety: potatoVariety ? String(potatoVariety).slice(0, 50) : null,
-        potatoBrand: potatoBrand ? String(potatoBrand).slice(0, 50) : null,
+        quantityBigha: category === "onion_seedling" && quantityBigha ? String(quantityBigha).slice(0, 20) : null,
+        availableAfterDays: category === "onion_seedling" && availableAfterDays ? Math.max(0, parseInt(String(availableAfterDays)) || 0) : null,
+        onionType: category === "onion_seedling" && onionType ? String(onionType).slice(0, 100) : null,
+        quantityBags: category === "potato_seed" && quantityBags ? String(quantityBags).slice(0, 20) : null,
+        potatoVariety: category === "potato_seed" && potatoVariety ? String(potatoVariety).slice(0, 50) : null,
+        potatoBrand: category === "potato_seed" && potatoBrand ? String(potatoBrand).slice(0, 50) : null,
+        onionSeedType: category === "onion_seed" && onionSeedType ? String(onionSeedType).slice(0, 100) : null,
+        onionSeedVariety: category === "onion_seed" && onionSeedVariety ? String(onionSeedVariety).slice(0, 100) : null,
+        onionSeedBrand: category === "onion_seed" && onionSeedBrand ? String(onionSeedBrand).slice(0, 100) : null,
+        onionSeedPricePerKg: parsedPricePerKg,
         sellerVillage: user.village || null,
         sellerTehsil: user.tehsil || null,
         sellerDistrict: user.district || null,
