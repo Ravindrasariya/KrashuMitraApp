@@ -861,32 +861,61 @@ Rules:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { serviceType, imageData, imageMimeType, benchmarkRate } = req.body;
+      const { serviceType, imageData, imageMimeType, imageDataList, imageMimeTypeList, benchmarkRate } = req.body;
       if (!serviceType || !["soil_test", "potato_perishability_test", "crop_doctor", "onion_price_predictor"].includes(serviceType)) {
         return res.status(400).json({ message: "Invalid service type" });
       }
 
       let aiDiagnosis: string | null = null;
       let inputData: string | null = null;
+      let onionImagesForStorage: { data: string; mime: string }[] = [];
 
       if (serviceType === "onion_price_predictor") {
-        if (!imageData || !imageMimeType) {
+        const rawList: string[] = Array.isArray(imageDataList) && imageDataList.length > 0
+          ? imageDataList
+          : (imageData ? [imageData] : []);
+        const rawMimes: string[] = Array.isArray(imageMimeTypeList) && imageMimeTypeList.length > 0
+          ? imageMimeTypeList
+          : (imageMimeType ? [imageMimeType] : []);
+
+        if (rawList.length === 0 || rawMimes.length === 0) {
           return res.status(400).json({ message: "Image required for Onion Price Predictor" });
         }
+        if (rawList.length > 3) {
+          return res.status(400).json({ message: "Maximum 3 photos per onion lot" });
+        }
+        if (rawList.length !== rawMimes.length) {
+          return res.status(400).json({ message: "Image data and mime type counts must match" });
+        }
+
+        onionImagesForStorage = rawList.map((d: string, i: number) => ({
+          data: String(d).replace(/^data:[^;]+;base64,/, ""),
+          mime: String(rawMimes[i] || "image/jpeg"),
+        }));
+
+        const totalBytes = onionImagesForStorage.reduce(
+          (sum, img) => sum + Buffer.byteLength(img.data, "base64"),
+          0,
+        );
+        if (totalBytes > 12 * 1024 * 1024) {
+          return res.status(400).json({ message: "Total image size exceeds 12 MB" });
+        }
+
         const B = Number(benchmarkRate);
         if (!Number.isFinite(B) || B <= 0) {
           return res.status(400).json({ message: "Valid mandi benchmark price required" });
         }
 
         inputData = JSON.stringify({ benchmarkRate: B });
-        const base64Data = imageData.replace(/^data:[^;]+;base64,/, "");
 
         const kqvPrompt = `# Role: KrashuVed Commodity Pricing & Underwriting Agent
 You are a high-precision pricing engine for the Indian Onion ecosystem. Your task is to calculate two values for every lot:
 1. **Market Price:** The estimated current sale value in the Mandi.
 2. **Collateral Value:** The de-risked value used for Lending (LSP) and Storage decisions.
 
-The user-provided mandi_benchmark_price (B) for this lot is: INR ${B} per quintal (this is the price for Lot 1 — Premium Super grade in the user's mandi today).
+You may receive 1 to 3 photos of the same lot — score the lot as a whole, not each photo separately.
+
+The user-provided mandi_benchmark_price (B) for this lot is: INR ${B} per kg (this is the price for Lot 1 — Premium Super grade in the user's mandi today).
 
 # Phase 1: Market Heat Index (H) Calculation
 Determine the Market State based on B:
@@ -990,7 +1019,9 @@ If the image does not appear to be onions, return:
               role: "user",
               parts: [
                 { text: kqvPrompt },
-                { inlineData: { mimeType: imageMimeType, data: base64Data } },
+                ...onionImagesForStorage.map((img) => ({
+                  inlineData: { mimeType: img.mime, data: img.data },
+                })),
               ],
             }],
             config: {
@@ -1107,14 +1138,23 @@ Respond in this structure:
       }
 
       const savesImage = serviceType === "crop_doctor" || serviceType === "onion_price_predictor";
+      const isOnionSave = serviceType === "onion_price_predictor" && onionImagesForStorage.length > 0;
+      const primaryImageData = isOnionSave
+        ? onionImagesForStorage[0].data
+        : (savesImage ? imageData : null);
+      const primaryImageMime = isOnionSave
+        ? onionImagesForStorage[0].mime
+        : (savesImage ? imageMimeType : null);
       const request = await storage.createServiceRequest({
         userId,
         serviceType,
         farmerName: user.firstName || null,
         farmerPhone: user.phoneNumber || null,
         farmerCode: user.farmerCode || null,
-        imageData: savesImage ? imageData : null,
-        imageMimeType: savesImage ? imageMimeType : null,
+        imageData: primaryImageData,
+        imageMimeType: primaryImageMime,
+        imageDataList: isOnionSave ? onionImagesForStorage.map((i) => i.data) : null,
+        imageMimeTypeList: isOnionSave ? onionImagesForStorage.map((i) => i.mime) : null,
         aiDiagnosis,
         inputData,
       });
@@ -1138,13 +1178,31 @@ Respond in this structure:
   app.get("/api/service-requests/:id/image", isAuthenticated, async (req: any, res) => {
     try {
       const request = await storage.getServiceRequest(parseInt(req.params.id));
-      if (!request || !request.imageData) return res.status(404).json({ message: "Not found" });
+      if (!request) return res.status(404).json({ message: "Not found" });
       const user = await storage.getUserById(req.session.userId);
       if (request.userId !== req.session.userId && !user?.isAdmin) {
         return res.status(403).json({ message: "Forbidden" });
       }
-      const buffer = Buffer.from(request.imageData, "base64");
-      res.set("Content-Type", request.imageMimeType || "image/jpeg");
+
+      const rawIndex = req.query.index;
+      const requestedIndex = Number.isFinite(Number(rawIndex)) ? Math.max(0, Math.floor(Number(rawIndex))) : 0;
+      const list = request.imageDataList;
+      const mimes = request.imageMimeTypeList;
+
+      let data: string | null = null;
+      let mime: string | null = null;
+      if (Array.isArray(list) && list.length > 0) {
+        const safeIndex = requestedIndex < list.length ? requestedIndex : 0;
+        data = list[safeIndex];
+        mime = (Array.isArray(mimes) && mimes[safeIndex]) ? mimes[safeIndex] : (request.imageMimeType || "image/jpeg");
+      } else if (request.imageData) {
+        data = request.imageData;
+        mime = request.imageMimeType || "image/jpeg";
+      }
+
+      if (!data) return res.status(404).json({ message: "Not found" });
+      const buffer = Buffer.from(data, "base64");
+      res.set("Content-Type", mime || "image/jpeg");
       res.send(buffer);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch image" });

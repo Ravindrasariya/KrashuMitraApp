@@ -89,10 +89,9 @@ export default function DigitalClinicPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const onionFileInputRef = useRef<HTMLInputElement>(null);
   const [onionBenchmark, setOnionBenchmark] = useState<string>("");
-  const [onionImageBase64, setOnionImageBase64] = useState<string | null>(null);
-  const [onionImageMime, setOnionImageMime] = useState<string>("");
-  const [onionImagePreview, setOnionImagePreview] = useState<string | null>(null);
+  const [onionImages, setOnionImages] = useState<{ base64: string; mime: string; preview: string }[]>([]);
   const [latestOnionResult, setLatestOnionResult] = useState<string | null>(null);
+  const ONION_MAX_IMAGES = 3;
 
   const { data: requests = [], isLoading: requestsLoading } = useQuery<ServiceRequest[]>({
     queryKey: ["/api/service-requests"],
@@ -140,17 +139,15 @@ export default function DigitalClinicPage() {
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/service-requests", {
         serviceType: "onion_price_predictor",
-        imageData: onionImageBase64,
-        imageMimeType: onionImageMime,
+        imageDataList: onionImages.map((i) => i.base64),
+        imageMimeTypeList: onionImages.map((i) => i.mime),
         benchmarkRate: Number(onionBenchmark),
       });
       return res.json() as Promise<ServiceRequest>;
     },
     onSuccess: (data: ServiceRequest) => {
       setLatestOnionResult(data.aiDiagnosis || null);
-      setOnionImagePreview(null);
-      setOnionImageBase64(null);
-      setOnionImageMime("");
+      setOnionImages([]);
       qc.invalidateQueries({ queryKey: ["/api/service-requests"] });
     },
     onError: (err: Error) => {
@@ -184,17 +181,40 @@ export default function DigitalClinicPage() {
   }
 
   function handleOnionFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setOnionImageMime(file.type);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setOnionImagePreview(result);
-      setOnionImageBase64(result.split(",")[1]);
-    };
-    reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
+    if (files.length === 0) return;
+
+    const remaining = ONION_MAX_IMAGES - onionImages.length;
+    if (remaining <= 0) {
+      toast({ title: t("onionMaxImages"), variant: "destructive" });
+      return;
+    }
+    const accepted = files.slice(0, remaining);
+    if (files.length > remaining) {
+      toast({ title: t("onionMaxImages"), variant: "destructive" });
+    }
+
+    Promise.all(
+      accepted.map(
+        (file) =>
+          new Promise<{ base64: string; mime: string; preview: string }>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve({ base64: result.split(",")[1], mime: file.type, preview: result });
+            };
+            reader.onerror = () => reject(new Error("read_failed"));
+            reader.readAsDataURL(file);
+          }),
+      ),
+    )
+      .then((items) => setOnionImages((prev) => [...prev, ...items].slice(0, ONION_MAX_IMAGES)))
+      .catch(() => toast({ title: t("imageReadFailed"), variant: "destructive" }));
+  }
+
+  function removeOnionImage(idx: number) {
+    setOnionImages((prev) => prev.filter((_, i) => i !== idx));
   }
 
   const serviceLabel = (type: string) => {
@@ -265,38 +285,58 @@ export default function DigitalClinicPage() {
                   ref={onionFileInputRef}
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
                   onChange={handleOnionFileSelect}
                   data-testid="input-onion-photo"
                 />
-                {onionImagePreview && (
-                  <img
-                    src={onionImagePreview}
-                    alt=""
-                    className="w-full max-h-48 object-contain rounded-md border"
-                    data-testid="img-onion-preview"
-                  />
+                {onionImages.length > 0 && (
+                  <div className="flex gap-2 flex-wrap" data-testid="row-onion-previews">
+                    {onionImages.map((img, idx) => (
+                      <div key={idx} className="relative">
+                        <img
+                          src={img.preview}
+                          alt=""
+                          className="w-20 h-20 object-cover rounded-md border"
+                          data-testid={`img-onion-preview-${idx}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeOnionImage(idx)}
+                          disabled={onionMutation.isPending}
+                          className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-background border text-xs flex items-center justify-center shadow-sm hover-elevate active-elevate-2 disabled:opacity-50"
+                          aria-label="Remove"
+                          data-testid={`button-remove-onion-image-${idx}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
                   <Button
                     variant="outline"
                     onClick={() => onionFileInputRef.current?.click()}
-                    disabled={onionMutation.isPending}
+                    disabled={onionMutation.isPending || onionImages.length >= ONION_MAX_IMAGES}
                     data-testid="button-upload-onion-photo"
                   >
                     <Camera className="w-4 h-4 mr-1" />
                     {t("uploadOnionPhoto")}
                   </Button>
+                  <span className="text-xs text-muted-foreground" data-testid="text-onion-image-count">
+                    {onionImages.length}/{ONION_MAX_IMAGES}
+                  </span>
                   <Button
                     onClick={() => {
                       const b = Number(onionBenchmark);
-                      if (!onionImageBase64 || !(b > 0)) {
+                      if (onionImages.length === 0 || !(b > 0)) {
                         toast({ title: t("benchmarkRequired"), variant: "destructive" });
                         return;
                       }
                       onionMutation.mutate();
                     }}
-                    disabled={onionMutation.isPending || !onionImageBase64 || !(Number(onionBenchmark) > 0)}
+                    disabled={onionMutation.isPending || onionImages.length === 0 || !(Number(onionBenchmark) > 0)}
                     data-testid="button-analyze-onion"
                   >
                     {onionMutation.isPending ? (
@@ -396,7 +436,6 @@ export default function DigitalClinicPage() {
               const isExpandable = isCropDoctor || isOnion;
               const isExpanded = expandedRequestId === req.id;
               const onionParsed = isOnion ? safeParseOnion(req.aiDiagnosis!) : null;
-              const onionHeat = onionParsed?.pricing_analysis?.market_heat_index;
               const onionMarketPrice = onionParsed?.pricing_analysis?.calculated_market_price;
               const onionCollateral = onionParsed?.pricing_analysis?.collateral_value;
               const onionCollateralPct =
@@ -431,11 +470,6 @@ export default function DigitalClinicPage() {
                         >
                           {req.status === "open" ? t("open") : t("closed")}
                         </Badge>
-                        {isOnion && onionHeat && (
-                          <Badge className={heatColor(onionHeat)} data-testid={`badge-onion-heat-${req.id}`}>
-                            {heatLabel(onionHeat, t)}
-                          </Badge>
-                        )}
                         {isOnion && onionParsed?.pricing_analysis && (
                           <Badge variant="outline" className="gap-1 tabular-nums" data-testid={`badge-onion-collateral-${req.id}`}>
                             {onionCollateralPct != null ? `${onionCollateralPct}%` : "—"}
@@ -464,13 +498,27 @@ export default function DigitalClinicPage() {
                   </div>
                   {isExpandable && isExpanded && (
                     <div className="mt-3 pt-3 border-t" data-testid={`text-diagnosis-full-${req.id}`}>
-                      {req.imageData && (
-                        <img
-                          src={`/api/service-requests/${req.id}/image`}
-                          alt=""
-                          className="w-full max-h-64 object-contain rounded-md mb-3"
-                          data-testid={`img-request-full-${req.id}`}
-                        />
+                      {isOnion && Array.isArray(req.imageDataList) && req.imageDataList.length > 1 ? (
+                        <div className="flex gap-2 flex-wrap mb-3" data-testid={`row-request-images-${req.id}`}>
+                          {req.imageDataList.map((_, idx) => (
+                            <img
+                              key={idx}
+                              src={`/api/service-requests/${req.id}/image?index=${idx}`}
+                              alt=""
+                              className="w-24 h-24 object-cover rounded-md border"
+                              data-testid={`img-request-full-${req.id}-${idx}`}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        req.imageData && (
+                          <img
+                            src={`/api/service-requests/${req.id}/image`}
+                            alt=""
+                            className="w-full max-h-64 object-contain rounded-md mb-3"
+                            data-testid={`img-request-full-${req.id}`}
+                          />
+                        )
                       )}
                       {isCropDoctor && <MarkdownText text={req.aiDiagnosis!} />}
                       {isOnion && <OnionResultView raw={req.aiDiagnosis!} />}
@@ -775,16 +823,12 @@ function OnionResultView({ raw }: { raw: string }) {
             <div className="text-2xl font-bold tabular-nums" data-testid="text-onion-market-price">
               {formatINR(market)}
             </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5">{t("perQuintal")}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">{t("perKg")}</div>
           </div>
           <div className="bg-background/60 rounded p-3">
             <div className="text-xs text-muted-foreground">{t("collateralValue")}</div>
             <div className={`text-2xl font-bold tabular-nums ${collateralPctClass}`} data-testid="text-onion-collateral-pct">
               {collateralPct != null ? `${collateralPct}%` : "—"}
-            </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5">{t("ofMarketPrice")}</div>
-            <div className="text-[10px] text-muted-foreground mt-1 leading-tight" data-testid="text-onion-ltv-note">
-              {t("collateralLtvNote")}
             </div>
           </div>
         </div>
