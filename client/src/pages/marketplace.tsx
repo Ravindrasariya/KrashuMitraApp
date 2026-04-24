@@ -684,7 +684,7 @@ export default function MarketplacePage() {
             return (
               <Card
                 key={listing.id}
-                className="overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition-shadow"
+                className="group relative overflow-hidden flex flex-col cursor-pointer rounded-2xl border-card-border/80 bg-gradient-to-br from-card via-card to-card/70 dark:from-card dark:via-card dark:to-background/60 shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/20 transition-all duration-300 ease-out will-change-transform"
                 onClick={() => { setDetailListing(listing); setDetailPhotoIndex(0); }}
                 data-testid={`card-listing-${listing.id}`}
               >
@@ -765,7 +765,7 @@ export default function MarketplacePage() {
                   </div>
                 )}
 
-                <div className="p-2 flex flex-col flex-1 gap-1">
+                <div className="relative z-10 p-2 flex flex-col flex-1 gap-1">
                   <Badge className={`text-xs font-semibold px-1.5 py-0.5 leading-4 w-fit ${categoryBadgeColor(listing.category)}`} data-testid={`badge-category-${listing.id}`}>
                     {categoryLabel(listing.category)}
                   </Badge>
@@ -904,6 +904,10 @@ export default function MarketplacePage() {
                     )}
                   </div>
                 </div>
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 z-[1] rounded-2xl bg-[linear-gradient(115deg,transparent_28%,rgba(255,255,255,0.18)_46%,rgba(255,255,255,0.32)_50%,rgba(255,255,255,0.18)_54%,transparent_72%)] dark:bg-[linear-gradient(115deg,transparent_28%,rgba(255,255,255,0.05)_46%,rgba(255,255,255,0.10)_50%,rgba(255,255,255,0.05)_54%,transparent_72%)] opacity-60 group-hover:opacity-90 translate-x-0 group-hover:translate-x-[6%] transition-[opacity,transform] duration-700 ease-out mix-blend-overlay dark:mix-blend-soft-light"
+                />
               </Card>
             );
           })}
