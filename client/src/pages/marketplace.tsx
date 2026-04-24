@@ -213,7 +213,7 @@ export default function MarketplacePage() {
   const [detailListing, setDetailListing] = useState<ListingNoPhoto | null>(null);
   const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
   const [cardPhotoIndex, setCardPhotoIndex] = useState<Record<number, number>>({});
-  const cardSwipeRef = useRef<{ startX: number; startY: number; swiped: boolean } | null>(null);
+  const cardSwipeRef = useRef<Map<number, { startX: number; startY: number; swiped: boolean }>>(new Map());
 
   const advanceCardPhoto = (id: number, total: number, dir: 1 | -1) => {
     setCardPhotoIndex(s => {
@@ -691,10 +691,10 @@ export default function MarketplacePage() {
                     className="relative"
                     onTouchStart={(e) => {
                       const t = e.touches[0];
-                      cardSwipeRef.current = { startX: t.clientX, startY: t.clientY, swiped: false };
+                      cardSwipeRef.current.set(listing.id, { startX: t.clientX, startY: t.clientY, swiped: false });
                     }}
                     onTouchEnd={(e) => {
-                      const s = cardSwipeRef.current;
+                      const s = cardSwipeRef.current.get(listing.id);
                       if (!s) return;
                       const t = e.changedTouches[0];
                       const dx = t.clientX - s.startX;
@@ -706,14 +706,14 @@ export default function MarketplacePage() {
                       }
                     }}
                     onTouchCancel={() => {
-                      cardSwipeRef.current = null;
+                      cardSwipeRef.current.delete(listing.id);
                     }}
                     onClick={(e) => {
-                      const s = cardSwipeRef.current;
+                      const s = cardSwipeRef.current.get(listing.id);
                       if (s?.swiped) {
                         e.stopPropagation();
                       }
-                      cardSwipeRef.current = null;
+                      cardSwipeRef.current.delete(listing.id);
                     }}
                   >
                     <img
