@@ -769,6 +769,8 @@ function OnionResultView({ raw }: { raw: string }) {
         </div>
       </div>
 
+      <QualityRatingBlock rating={parsed.quality_rating} />
+
       <div className="text-xs font-medium mb-2 text-muted-foreground">{t("visualParameters")}</div>
       <div className="grid grid-cols-2 gap-2 text-xs mb-3">
         <div className="bg-background/50 rounded p-2">
