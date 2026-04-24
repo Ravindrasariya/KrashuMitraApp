@@ -19,7 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MarketplaceListing } from "@shared/schema";
 
@@ -206,6 +206,9 @@ export default function MarketplacePage() {
   const qc = useQueryClient();
 
   const [addOpen, setAddOpen] = useState(false);
+  const [editingListingId, setEditingListingId] = useState<number | null>(null);
+  const [editPhotosLoading, setEditPhotosLoading] = useState(false);
+  const [photosDirty, setPhotosDirty] = useState(false);
   const [category, setCategory] = useState<string>("");
   const [uploadedPhotos, setUploadedPhotos] = useState<{ preview: string; base64: string; mime: string }[]>([]);
   const [quantityBigha, setQuantityBigha] = useState("");
@@ -257,6 +260,24 @@ export default function MarketplacePage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/marketplace/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: t("listingUpdated") });
+      qc.invalidateQueries({ queryKey: ["/api/marketplace"] });
+      resetForm();
+      setEditingListingId(null);
+      setAddOpen(false);
+      setDetailListing(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: err.message, variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest("DELETE", `/api/marketplace/${id}`);
@@ -295,6 +316,7 @@ export default function MarketplacePage() {
   function resetForm() {
     setCategory("");
     setUploadedPhotos([]);
+    setPhotosDirty(false);
     setQuantityBigha("");
     setAvailableDays("");
     setOnionType("");
@@ -326,6 +348,7 @@ export default function MarketplacePage() {
         base64: result.split(",")[1],
         mime: file.type,
       }]);
+      setPhotosDirty(true);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
@@ -333,12 +356,16 @@ export default function MarketplacePage() {
 
   function removePhoto(index: number) {
     setUploadedPhotos(prev => prev.filter((_, i) => i !== index));
+    setPhotosDirty(true);
   }
 
   function handleSubmit() {
     if (!category) return;
     const data: any = { category };
-    if (uploadedPhotos.length > 0) {
+    // For create, always include photos. For edit, only include when the user
+    // actually touched the photo widget — this prevents accidentally wiping
+    // photos when the prefetch failed or the user is doing a metadata-only edit.
+    if (editingListingId == null || photosDirty) {
       data.photos = uploadedPhotos.map(p => ({ base64: p.base64, mime: p.mime }));
     }
     if (category === "onion_seedling") {
@@ -367,7 +394,72 @@ export default function MarketplacePage() {
       data.soyabeanSeedVariety = soyabeanVariety.trim();
       data.soyabeanSeedPricePerQuintal = soyabeanPricePerQuintal ? parseInt(soyabeanPricePerQuintal, 10) : null;
     }
-    createMutation.mutate(data);
+    if (editingListingId != null) {
+      updateMutation.mutate({ id: editingListingId, data });
+    } else {
+      createMutation.mutate(data);
+    }
+  }
+
+  async function openEditDialog(listing: ListingNoPhoto) {
+    resetForm();
+    setCategory(listing.category);
+    if (listing.category === "onion_seedling") {
+      setQuantityBigha(listing.quantityBigha || "");
+      setAvailableDays(listing.availableAfterDays != null ? String(listing.availableAfterDays) : "");
+      setOnionType(listing.onionType || "");
+    } else if (listing.category === "potato_seed") {
+      setQuantityBags(listing.quantityBags || "");
+      setPotatoVariety(listing.potatoVariety || "");
+      setPotatoBrand(listing.potatoBrand || "");
+    } else if (listing.category === "onion_seed") {
+      setOnionSeedType(listing.onionSeedType || "");
+      setOnionSeedVariety(listing.onionSeedVariety || "");
+      setOnionSeedBrand(listing.onionSeedBrand || "none");
+      setOnionSeedPricePerKg(listing.onionSeedPricePerKg != null ? String(listing.onionSeedPricePerKg) : "");
+    }
+    setEditingListingId(listing.id);
+    setPhotosDirty(false);
+    setAddOpen(true);
+
+    const totalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
+    if (totalPhotos > 0) {
+      setEditPhotosLoading(true);
+      try {
+        const fetched = await Promise.all(
+          Array.from({ length: Math.min(totalPhotos, MAX_PHOTOS) }, async (_, i) => {
+            const res = await fetch(`/api/marketplace/${listing.id}/image?index=${i}`, { credentials: "include" });
+            if (!res.ok) throw new Error("photo-fetch-failed");
+            const blob = await res.blob();
+            const dataUrl: string = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(reader.error);
+              reader.readAsDataURL(blob);
+            });
+            return {
+              preview: dataUrl,
+              base64: dataUrl.split(",")[1] || "",
+              mime: blob.type || "image/jpeg",
+            };
+          })
+        );
+        setUploadedPhotos(fetched);
+        // Pre-fill itself isn't a user edit; only mark dirty when the user
+        // explicitly adds or removes a photo afterwards.
+        setPhotosDirty(false);
+      } catch {
+        // Photo prefetch failed. Surface a clear toast so the seller knows
+        // photos shown in the dialog (none) don't reflect what's saved, and
+        // submitting won't touch existing photos unless they explicitly
+        // add/remove a photo (which sets photosDirty).
+        toast({ title: t("editPhotoFetchFailed"), variant: "destructive" });
+        setUploadedPhotos([]);
+        setPhotosDirty(false);
+      } finally {
+        setEditPhotosLoading(false);
+      }
+    }
   }
 
   async function handleContactClick(id: number, e?: React.MouseEvent) {
@@ -715,20 +807,33 @@ export default function MarketplacePage() {
                       <span className="text-[9px] text-muted-foreground">{t("loginToContact")}</span>
                     )}
                     {isOwner && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="ml-auto"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm(t("deleteListingConfirm"))) {
-                            deleteMutation.mutate(listing.id);
-                          }
-                        }}
-                        data-testid={`button-delete-listing-${listing.id}`}
-                      >
-                        <Trash2 className="w-3 h-3 text-destructive" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="ml-auto"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(listing);
+                          }}
+                          data-testid={`button-edit-listing-${listing.id}`}
+                        >
+                          <Pencil className="w-3 h-3 text-primary" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(t("deleteListingConfirm"))) {
+                              deleteMutation.mutate(listing.id);
+                            }
+                          }}
+                          data-testid={`button-delete-listing-${listing.id}`}
+                        >
+                          <Trash2 className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -748,16 +853,16 @@ export default function MarketplacePage() {
         data-testid="input-listing-photo"
       />
 
-      <Dialog open={addOpen} onOpenChange={(open) => { if (!open) { resetForm(); setAddOpen(false); } }}>
+      <Dialog open={addOpen} onOpenChange={(open) => { if (!open) { resetForm(); setEditingListingId(null); setAddOpen(false); } }}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{t("addSale")}</DialogTitle>
+            <DialogTitle>{editingListingId != null ? t("editListing") : t("addSale")}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
               <Label className="text-sm">{t("selectItem")}</Label>
-              <Select value={category} onValueChange={setCategory}>
+              <Select value={category} onValueChange={setCategory} disabled={editingListingId != null}>
                 <SelectTrigger data-testid="select-category">
                   <SelectValue placeholder={t("selectItem")} />
                 </SelectTrigger>
@@ -771,7 +876,15 @@ export default function MarketplacePage() {
             </div>
 
             <div>
-              <Label className="text-sm">{t("photos")} ({uploadedPhotos.length}/{MAX_PHOTOS})</Label>
+              <Label className="text-sm">
+                {t("photos")} ({uploadedPhotos.length}/{MAX_PHOTOS})
+                {editPhotosLoading && <Loader2 className="inline-block w-3 h-3 ml-2 animate-spin" />}
+              </Label>
+              {editingListingId != null && !photosDirty && !editPhotosLoading && (
+                <p className="text-[11px] text-muted-foreground mt-0.5" data-testid="text-photos-unchanged-hint">
+                  {t("photosUnchangedHint")}
+                </p>
+              )}
               <div className="flex gap-2 mt-1 flex-wrap">
                 {uploadedPhotos.map((photo, i) => (
                   <div key={i} className="relative w-20 h-20 rounded-md overflow-hidden border">
@@ -983,11 +1096,11 @@ export default function MarketplacePage() {
           <DialogFooter>
             <Button
               onClick={handleSubmit}
-              disabled={!category || createMutation.isPending}
+              disabled={!category || createMutation.isPending || updateMutation.isPending || editPhotosLoading}
               className="w-full"
               data-testid="button-submit-listing"
             >
-              {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {t("save")}
             </Button>
           </DialogFooter>
@@ -1192,19 +1305,30 @@ export default function MarketplacePage() {
                           <p className="text-sm text-muted-foreground">{t("loginToContact")}</p>
                         )}
                         {isOwner && (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              if (confirm(t("deleteListingConfirm"))) {
-                                deleteMutation.mutate(listing.id);
-                              }
-                            }}
-                            data-testid="button-detail-delete"
-                          >
-                            <Trash2 className="w-4 h-4 mr-1" />
-                            {t("deleteListing")}
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditDialog(listing)}
+                              data-testid="button-detail-edit"
+                            >
+                              <Pencil className="w-4 h-4 mr-1" />
+                              {t("editListing")}
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm(t("deleteListingConfirm"))) {
+                                  deleteMutation.mutate(listing.id);
+                                }
+                              }}
+                              data-testid="button-detail-delete"
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              {t("deleteListing")}
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>

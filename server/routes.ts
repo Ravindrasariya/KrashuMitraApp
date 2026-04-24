@@ -1826,6 +1826,103 @@ Respond in this structure:
     }
   });
 
+  app.patch("/api/marketplace/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      const existing = await storage.getMarketplaceListing(parseInt(req.params.id));
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      if (existing.sellerId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const category = existing.category;
+      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg } = req.body || {};
+
+      if (category === "onion_seedling" && quantityBigha !== undefined && !quantityBigha) {
+        return res.status(400).json({ message: "quantityBigha required for onion_seedling" });
+      }
+      if (category === "potato_seed" && quantityBags !== undefined && !quantityBags) {
+        return res.status(400).json({ message: "quantityBags required for potato_seed" });
+      }
+      if (category === "onion_seed" && onionSeedVariety !== undefined && !onionSeedVariety) {
+        return res.status(400).json({ message: "onionSeedVariety required for onion_seed" });
+      }
+
+      const ONION_SEED_TYPES_ALLOWED = ["Nafed", "Nasik", "Others"];
+      const ONION_SEED_VARIETIES_ALLOWED = ["Agriwell", "Kalash", "Nasik Fursungi", "Nasik Red (N-53)", "NHRDF Red / L-28", "Others"];
+      const ONION_SEED_BRANDS_ALLOWED = ["Deepak", "Divya Seeds", "East-West Seed", "Ellora", "Farmson Biotech", "Indo-American Hybrid Seeds (IAHS)", "Jindal Seeds", "Kalash Seeds", "Malav Seeds", "Mukund", "Namdhari Seeds", "Prashant", "Rudraksh Seeds", "Sarpan Hybrid Seeds", "Seminis (Bayer)", "Syngenta", "Urja Seeds", "Others"];
+
+      if (category === "onion_seed") {
+        if (onionSeedType && !ONION_SEED_TYPES_ALLOWED.includes(String(onionSeedType))) {
+          return res.status(400).json({ message: "Invalid onionSeedType" });
+        }
+        if (onionSeedVariety && !ONION_SEED_VARIETIES_ALLOWED.includes(String(onionSeedVariety))) {
+          return res.status(400).json({ message: "Invalid onionSeedVariety" });
+        }
+        if (onionSeedBrand && !ONION_SEED_BRANDS_ALLOWED.includes(String(onionSeedBrand))) {
+          return res.status(400).json({ message: "Invalid onionSeedBrand" });
+        }
+      }
+
+      let parsedPricePerKg: number | null | undefined = undefined;
+      if (category === "onion_seed" && onionSeedPricePerKg !== undefined) {
+        if (onionSeedPricePerKg === null || String(onionSeedPricePerKg).trim() === "") {
+          parsedPricePerKg = null;
+        } else {
+          const n = parseInt(String(onionSeedPricePerKg), 10);
+          if (Number.isNaN(n) || n < 0 || n > 999999) {
+            return res.status(400).json({ message: "Invalid price per kg" });
+          }
+          parsedPricePerKg = n;
+        }
+      }
+
+      const updates: Partial<typeof existing> = {};
+      if (category === "onion_seedling") {
+        if (quantityBigha !== undefined) updates.quantityBigha = quantityBigha ? String(quantityBigha).slice(0, 20) : null;
+        if (availableAfterDays !== undefined) updates.availableAfterDays = availableAfterDays !== null && availableAfterDays !== "" ? Math.max(0, parseInt(String(availableAfterDays)) || 0) : null;
+        if (onionType !== undefined) updates.onionType = onionType ? String(onionType).slice(0, 100) : null;
+      } else if (category === "potato_seed") {
+        if (quantityBags !== undefined) updates.quantityBags = quantityBags ? String(quantityBags).slice(0, 20) : null;
+        if (potatoVariety !== undefined) updates.potatoVariety = potatoVariety ? String(potatoVariety).slice(0, 50) : null;
+        if (potatoBrand !== undefined) updates.potatoBrand = potatoBrand ? String(potatoBrand).slice(0, 50) : null;
+      } else if (category === "onion_seed") {
+        if (onionSeedType !== undefined) updates.onionSeedType = onionSeedType ? String(onionSeedType).slice(0, 100) : null;
+        if (onionSeedVariety !== undefined) updates.onionSeedVariety = onionSeedVariety ? String(onionSeedVariety).slice(0, 100) : null;
+        if (onionSeedBrand !== undefined) updates.onionSeedBrand = onionSeedBrand ? String(onionSeedBrand).slice(0, 100) : null;
+        if (parsedPricePerKg !== undefined) updates.onionSeedPricePerKg = parsedPricePerKg;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await storage.updateMarketplaceListing(existing.id, updates);
+      }
+
+      if (Array.isArray(photos)) {
+        const photoArr = photos.slice(0, 3);
+        await storage.replaceListingPhotos(existing.id, photoArr.map((p: any, i: number) => ({
+          photoData: String(p.base64),
+          photoMime: String(p.mime).slice(0, 50),
+          sortOrder: i,
+        })));
+        if (photoArr.length > 0 || existing.photoData) {
+          await storage.updateMarketplaceListing(existing.id, { photoData: null, photoMime: null });
+        }
+      } else if (photoData) {
+        await storage.replaceListingPhotos(existing.id, [{
+          photoData: String(photoData),
+          photoMime: String(photoMime || "image/jpeg").slice(0, 50),
+          sortOrder: 0,
+        }]);
+      }
+
+      const refreshed = await storage.getMarketplaceListing(existing.id);
+      const photoCount = await storage.getListingPhotoCount(existing.id);
+      const { photoData: _, ...listingWithoutPhoto } = refreshed!;
+      res.json({ ...listingWithoutPhoto, photoCount });
+    } catch (error) {
+      console.error("Error updating listing:", error);
+      res.status(500).json({ message: "Failed to update listing" });
+    }
+  });
+
   app.delete("/api/marketplace/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;

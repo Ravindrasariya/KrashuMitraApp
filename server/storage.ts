@@ -57,8 +57,10 @@ export interface IStorage {
   createMarketplaceListing(data: InsertMarketplaceListing): Promise<MarketplaceListing>;
   getMarketplaceListings(filters?: { category?: string }): Promise<MarketplaceListing[]>;
   getMarketplaceListing(id: number): Promise<MarketplaceListing | undefined>;
+  updateMarketplaceListing(id: number, data: Partial<InsertMarketplaceListing>): Promise<MarketplaceListing | undefined>;
   deleteMarketplaceListing(id: number): Promise<void>;
   addListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void>;
+  replaceListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void>;
   getListingPhotos(listingId: number): Promise<MarketplacePhoto[]>;
   getListingPhotoByIndex(listingId: number, index: number): Promise<MarketplacePhoto | undefined>;
   getListingPhotoCount(listingId: number): Promise<number>;
@@ -608,12 +610,23 @@ class DatabaseStorage implements IStorage {
     return listing;
   }
 
+  async updateMarketplaceListing(id: number, data: Partial<InsertMarketplaceListing>): Promise<MarketplaceListing | undefined> {
+    const [updated] = await db.update(marketplaceListings).set(data).where(eq(marketplaceListings.id, id)).returning();
+    return updated;
+  }
+
   async deleteMarketplaceListing(id: number): Promise<void> {
     await db.delete(marketplacePhotos).where(eq(marketplacePhotos.listingId, id));
     await db.delete(marketplaceListings).where(eq(marketplaceListings.id, id));
   }
 
   async addListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void> {
+    if (photos.length === 0) return;
+    await db.insert(marketplacePhotos).values(photos.map(p => ({ ...p, listingId })));
+  }
+
+  async replaceListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void> {
+    await db.delete(marketplacePhotos).where(eq(marketplacePhotos.listingId, listingId));
     if (photos.length === 0) return;
     await db.insert(marketplacePhotos).values(photos.map(p => ({ ...p, listingId })));
   }
