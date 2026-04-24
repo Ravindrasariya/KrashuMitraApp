@@ -11,22 +11,22 @@ import { z } from "zod";
 const onionResultSchema = z.object({
   lot_analysis: z.object({
     overall_score: z.number().min(1).max(5),
-    benchmark_used: z.string().optional(),
+    benchmark_used: z.string().min(1).optional(),
     parameters: z.object({
       neck_rating: z.number().int().min(1).max(5),
       shoulder_geometry: z.enum(["Flat", "Convex", "Tapered"]),
       skin_quality: z.number().int().min(1).max(5),
       uniformity: z.number().int().min(1).max(5),
-    }),
+    }).strict(),
     valuation: z.object({
-      expected_rate: z.string(),
-      price_delta: z.string(),
+      expected_rate: z.string().min(1),
+      price_delta: z.string().min(1),
       commercial_verdict: z.enum(["Store Long-term", "Sell Immediate", "Reject"]),
       ltv_recommendation: z.string().optional().default(""),
       summary: z.string().optional().default(""),
-    }),
-  }),
-});
+    }).strict(),
+  }).strict(),
+}).strict();
 
 const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,

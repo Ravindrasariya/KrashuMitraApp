@@ -252,28 +252,38 @@ export default function DigitalClinicPage() {
                 <div>
                   <Label className="text-xs">{t("benchmarkRateLabel")}</Label>
                   <div className="grid grid-cols-2 gap-2 mt-1">
-                    <Input
-                      id="onion-benchmark-min"
-                      type="number"
-                      min={1}
-                      inputMode="numeric"
-                      placeholder={t("benchmarkRateMinPlaceholder")}
-                      value={onionBenchmarkMin}
-                      onChange={(e) => setOnionBenchmarkMin(e.target.value)}
-                      aria-label={t("benchmarkRateMin")}
-                      data-testid="input-onion-benchmark-min"
-                    />
-                    <Input
-                      id="onion-benchmark-max"
-                      type="number"
-                      min={1}
-                      inputMode="numeric"
-                      placeholder={t("benchmarkRateMaxPlaceholder")}
-                      value={onionBenchmarkMax}
-                      onChange={(e) => setOnionBenchmarkMax(e.target.value)}
-                      aria-label={t("benchmarkRateMax")}
-                      data-testid="input-onion-benchmark-max"
-                    />
+                    <div>
+                      <Label htmlFor="onion-benchmark-min" className="text-[11px] text-muted-foreground">
+                        {t("benchmarkRateMin")}
+                      </Label>
+                      <Input
+                        id="onion-benchmark-min"
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        placeholder={t("benchmarkRateMinPlaceholder")}
+                        value={onionBenchmarkMin}
+                        onChange={(e) => setOnionBenchmarkMin(e.target.value)}
+                        className="mt-1"
+                        data-testid="input-onion-benchmark-min"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="onion-benchmark-max" className="text-[11px] text-muted-foreground">
+                        {t("benchmarkRateMax")}
+                      </Label>
+                      <Input
+                        id="onion-benchmark-max"
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        placeholder={t("benchmarkRateMaxPlaceholder")}
+                        value={onionBenchmarkMax}
+                        onChange={(e) => setOnionBenchmarkMax(e.target.value)}
+                        className="mt-1"
+                        data-testid="input-onion-benchmark-max"
+                      />
+                    </div>
                   </div>
                 </div>
                 <input
