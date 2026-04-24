@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -212,6 +212,16 @@ export default function MarketplacePage() {
   const [contactLoading, setContactLoading] = useState<number | null>(null);
   const [detailListing, setDetailListing] = useState<ListingNoPhoto | null>(null);
   const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
+  const [cardPhotoIndex, setCardPhotoIndex] = useState<Record<number, number>>({});
+  const cardSwipeRef = useRef<{ startX: number; startY: number; swiped: boolean } | null>(null);
+  const justSwipedRef = useRef(false);
+
+  const advanceCardPhoto = (id: number, total: number, dir: 1 | -1) => {
+    setCardPhotoIndex(s => {
+      const cur = s[id] ?? 0;
+      return { ...s, [id]: (cur + dir + total) % total };
+    });
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: listings = [], isLoading } = useQuery<ListingNoPhoto[]>({
@@ -223,6 +233,23 @@ export default function MarketplacePage() {
       return res.json();
     },
   });
+
+  useEffect(() => {
+    setCardPhotoIndex(prev => {
+      const validIds = new Set(listings.map(l => l.id));
+      let changed = false;
+      const next: Record<number, number> = {};
+      for (const k of Object.keys(prev)) {
+        const id = Number(k);
+        if (validIds.has(id)) {
+          next[id] = prev[id];
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [listings]);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -654,7 +681,7 @@ export default function MarketplacePage() {
           <p className="text-sm" data-testid="text-no-listings">{t("noListings")}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {sortedListings.map(listing => {
             const dist = getDistanceKm(listing);
             const isOwner = user?.id === listing.sellerId;
@@ -662,6 +689,10 @@ export default function MarketplacePage() {
             const isOnionSeed = listing.category === "onion_seed";
             const isSoyabeanSeed = listing.category === "soyabean_seed";
             const hasPhoto = listing.photoCount > 0 || listing.photoMime;
+            const cardTotalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
+            const cardIdxRaw = cardPhotoIndex[listing.id] ?? 0;
+            const cardIdx = cardTotalPhotos > 0 ? Math.min(cardIdxRaw, cardTotalPhotos - 1) : 0;
+            const showCardSwipe = cardTotalPhotos > 1;
             return (
               <Card
                 key={listing.id}
@@ -670,12 +701,83 @@ export default function MarketplacePage() {
                 data-testid={`card-listing-${listing.id}`}
               >
                 {hasPhoto ? (
-                  <img
-                    src={`/api/marketplace/${listing.id}/image`}
-                    alt=""
-                    className="w-full aspect-[4/3] object-cover"
-                    data-testid={`img-listing-${listing.id}`}
-                  />
+                  <div
+                    className="relative"
+                    onTouchStart={(e) => {
+                      const t = e.touches[0];
+                      cardSwipeRef.current = { startX: t.clientX, startY: t.clientY, swiped: false };
+                    }}
+                    onTouchMove={(e) => {
+                      const s = cardSwipeRef.current;
+                      if (!s) return;
+                      const t = e.touches[0];
+                      const dx = t.clientX - s.startX;
+                      const dy = t.clientY - s.startY;
+                      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+                        s.swiped = true;
+                      }
+                    }}
+                    onTouchEnd={(e) => {
+                      const s = cardSwipeRef.current;
+                      cardSwipeRef.current = null;
+                      if (!s) return;
+                      const t = e.changedTouches[0];
+                      const dx = t.clientX - s.startX;
+                      const dy = t.clientY - s.startY;
+                      if (showCardSwipe && Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) {
+                        advanceCardPhoto(listing.id, cardTotalPhotos, dx < 0 ? 1 : -1);
+                        justSwipedRef.current = true;
+                        setTimeout(() => { justSwipedRef.current = false; }, 100);
+                      }
+                    }}
+                    onClick={(e) => {
+                      if (justSwipedRef.current) {
+                        e.stopPropagation();
+                        justSwipedRef.current = false;
+                      }
+                    }}
+                  >
+                    <img
+                      src={`/api/marketplace/${listing.id}/image${showCardSwipe ? `?index=${cardIdx}` : ""}`}
+                      alt=""
+                      className="w-full aspect-[4/3] object-cover"
+                      data-testid={`img-listing-${listing.id}`}
+                    />
+                    {showCardSwipe && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label={t("previousPhoto")}
+                          className="absolute left-1 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            advanceCardPhoto(listing.id, cardTotalPhotos, -1);
+                          }}
+                          data-testid={`button-card-photo-prev-${listing.id}`}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={t("nextPhoto")}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            advanceCardPhoto(listing.id, cardTotalPhotos, 1);
+                          }}
+                          data-testid={`button-card-photo-next-${listing.id}`}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                        <div
+                          className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-full pointer-events-none"
+                          data-testid={`text-card-photo-counter-${listing.id}`}
+                        >
+                          {cardIdx + 1} / {cardTotalPhotos}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <div className={`w-full aspect-[4/3] flex items-center justify-center ${categoryPlaceholderBg(listing.category)}`}>
                     {renderPlaceholderIcon(listing.category, "sm")}

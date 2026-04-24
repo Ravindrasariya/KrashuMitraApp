@@ -555,6 +555,8 @@ const translations = {
   noListings: { hi: "कोई बिक्री सूची नहीं है", en: "No listings yet" },
   contact: { hi: "संपर्क", en: "Contact" },
   contactSeller: { hi: "विक्रेता से संपर्क करें", en: "Contact Seller" },
+  previousPhoto: { hi: "पिछली फोटो", en: "Previous photo" },
+  nextPhoto: { hi: "अगली फोटो", en: "Next photo" },
   loginToContact: { hi: "संपर्क देखने के लिए लॉगिन करें", en: "Login to see contact" },
   allCategories: { hi: "सभी", en: "All" },
   sortLatest: { hi: "नवीनतम", en: "Latest" },
