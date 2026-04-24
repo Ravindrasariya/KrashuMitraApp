@@ -214,7 +214,6 @@ export default function MarketplacePage() {
   const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
   const [cardPhotoIndex, setCardPhotoIndex] = useState<Record<number, number>>({});
   const cardSwipeRef = useRef<{ startX: number; startY: number; swiped: boolean } | null>(null);
-  const justSwipedRef = useRef(false);
 
   const advanceCardPhoto = (id: number, total: number, dir: 1 | -1) => {
     setCardPhotoIndex(s => {
@@ -235,20 +234,7 @@ export default function MarketplacePage() {
   });
 
   useEffect(() => {
-    setCardPhotoIndex(prev => {
-      const validIds = new Set(listings.map(l => l.id));
-      let changed = false;
-      const next: Record<number, number> = {};
-      for (const k of Object.keys(prev)) {
-        const id = Number(k);
-        if (validIds.has(id)) {
-          next[id] = prev[id];
-        } else {
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
+    setCardPhotoIndex({});
   }, [listings]);
 
   const createMutation = useMutation({
@@ -681,7 +667,7 @@ export default function MarketplacePage() {
           <p className="text-sm" data-testid="text-no-listings">{t("noListings")}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {sortedListings.map(listing => {
             const dist = getDistanceKm(listing);
             const isOwner = user?.id === listing.sellerId;
@@ -719,22 +705,22 @@ export default function MarketplacePage() {
                     }}
                     onTouchEnd={(e) => {
                       const s = cardSwipeRef.current;
-                      cardSwipeRef.current = null;
                       if (!s) return;
                       const t = e.changedTouches[0];
                       const dx = t.clientX - s.startX;
                       const dy = t.clientY - s.startY;
                       if (showCardSwipe && Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) {
                         advanceCardPhoto(listing.id, cardTotalPhotos, dx < 0 ? 1 : -1);
-                        justSwipedRef.current = true;
-                        setTimeout(() => { justSwipedRef.current = false; }, 100);
+                        s.swiped = true;
+                        e.preventDefault();
                       }
                     }}
                     onClick={(e) => {
-                      if (justSwipedRef.current) {
+                      const s = cardSwipeRef.current;
+                      if (s?.swiped) {
                         e.stopPropagation();
-                        justSwipedRef.current = false;
                       }
+                      cardSwipeRef.current = null;
                     }}
                   >
                     <img
