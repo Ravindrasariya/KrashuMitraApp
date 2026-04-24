@@ -88,7 +88,8 @@ export default function DigitalClinicPage() {
   const [expandedRequestId, setExpandedRequestId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const onionFileInputRef = useRef<HTMLInputElement>(null);
-  const [onionBenchmark, setOnionBenchmark] = useState<string>("");
+  const [onionBenchmarkMin, setOnionBenchmarkMin] = useState<string>("");
+  const [onionBenchmarkMax, setOnionBenchmarkMax] = useState<string>("");
   const [onionImageBase64, setOnionImageBase64] = useState<string | null>(null);
   const [onionImageMime, setOnionImageMime] = useState<string>("");
   const [onionImagePreview, setOnionImagePreview] = useState<string | null>(null);
@@ -142,7 +143,8 @@ export default function DigitalClinicPage() {
         serviceType: "onion_price_predictor",
         imageData: onionImageBase64,
         imageMimeType: onionImageMime,
-        benchmarkRate: Number(onionBenchmark),
+        benchmarkRateMin: Number(onionBenchmarkMin),
+        benchmarkRateMax: Number(onionBenchmarkMax),
       });
       return res.json() as Promise<ServiceRequest>;
     },
@@ -248,18 +250,31 @@ export default function DigitalClinicPage() {
               <p className="text-sm text-muted-foreground mb-3">{t("onionPricePredictorDesc")}</p>
               <div className="space-y-3">
                 <div>
-                  <Label htmlFor="onion-benchmark" className="text-xs">{t("benchmarkRateLabel")}</Label>
-                  <Input
-                    id="onion-benchmark"
-                    type="number"
-                    min={1}
-                    inputMode="numeric"
-                    placeholder={t("benchmarkRatePlaceholder")}
-                    value={onionBenchmark}
-                    onChange={(e) => setOnionBenchmark(e.target.value)}
-                    className="mt-1"
-                    data-testid="input-onion-benchmark"
-                  />
+                  <Label className="text-xs">{t("benchmarkRateLabel")}</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <Input
+                      id="onion-benchmark-min"
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      placeholder={t("benchmarkRateMinPlaceholder")}
+                      value={onionBenchmarkMin}
+                      onChange={(e) => setOnionBenchmarkMin(e.target.value)}
+                      aria-label={t("benchmarkRateMin")}
+                      data-testid="input-onion-benchmark-min"
+                    />
+                    <Input
+                      id="onion-benchmark-max"
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      placeholder={t("benchmarkRateMaxPlaceholder")}
+                      value={onionBenchmarkMax}
+                      onChange={(e) => setOnionBenchmarkMax(e.target.value)}
+                      aria-label={t("benchmarkRateMax")}
+                      data-testid="input-onion-benchmark-max"
+                    />
+                  </div>
                 </div>
                 <input
                   ref={onionFileInputRef}
@@ -289,13 +304,25 @@ export default function DigitalClinicPage() {
                   </Button>
                   <Button
                     onClick={() => {
-                      if (!onionImageBase64 || !onionBenchmark || Number(onionBenchmark) <= 0) {
+                      const minN = Number(onionBenchmarkMin);
+                      const maxN = Number(onionBenchmarkMax);
+                      if (!onionImageBase64 || !(minN > 0) || !(maxN > 0)) {
                         toast({ title: t("benchmarkRequired"), variant: "destructive" });
+                        return;
+                      }
+                      if (maxN < minN) {
+                        toast({ title: t("benchmarkMaxLessThanMin"), variant: "destructive" });
                         return;
                       }
                       onionMutation.mutate();
                     }}
-                    disabled={onionMutation.isPending || !onionImageBase64 || !(Number(onionBenchmark) > 0)}
+                    disabled={
+                      onionMutation.isPending ||
+                      !onionImageBase64 ||
+                      !(Number(onionBenchmarkMin) > 0) ||
+                      !(Number(onionBenchmarkMax) > 0) ||
+                      Number(onionBenchmarkMax) < Number(onionBenchmarkMin)
+                    }
                     data-testid="button-analyze-onion"
                   >
                     {onionMutation.isPending ? (
@@ -633,8 +660,9 @@ function OnionResultView({ raw }: { raw: string }) {
   const v = la.valuation || {};
   const p = la.parameters || {};
   const delta = (v.price_delta || "").trim();
-  const isPositiveDelta = delta.startsWith("+");
-  const isNegativeDelta = delta.startsWith("-");
+  const deltaSigns = Array.from(delta.matchAll(/([+-])\s*\d/g)).map((m) => m[1]);
+  const allPositive = deltaSigns.length > 0 && deltaSigns.every((s) => s === "+");
+  const allNegative = deltaSigns.length > 0 && deltaSigns.every((s) => s === "-");
 
   return (
     <Card className="p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800" data-testid="card-onion-result-view">
@@ -656,7 +684,7 @@ function OnionResultView({ raw }: { raw: string }) {
         <div>
           <div className="text-xs text-muted-foreground">{t("priceDelta")}</div>
           <div
-            className={`font-semibold ${isPositiveDelta ? "text-green-600" : isNegativeDelta ? "text-red-600" : ""}`}
+            className={`font-semibold ${allPositive ? "text-green-600" : allNegative ? "text-red-600" : ""}`}
             data-testid="text-onion-delta"
           >
             {delta || "-"}

@@ -807,7 +807,7 @@ Rules:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { serviceType, imageData, imageMimeType, benchmarkRate } = req.body;
+      const { serviceType, imageData, imageMimeType, benchmarkRate, benchmarkRateMin, benchmarkRateMax } = req.body;
       if (!serviceType || !["soil_test", "potato_perishability_test", "crop_doctor", "onion_price_predictor"].includes(serviceType)) {
         return res.status(400).json({ message: "Invalid service type" });
       }
@@ -816,27 +816,43 @@ Rules:
       let inputData: string | null = null;
 
       if (serviceType === "onion_price_predictor") {
-        const benchmark = Number(benchmarkRate);
         if (!imageData || !imageMimeType) {
           return res.status(400).json({ message: "Image required for Onion Price Predictor" });
         }
-        if (!benchmark || benchmark <= 0 || !Number.isFinite(benchmark)) {
-          return res.status(400).json({ message: "Valid benchmark rate required" });
+        let bMin = Number(benchmarkRateMin);
+        let bMax = Number(benchmarkRateMax);
+        if (!Number.isFinite(bMin) || bMin <= 0 || !Number.isFinite(bMax) || bMax <= 0) {
+          const legacy = Number(benchmarkRate);
+          if (Number.isFinite(legacy) && legacy > 0) {
+            bMin = legacy;
+            bMax = legacy;
+          } else {
+            return res.status(400).json({ message: "Valid benchmark rate range required" });
+          }
+        }
+        if (bMax < bMin) {
+          return res.status(400).json({ message: "Max benchmark rate must be ≥ Min" });
         }
 
-        inputData = JSON.stringify({ benchmarkRate: benchmark });
+        inputData = JSON.stringify({ benchmarkRateMin: bMin, benchmarkRateMax: bMax });
         const base64Data = imageData.replace(/^data:[^;]+;base64,/, "");
+        const benchmarkLabel = bMin === bMax ? `INR ${bMin}` : `INR ${bMin}-${bMax}`;
 
         const kqvPrompt = `# Role: KrashuVed Quality Vision (KQV) Agent
-You are an expert Agri-Commodity Underwriter for KrashuVed. You analyze onion lots to provide a 1–5 Quality Score and calculate "Expected Mandi Rates" based on a user-provided benchmark for top-tier (10–15%) lots.
+You are an expert Agri-Commodity Underwriter for KrashuVed. You analyze onion lots to provide a 1–5 Quality Score and calculate an "Expected Mandi Rate Range" based on a user-provided benchmark range for top-tier (10–15%) lots.
 
 # Pricing Logic (The Anchor Method)
-The User has provided a Premium_Benchmark_Rate of INR ${benchmark} (price per quintal for top 10-15% quality). Use the following multipliers to calculate the Expected Rate for the lot:
-- Score 5 (Elite Storage): 100% to 110% of Benchmark. (Reserved for exceptional 'AAA' lots that exceed the top 10-15% standard).
-- Score 4 (Premium Commercial): 85% to 95% of Benchmark. (Standard high-quality discount).
-- Score 3 (Standard/Domestic): 70% to 80% of Benchmark. (Medium-grade valuation).
-- Score 2 (High Risk/Puffy): 50% to 65% of Benchmark. (Significant penalty for structural risk).
-- Score 1 (Distress/Reject): 30% to 45% of Benchmark. (Value limited to processing/liquidation).
+The User has provided a Premium_Benchmark_Rate range of INR ${bMin} (low) to INR ${bMax} (high) per quintal for top 10-15% quality. For the assigned score's multiplier band, compute the expected rate range as:
+- low_expected  = round(lower_multiplier × ${bMin})
+- high_expected = round(upper_multiplier × ${bMax})
+The benchmark midpoint for delta calculation is ${(bMin + bMax) / 2}.
+
+Multiplier bands:
+- Score 5 (Elite Storage): 100% to 110% of Benchmark.
+- Score 4 (Premium Commercial): 85% to 95% of Benchmark.
+- Score 3 (Standard/Domestic): 70% to 80% of Benchmark.
+- Score 2 (High Risk/Puffy): 50% to 65% of Benchmark.
+- Score 1 (Distress/Reject): 30% to 45% of Benchmark.
 
 # Core Parameters for Analysis
 1. Neck Integrity (Dormancy): Target = Paper-thin/Dry. Risk = Fleshy/Open.
@@ -853,12 +869,13 @@ The User has provided a Premium_Benchmark_Rate of INR ${benchmark} (price per qu
 - Score 1: Rot, sprouting, or severe damage. (VERDICT: REJECT)
 
 # Output Format (Mandatory JSON — return ONLY the JSON object, no markdown, no commentary)
-Use the midpoint of the multiplier band for expected_rate. Compute price_delta as a signed percentage like "-15%" or "+5%".
+Express expected_rate as a range string like "INR 720-900" (no decimals).
+Express price_delta as a signed-percentage range vs the benchmark midpoint, like "-15% to -5%" or "+5% to +12%". Use the same sign convention on both ends.
 
 {
   "lot_analysis": {
     "overall_score": <float 1-5>,
-    "benchmark_used": "INR ${benchmark}",
+    "benchmark_used": "${benchmarkLabel}",
     "parameters": {
       "neck_rating": <integer 1-5>,
       "shoulder_geometry": "Flat" | "Convex" | "Tapered",
@@ -866,8 +883,8 @@ Use the midpoint of the multiplier band for expected_rate. Compute price_delta a
       "uniformity": <integer 1-5>
     },
     "valuation": {
-      "expected_rate": "INR <number>",
-      "price_delta": "<signed percentage vs benchmark>",
+      "expected_rate": "INR <low>-<high>",
+      "price_delta": "<signed % low> to <signed % high>",
       "commercial_verdict": "Store Long-term" | "Sell Immediate" | "Reject",
       "ltv_recommendation": "<percentage>",
       "summary": "<one short sentence reason for the verdict>"
