@@ -693,16 +693,6 @@ export default function MarketplacePage() {
                       const t = e.touches[0];
                       cardSwipeRef.current = { startX: t.clientX, startY: t.clientY, swiped: false };
                     }}
-                    onTouchMove={(e) => {
-                      const s = cardSwipeRef.current;
-                      if (!s) return;
-                      const t = e.touches[0];
-                      const dx = t.clientX - s.startX;
-                      const dy = t.clientY - s.startY;
-                      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
-                        s.swiped = true;
-                      }
-                    }}
                     onTouchEnd={(e) => {
                       const s = cardSwipeRef.current;
                       if (!s) return;
@@ -714,6 +704,9 @@ export default function MarketplacePage() {
                         s.swiped = true;
                         e.preventDefault();
                       }
+                    }}
+                    onTouchCancel={() => {
+                      cardSwipeRef.current = null;
                     }}
                     onClick={(e) => {
                       const s = cardSwipeRef.current;
