@@ -403,6 +403,7 @@ export default function DigitalClinicPage() {
                 onionMarketPrice && onionMarketPrice > 0 && onionCollateral != null
                   ? Math.round((onionCollateral / onionMarketPrice) * 100)
                   : null;
+              const onionScoreBand = onionParsed?.quality_rating?.score_band;
               return (
                 <Card
                   key={req.id}
@@ -438,6 +439,11 @@ export default function DigitalClinicPage() {
                         {isOnion && onionParsed?.pricing_analysis && (
                           <Badge variant="outline" className="gap-1 tabular-nums" data-testid={`badge-onion-collateral-${req.id}`}>
                             {onionCollateralPct != null ? `${onionCollateralPct}%` : "—"}
+                          </Badge>
+                        )}
+                        {isOnion && onionScoreBand && (
+                          <Badge className={scoreBandClass(onionScoreBand)} data-testid={`badge-onion-score-band-${req.id}`}>
+                            {scoreBandLabel(onionScoreBand, t)}
                           </Badge>
                         )}
                         {isExpandable && (
@@ -579,6 +585,18 @@ type OnionParsed = {
     neck_rating?: number;
     shoulder_geometry?: string;
   };
+  quality_rating?: {
+    overall_score?: number;
+    score_band?: string;
+    pillar_scores?: {
+      neck_integrity?: number;
+      shoulder_geometry?: number;
+      parda_luster?: number;
+      shape_roundness?: number;
+      uniformity_size?: number;
+    };
+    rationale_markdown?: string;
+  };
   error?: string;
   message?: string;
   raw?: string;
@@ -620,6 +638,52 @@ function sizeGradeLabel(grade: string, t: (k: any) => string): string {
 function formatINR(n: number): string {
   if (!Number.isFinite(n)) return "-";
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+const SCORE_BAND_KEYS: Record<string, string> = {
+  "Elite Storage": "bandElite",
+  "Premium Commercial": "bandPremium",
+  "Standard/Domestic": "bandStandard",
+  "High Risk/Puffy": "bandHighRisk",
+  "Distress/Reject": "bandDistress",
+};
+
+function scoreBandLabel(band: string, t: (k: any) => string): string {
+  const key = SCORE_BAND_KEYS[band];
+  return key ? t(key) : band || "-";
+}
+
+function scoreBandClass(band: string): string {
+  switch (band) {
+    case "Elite Storage":
+      return "bg-emerald-600 hover:bg-emerald-700 text-white";
+    case "Premium Commercial":
+      return "bg-green-600 hover:bg-green-700 text-white";
+    case "Standard/Domestic":
+      return "bg-amber-500 hover:bg-amber-600 text-white";
+    case "High Risk/Puffy":
+      return "bg-orange-600 hover:bg-orange-700 text-white";
+    case "Distress/Reject":
+      return "bg-red-600 hover:bg-red-700 text-white";
+    default:
+      return "";
+  }
+}
+
+function StarBar({ score }: { score: number }) {
+  const filled = Math.round(score);
+  return (
+    <div className="flex items-center gap-0.5" aria-hidden="true">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span
+          key={i}
+          className={i <= filled ? "text-amber-500" : "text-muted-foreground/30"}
+        >
+          ★
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function OnionResultView({ raw }: { raw: string }) {
@@ -680,6 +744,9 @@ function OnionResultView({ raw }: { raw: string }) {
             {collateralPct != null ? `${collateralPct}%` : "—"}
           </div>
           <div className="text-[10px] text-muted-foreground mt-0.5">{t("ofMarketPrice")}</div>
+          <div className="text-[10px] text-muted-foreground mt-1 leading-tight" data-testid="text-onion-ltv-note">
+            {t("collateralLtvNote")}
+          </div>
         </div>
       </div>
 
@@ -731,9 +798,79 @@ function OnionResultView({ raw }: { raw: string }) {
       </div>
 
       {pa.underwriting_note && (
-        <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400">
+        <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400 mb-4">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">{t("underwritingNote")}</div>
           <p className="text-xs" data-testid="text-onion-underwriting-note">{pa.underwriting_note}</p>
+        </div>
+      )}
+
+      <QualityRatingBlock rating={parsed.quality_rating} />
+    </Card>
+  );
+}
+
+function QualityRatingBlock({ rating }: { rating?: OnionParsed["quality_rating"] }) {
+  const { t } = useTranslation();
+  if (!rating || rating.overall_score == null || !rating.score_band || !rating.pillar_scores) {
+    return null;
+  }
+  const score = Number(rating.overall_score);
+  const band = rating.score_band;
+  const ps = rating.pillar_scores;
+  const pillars: Array<{ key: string; labelKey: string; value?: number }> = [
+    { key: "neck_integrity", labelKey: "pillarNeckIntegrity", value: ps.neck_integrity },
+    { key: "shoulder_geometry", labelKey: "pillarShoulderGeometry", value: ps.shoulder_geometry },
+    { key: "parda_luster", labelKey: "pillarPardaLuster", value: ps.parda_luster },
+    { key: "shape_roundness", labelKey: "pillarShapeRoundness", value: ps.shape_roundness },
+    { key: "uniformity_size", labelKey: "pillarUniformitySize", value: ps.uniformity_size },
+  ];
+  return (
+    <Card
+      className="p-4 bg-background border-amber-200 dark:border-amber-800 mb-3"
+      data-testid="card-onion-quality-rating"
+    >
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h4 className="font-semibold text-sm">{t("qualityRating")}</h4>
+        <Badge className={scoreBandClass(band)} data-testid="badge-onion-score-band">
+          {scoreBandLabel(band, t)}
+        </Badge>
+      </div>
+
+      <div className="flex items-center gap-3 mb-4">
+        <div className="text-3xl font-bold tabular-nums" data-testid="text-onion-overall-score">
+          {score.toFixed(1)}
+          <span className="text-base text-muted-foreground font-normal">/5</span>
+        </div>
+        <StarBar score={score} />
+      </div>
+
+      <div className="text-xs font-medium mb-2 text-muted-foreground">{t("pillarBreakdown")}</div>
+      <div className="space-y-1.5 mb-3">
+        {pillars.map((p) => (
+          <div
+            key={p.key}
+            className="flex items-center justify-between bg-background/50 rounded px-2 py-1.5 text-xs"
+            data-testid={`row-pillar-${p.key}`}
+          >
+            <span className="text-muted-foreground">{t(p.labelKey as any)}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold tabular-nums">
+                {p.value != null ? `${p.value}/5` : "-"}
+              </span>
+              {p.value != null && <StarBar score={p.value} />}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {rating.rationale_markdown && (
+        <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+            {t("ratingRationale")}
+          </div>
+          <div className="text-xs" data-testid="text-onion-rating-rationale">
+            <MarkdownText text={rating.rationale_markdown} />
+          </div>
         </div>
       )}
     </Card>

@@ -28,6 +28,27 @@ const onionResultSchema = z.object({
     neck_rating: z.number().int().min(1).max(5),
     shoulder_geometry: z.enum(["Flat", "Convex", "Tapered"]),
   }).strict(),
+  quality_rating: z.object({
+    overall_score: z.number().min(1).max(5).refine(
+      (n) => Math.round(n * 10) === n * 10,
+      { message: "overall_score must have at most 1 decimal place" },
+    ),
+    score_band: z.enum([
+      "Elite Storage",
+      "Premium Commercial",
+      "Standard/Domestic",
+      "High Risk/Puffy",
+      "Distress/Reject",
+    ]),
+    pillar_scores: z.object({
+      neck_integrity: z.number().int().min(1).max(5),
+      shoulder_geometry: z.number().int().min(1).max(5),
+      parda_luster: z.number().int().min(1).max(5),
+      shape_roundness: z.number().int().min(1).max(5),
+      uniformity_size: z.number().int().min(1).max(5),
+    }).strict(),
+    rationale_markdown: z.string().min(1),
+  }).strict(),
 }).strict();
 
 const ai = new GoogleGenAI({
@@ -871,6 +892,28 @@ Sustainability_Haircut = sum of the applicable penalties above (0 if neither app
 
 Round both Market_Price and Collateral_Value to 2 decimals. Express quality_adjustments_total as a signed percentage string (e.g. "+5%", "-10%", "0%").
 
+# Quality Rating Engine (independent of pricing — runs in parallel)
+This block is a separate, parallel evaluation of the lot's *visual quality* on the original KQV (KrashuVed Quality Vision) scoring matrix. It is fully independent of the Pricing Engine above:
+- It does NOT use the benchmark price B, mandi heat, multipliers, haircuts, or any pricing math.
+- It does NOT output any LTV, lending recommendation, collateral percentage, or money value of any kind. LTV stays inside the Pricing Engine only (surfaced via Collateral Value % above).
+- Its only job is to express the visual quality of the lot as a 1–5 score, a named band, a 1–5 score for each of the 5 pillars, and a brief markdown rationale.
+
+Score five pillars on an integer 1–5 scale (1 = worst, 5 = best), based purely on the photo:
+1. **neck_integrity** (Dormancy) — paper-thin dry closed neck = 5; thick / fleshy / open / sprouting = 1.
+2. **shoulder_geometry** — sharp ~90° flat shoulders = 5; convex / puffy / bulging = 1.
+3. **parda_luster** — 2–3 waxy intact skin layers + vibrant pink/dark-red shine = 5; dull / peeling (Kattar) / single thin skin = 1.
+4. **shape_roundness** — perfectly globe / round = 5; elongated / pear-shaped / oven-shaped = 1.
+5. **uniformity_size** (45–60 mm reference) — tightly consistent size distribution = 5; mixed field-run lot = 1.
+
+Compute overall_score (the simple average of the five pillar scores, expressed as a number with at most one decimal, between 1.0 and 5.0) and pick exactly one score_band:
+- **5.0–4.5 → "Elite Storage"** — flat shoulders, thin necks, triple skin, vibrant color.
+- **4.4–3.5 → "Premium Commercial"** — good size, mostly round, stable necks.
+- **3.4–2.5 → "Standard/Domestic"** — average mandi quality, minor peeling, mixed sizes.
+- **2.4–1.5 → "High Risk/Puffy"** — convex shoulders, fleshy necks, dull luster.
+- **1.4–1.0 → "Distress/Reject"** — sprouting, rot, or severe mechanical damage.
+
+The rationale_markdown must be a short markdown string (2–4 bullet points, "- " prefixed) calling out which pillars drove the score. It must NOT contain any rupee value, percentage, LTV, collateral, or pricing language.
+
 # Output Format (return ONLY this JSON object — no markdown, no commentary)
 {
   "pricing_analysis": {
@@ -891,6 +934,18 @@ Round both Market_Price and Collateral_Value to 2 decimals. Express quality_adju
     "shape_uniformity": "<short description like 'Perfectly Globe', 'Irregular', 'Mixed'>",
     "neck_rating": <integer 1-5>,
     "shoulder_geometry": "Flat" | "Convex" | "Tapered"
+  },
+  "quality_rating": {
+    "overall_score": <number 1.0-5.0, at most 1 decimal>,
+    "score_band": "Elite Storage" | "Premium Commercial" | "Standard/Domestic" | "High Risk/Puffy" | "Distress/Reject",
+    "pillar_scores": {
+      "neck_integrity": <integer 1-5>,
+      "shoulder_geometry": <integer 1-5>,
+      "parda_luster": <integer 1-5>,
+      "shape_roundness": <integer 1-5>,
+      "uniformity_size": <integer 1-5>
+    },
+    "rationale_markdown": "<short markdown, 2-4 bullets, no rupee/LTV/percent>"
   }
 }
 

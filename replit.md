@@ -70,6 +70,18 @@ The full engine specification (used verbatim as the agent's system prompt):
 >     "shape_uniformity": "<short description like 'Perfectly Globe', 'Irregular', 'Mixed'>",
 >     "neck_rating": <integer 1-5>,
 >     "shoulder_geometry": "Flat" | "Convex" | "Tapered"
+>   },
+>   "quality_rating": {
+>     "overall_score": <number 1.0-5.0, at most 1 decimal>,
+>     "score_band": "Elite Storage" | "Premium Commercial" | "Standard/Domestic" | "High Risk/Puffy" | "Distress/Reject",
+>     "pillar_scores": {
+>       "neck_integrity": <integer 1-5>,
+>       "shoulder_geometry": <integer 1-5>,
+>       "parda_luster": <integer 1-5>,
+>       "shape_roundness": <integer 1-5>,
+>       "uniformity_size": <integer 1-5>
+>     },
+>     "rationale_markdown": "<short markdown, 2-4 bullets, no rupee/LTV/percent>"
 >   }
 > }
 > ```
@@ -78,6 +90,13 @@ The full engine specification (used verbatim as the agent's system prompt):
 > `{ "error": "image_not_onion", "message": "The uploaded image does not appear to be an onion lot. Please upload a clear photo of onions." }`
 
 The output is validated server-side with Zod (`onionResultSchema` in `server/routes.ts`, with regex on `quality_adjustments_total`) and stored in `service_requests.ai_diagnosis` as JSON text. Legacy KQV records (with `lot_analysis`) render as raw JSON in the result panel and are skipped in the new history badges.
+
+**Quality Rating Layer (independent of pricing).** Alongside the Pricing Engine the same AI call returns a separate `quality_rating` block built on the original KQV scoring matrix. It is fully independent — it does NOT use B, mandi heat, multipliers, or haircuts, and it does NOT emit any LTV / collateral / rupee value of its own. LTV stays inside the Pricing Engine and is surfaced only as the Collateral % on the pricing card (with an inline note that Collateral % = effective LTV after puffy + dormancy haircuts). The rating block scores 5 visual pillars on a 1–5 integer scale and assigns a named band:
+- Pillars: `neck_integrity` (Dormancy), `shoulder_geometry`, `parda_luster`, `shape_roundness`, `uniformity_size`.
+- Bands by `overall_score` (avg of pillars): 5.0–4.5 = Elite Storage; 4.4–3.5 = Premium Commercial; 3.4–2.5 = Standard/Domestic; 2.4–1.5 = High Risk/Puffy; 1.4–1.0 = Distress/Reject.
+- JSON shape: `quality_rating: { overall_score, score_band, pillar_scores: {neck_integrity, shoulder_geometry, parda_luster, shape_roundness, uniformity_size}, rationale_markdown }`.
+- The rationale_markdown is short bullets explaining which pillars drove the score and contains no rupee/percent/LTV language.
+- UI: rendered as a separate "Quality Rating (KQV)" card under the Pricing card with star indicator, colored band badge, 5-row pillar grid, and markdown rationale. The score-band badge also appears on each onion request row in the request history alongside the heat / collateral badges.
 - **Weather Widget**: Real-time weather display on home page using Open-Meteo API (free, no key required). Shows current temperature with weather icon; click to expand for humidity, wind, and 3-day forecast.
 - **Weather Data Logging**: Daily historical weather data logged to `weather_logs` table via cron job (1:00 AM IST). Logs for all registered user locations + 16 default Indian agricultural cities. Data points: temp (max/min/mean/apparent), precipitation, rain, weather code, wind speed/gusts, humidity, dew point, pressure, soil temperature & moisture (3 depths), ET0 evapotranspiration, UV index, sunrise/sunset, daylight duration. Source: Open-Meteo API. Admin can trigger manual logging via `POST /api/admin/weather-log-now`. Unique index on (date, latitude, longitude) prevents duplicates.
 - **Marketplace**: Buy/sell platform for agricultural products (Onion Seedlings, Potato Seeds). Amazon-style grid layout (2 cols mobile, 5 cols desktop). Multi-photo upload (max 3), clickable cards open detail dialog with photo carousel. Sort by Latest/Nearest/Oldest. GPS-based distance sorting, seller location display, and contact info visible only to logged-in users. Photos stored in separate `marketplace_photos` table. Star rating system: buyers can rate listings 1-5 stars (one rating per user per listing, atomic upsert), listing avg rating shown on cards and detail dialog, seller avg rating shown when contact info is revealed. Self-rating prevented. Ratings stored in `marketplace_ratings` table with unique constraint on (listing_id, user_id).
