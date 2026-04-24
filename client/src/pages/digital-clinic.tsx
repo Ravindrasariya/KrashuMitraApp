@@ -759,14 +759,13 @@ function OnionResultView({ raw }: { raw: string }) {
 
   return (
     <Card className="p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 space-y-4" data-testid="card-onion-result-view">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h4 className="font-semibold text-sm">{t("onionResult")}</h4>
-        {band && (
+      {band && (
+        <div className="flex flex-wrap gap-2">
           <Badge className={scoreBandClass(band)} data-testid="badge-onion-score-band">
             {scoreBandLabel(band, t)}
           </Badge>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Row 2: Pricing + Selling Recommendation */}
       <section data-testid="section-onion-pricing">
