@@ -797,16 +797,18 @@ function OnionResultView({ raw }: { raw: string }) {
 
       {/* Row 2: Pricing + Selling Recommendation */}
       <section data-testid="section-onion-pricing">
-        <div className="mb-3">
-          <div className="bg-background/60 rounded p-3">
+        <div className="grid grid-cols-5 gap-3">
+          <div className="bg-background/60 rounded p-3 col-span-2">
             <div className="text-xs text-muted-foreground">{t("marketPrice")}</div>
-            <div className="text-2xl font-bold tabular-nums" data-testid="text-onion-market-price">
+            <div className="text-xl font-bold tabular-nums leading-tight" data-testid="text-onion-market-price">
               {formatINR(market)}
             </div>
             <div className="text-[10px] text-muted-foreground mt-0.5">{t("perKg")}</div>
           </div>
+          <div className="col-span-3">
+            <StorageRecommendationBlock rec={storageRec} />
+          </div>
         </div>
-        <StorageRecommendationBlock rec={storageRec} />
       </section>
 
       {/* Row 3: Visual Parameters */}
