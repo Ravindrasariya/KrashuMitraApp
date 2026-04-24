@@ -1769,7 +1769,11 @@ Respond in this structure:
 
       let parsedPricePerQuintal: number | null = null;
       if (category === "soyabean_seed" && soyabeanSeedPricePerQuintal !== undefined && soyabeanSeedPricePerQuintal !== null && String(soyabeanSeedPricePerQuintal).trim() !== "") {
-        const n = parseInt(String(soyabeanSeedPricePerQuintal), 10);
+        const raw = String(soyabeanSeedPricePerQuintal).trim();
+        if (!/^\d+$/.test(raw)) {
+          return res.status(400).json({ message: "Invalid price per quintal" });
+        }
+        const n = parseInt(raw, 10);
         if (Number.isNaN(n) || n < 0 || n > 999999) {
           return res.status(400).json({ message: "Invalid price per quintal" });
         }
@@ -1890,7 +1894,11 @@ Respond in this structure:
         if (soyabeanSeedPricePerQuintal === null || String(soyabeanSeedPricePerQuintal).trim() === "") {
           parsedPricePerQuintal = null;
         } else {
-          const n = parseInt(String(soyabeanSeedPricePerQuintal), 10);
+          const raw = String(soyabeanSeedPricePerQuintal).trim();
+          if (!/^\d+$/.test(raw)) {
+            return res.status(400).json({ message: "Invalid price per quintal" });
+          }
+          const n = parseInt(raw, 10);
           if (Number.isNaN(n) || n < 0 || n > 999999) {
             return res.status(400).json({ message: "Invalid price per quintal" });
           }
