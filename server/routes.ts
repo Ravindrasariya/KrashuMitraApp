@@ -1834,7 +1834,7 @@ Respond in this structure:
       if (existing.sellerId !== userId) return res.status(403).json({ message: "Not authorized" });
 
       const category = existing.category;
-      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg } = req.body || {};
+      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal } = req.body || {};
 
       if (category === "onion_seedling" && quantityBigha !== undefined && !quantityBigha) {
         return res.status(400).json({ message: "quantityBigha required for onion_seedling" });
@@ -1845,10 +1845,14 @@ Respond in this structure:
       if (category === "onion_seed" && onionSeedVariety !== undefined && !onionSeedVariety) {
         return res.status(400).json({ message: "onionSeedVariety required for onion_seed" });
       }
+      if (category === "soyabean_seed" && soyabeanSeedVariety !== undefined && (typeof soyabeanSeedVariety !== "string" || !soyabeanSeedVariety.trim())) {
+        return res.status(400).json({ message: "soyabeanSeedVariety required for soyabean_seed" });
+      }
 
       const ONION_SEED_TYPES_ALLOWED = ["Nafed", "Nasik", "Others"];
       const ONION_SEED_VARIETIES_ALLOWED = ["Agriwell", "Kalash", "Nasik Fursungi", "Nasik Red (N-53)", "NHRDF Red / L-28", "Others"];
       const ONION_SEED_BRANDS_ALLOWED = ["Deepak", "Divya Seeds", "East-West Seed", "Ellora", "Farmson Biotech", "Indo-American Hybrid Seeds (IAHS)", "Jindal Seeds", "Kalash Seeds", "Malav Seeds", "Mukund", "Namdhari Seeds", "Prashant", "Rudraksh Seeds", "Sarpan Hybrid Seeds", "Seminis (Bayer)", "Syngenta", "Urja Seeds", "Others"];
+      const SOYABEAN_DURATIONS_ALLOWED_PATCH = ["Long", "Short"];
 
       if (category === "onion_seed") {
         if (onionSeedType && !ONION_SEED_TYPES_ALLOWED.includes(String(onionSeedType))) {
@@ -1862,6 +1866,12 @@ Respond in this structure:
         }
       }
 
+      if (category === "soyabean_seed" && soyabeanSeedDuration !== undefined && soyabeanSeedDuration !== null && soyabeanSeedDuration !== "") {
+        if (!SOYABEAN_DURATIONS_ALLOWED_PATCH.includes(String(soyabeanSeedDuration))) {
+          return res.status(400).json({ message: "Invalid soyabeanSeedDuration" });
+        }
+      }
+
       let parsedPricePerKg: number | null | undefined = undefined;
       if (category === "onion_seed" && onionSeedPricePerKg !== undefined) {
         if (onionSeedPricePerKg === null || String(onionSeedPricePerKg).trim() === "") {
@@ -1872,6 +1882,19 @@ Respond in this structure:
             return res.status(400).json({ message: "Invalid price per kg" });
           }
           parsedPricePerKg = n;
+        }
+      }
+
+      let parsedPricePerQuintal: number | null | undefined = undefined;
+      if (category === "soyabean_seed" && soyabeanSeedPricePerQuintal !== undefined) {
+        if (soyabeanSeedPricePerQuintal === null || String(soyabeanSeedPricePerQuintal).trim() === "") {
+          parsedPricePerQuintal = null;
+        } else {
+          const n = parseInt(String(soyabeanSeedPricePerQuintal), 10);
+          if (Number.isNaN(n) || n < 0 || n > 999999) {
+            return res.status(400).json({ message: "Invalid price per quintal" });
+          }
+          parsedPricePerQuintal = n;
         }
       }
 
@@ -1889,6 +1912,12 @@ Respond in this structure:
         if (onionSeedVariety !== undefined) updates.onionSeedVariety = onionSeedVariety ? String(onionSeedVariety).slice(0, 100) : null;
         if (onionSeedBrand !== undefined) updates.onionSeedBrand = onionSeedBrand ? String(onionSeedBrand).slice(0, 100) : null;
         if (parsedPricePerKg !== undefined) updates.onionSeedPricePerKg = parsedPricePerKg;
+      } else if (category === "soyabean_seed") {
+        if (soyabeanSeedDuration !== undefined) updates.soyabeanSeedDuration = soyabeanSeedDuration ? String(soyabeanSeedDuration).slice(0, 20) : null;
+        if (soyabeanSeedVariety !== undefined && typeof soyabeanSeedVariety === "string" && soyabeanSeedVariety.trim()) {
+          updates.soyabeanSeedVariety = soyabeanSeedVariety.trim().slice(0, 100);
+        }
+        if (parsedPricePerQuintal !== undefined) updates.soyabeanSeedPricePerQuintal = parsedPricePerQuintal;
       }
 
       if (Object.keys(updates).length > 0) {

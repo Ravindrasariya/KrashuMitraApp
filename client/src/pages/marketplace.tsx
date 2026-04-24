@@ -417,6 +417,10 @@ export default function MarketplacePage() {
       setOnionSeedVariety(listing.onionSeedVariety || "");
       setOnionSeedBrand(listing.onionSeedBrand || "none");
       setOnionSeedPricePerKg(listing.onionSeedPricePerKg != null ? String(listing.onionSeedPricePerKg) : "");
+    } else if (listing.category === "soyabean_seed") {
+      setSoyabeanDuration(listing.soyabeanSeedDuration || "");
+      setSoyabeanVariety(listing.soyabeanSeedVariety || "");
+      setSoyabeanPricePerQuintal(listing.soyabeanSeedPricePerQuintal != null ? String(listing.soyabeanSeedPricePerQuintal) : "");
     }
     setEditingListingId(listing.id);
     setPhotosDirty(false);
