@@ -436,12 +436,6 @@ export default function DigitalClinicPage() {
               const isExpandable = isCropDoctor || isOnion;
               const isExpanded = expandedRequestId === req.id;
               const onionParsed = isOnion ? safeParseOnion(req.aiDiagnosis!) : null;
-              const onionMarketPrice = onionParsed?.pricing_analysis?.calculated_market_price;
-              const onionCollateral = onionParsed?.pricing_analysis?.collateral_value;
-              const onionCollateralPct =
-                onionMarketPrice && onionMarketPrice > 0 && onionCollateral != null
-                  ? Math.round((onionCollateral / onionMarketPrice) * 100)
-                  : null;
               const onionScoreBand = onionParsed?.quality_rating?.score_band;
               return (
                 <Card
@@ -464,15 +458,12 @@ export default function DigitalClinicPage() {
                         <Badge variant="secondary" data-testid={`badge-type-${req.id}`}>
                           {serviceLabel(req.serviceType)}
                         </Badge>
-                        <Badge
-                          variant={req.status === "open" ? "default" : "outline"}
-                          data-testid={`badge-status-${req.id}`}
-                        >
-                          {req.status === "open" ? t("open") : t("closed")}
-                        </Badge>
-                        {isOnion && onionParsed?.pricing_analysis && (
-                          <Badge variant="outline" className="gap-1 tabular-nums" data-testid={`badge-onion-collateral-${req.id}`}>
-                            {onionCollateralPct != null ? `${onionCollateralPct}%` : "—"}
+                        {!isOnion && (
+                          <Badge
+                            variant={req.status === "open" ? "default" : "outline"}
+                            data-testid={`badge-status-${req.id}`}
+                          >
+                            {req.status === "open" ? t("open") : t("closed")}
                           </Badge>
                         )}
                         {isOnion && onionScoreBand && (
@@ -791,17 +782,6 @@ function OnionResultView({ raw }: { raw: string }) {
   }
 
   const market = Number(pa.calculated_market_price ?? 0);
-  const collateral = Number(pa.collateral_value ?? 0);
-  const collateralPct = market > 0 ? Math.round((collateral / market) * 100) : null;
-  const collateralPctClass =
-    collateralPct == null
-      ? ""
-      : collateralPct >= 90
-        ? "text-green-600"
-        : collateralPct >= 75
-          ? "text-amber-600"
-          : "text-red-600";
-
   const storageRec = parsed.storage_recommendation || deriveStorageRecommendation(vp, parsed.quality_rating);
   const band = parsed.quality_rating?.score_band || "";
 
@@ -817,19 +797,13 @@ function OnionResultView({ raw }: { raw: string }) {
 
       {/* Row 2: Pricing + Selling Recommendation */}
       <section data-testid="section-onion-pricing">
-        <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="mb-3">
           <div className="bg-background/60 rounded p-3">
             <div className="text-xs text-muted-foreground">{t("marketPrice")}</div>
             <div className="text-2xl font-bold tabular-nums" data-testid="text-onion-market-price">
               {formatINR(market)}
             </div>
             <div className="text-[10px] text-muted-foreground mt-0.5">{t("perKg")}</div>
-          </div>
-          <div className="bg-background/60 rounded p-3">
-            <div className="text-xs text-muted-foreground">{t("collateralValue")}</div>
-            <div className={`text-2xl font-bold tabular-nums ${collateralPctClass}`} data-testid="text-onion-collateral-pct">
-              {collateralPct != null ? `${collateralPct}%` : "—"}
-            </div>
           </div>
         </div>
         <StorageRecommendationBlock rec={storageRec} />
