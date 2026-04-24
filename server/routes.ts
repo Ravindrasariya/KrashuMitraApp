@@ -993,7 +993,11 @@ If the image does not appear to be onions, return:
                 { inlineData: { mimeType: imageMimeType, data: base64Data } },
               ],
             }],
-            config: { maxOutputTokens: 2048, responseMimeType: "application/json" },
+            config: {
+              maxOutputTokens: 4096,
+              responseMimeType: "application/json",
+              thinkingConfig: { thinkingBudget: 1024 },
+            },
           });
           let raw = (result.text || "").trim();
           raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
