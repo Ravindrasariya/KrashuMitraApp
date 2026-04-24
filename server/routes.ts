@@ -4,7 +4,16 @@ import { storage } from "./storage";
 import { setupPhoneAuth, isAuthenticated } from "./auth-phone";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
-import { insertCropCardSchema, insertCropEventSchema, insertKhataRegisterSchema, insertKhataItemSchema, insertPanatPaymentSchema } from "@shared/schema";
+import {
+  insertCropCardSchema,
+  insertCropEventSchema,
+  insertKhataRegisterSchema,
+  insertKhataItemSchema,
+  insertPanatPaymentSchema,
+  MARKETPLACE_ONION_SEED_TYPES,
+  MARKETPLACE_ONION_SEED_VARIETIES,
+  MARKETPLACE_ONION_SEED_BRANDS,
+} from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import sharp from "sharp";
@@ -1735,19 +1744,18 @@ Respond in this structure:
         return res.status(400).json({ message: "soyabeanSeedVariety required for soyabean_seed" });
       }
 
-      const ONION_SEED_TYPES_ALLOWED = ["Nafed", "Nasik", "Others"];
-      const ONION_SEED_VARIETIES_ALLOWED = ["Agriwell", "Kalash", "Nasik Fursungi", "Nasik Red (N-53)", "NHRDF Red / L-28", "Others"];
-      const ONION_SEED_BRANDS_ALLOWED = ["Deepak", "Divya Seeds", "East-West Seed", "Ellora", "Farmson Biotech", "Indo-American Hybrid Seeds (IAHS)", "Jindal Seeds", "Kalash Seeds", "Malav Seeds", "Mukund", "Namdhari Seeds", "Prashant", "Rudraksh Seeds", "Sarpan Hybrid Seeds", "Seminis (Bayer)", "Syngenta", "Urja Seeds", "Others"];
+      // Allow-lists are imported from shared/schema.ts so the seller form
+      // dropdowns and this validation always agree.
       const SOYABEAN_DURATIONS_ALLOWED = ["Long", "Short"];
 
       if (category === "onion_seed") {
-        if (onionSeedType && !ONION_SEED_TYPES_ALLOWED.includes(String(onionSeedType))) {
+        if (onionSeedType && !MARKETPLACE_ONION_SEED_TYPES.includes(String(onionSeedType) as typeof MARKETPLACE_ONION_SEED_TYPES[number])) {
           return res.status(400).json({ message: "Invalid onionSeedType" });
         }
-        if (!ONION_SEED_VARIETIES_ALLOWED.includes(String(onionSeedVariety))) {
+        if (!MARKETPLACE_ONION_SEED_VARIETIES.includes(String(onionSeedVariety) as typeof MARKETPLACE_ONION_SEED_VARIETIES[number])) {
           return res.status(400).json({ message: "Invalid onionSeedVariety" });
         }
-        if (onionSeedBrand && !ONION_SEED_BRANDS_ALLOWED.includes(String(onionSeedBrand))) {
+        if (onionSeedBrand && !MARKETPLACE_ONION_SEED_BRANDS.includes(String(onionSeedBrand) as typeof MARKETPLACE_ONION_SEED_BRANDS[number])) {
           return res.status(400).json({ message: "Invalid onionSeedBrand" });
         }
       }
@@ -1853,19 +1861,19 @@ Respond in this structure:
         return res.status(400).json({ message: "soyabeanSeedVariety required for soyabean_seed" });
       }
 
-      const ONION_SEED_TYPES_ALLOWED = ["Nafed", "Nasik", "Others"];
-      const ONION_SEED_VARIETIES_ALLOWED = ["Agriwell", "Kalash", "Nasik Fursungi", "Nasik Red (N-53)", "NHRDF Red / L-28", "Others"];
-      const ONION_SEED_BRANDS_ALLOWED = ["Deepak", "Divya Seeds", "East-West Seed", "Ellora", "Farmson Biotech", "Indo-American Hybrid Seeds (IAHS)", "Jindal Seeds", "Kalash Seeds", "Malav Seeds", "Mukund", "Namdhari Seeds", "Prashant", "Rudraksh Seeds", "Sarpan Hybrid Seeds", "Seminis (Bayer)", "Syngenta", "Urja Seeds", "Others"];
+      // Onion-seed allow-lists are imported from shared/schema.ts so the
+      // seller form dropdowns and this validation always agree.
       const SOYABEAN_DURATIONS_ALLOWED_PATCH = ["Long", "Short"];
 
+
       if (category === "onion_seed") {
-        if (onionSeedType && !ONION_SEED_TYPES_ALLOWED.includes(String(onionSeedType))) {
+        if (onionSeedType && !MARKETPLACE_ONION_SEED_TYPES.includes(String(onionSeedType) as typeof MARKETPLACE_ONION_SEED_TYPES[number])) {
           return res.status(400).json({ message: "Invalid onionSeedType" });
         }
-        if (onionSeedVariety && !ONION_SEED_VARIETIES_ALLOWED.includes(String(onionSeedVariety))) {
+        if (onionSeedVariety && !MARKETPLACE_ONION_SEED_VARIETIES.includes(String(onionSeedVariety) as typeof MARKETPLACE_ONION_SEED_VARIETIES[number])) {
           return res.status(400).json({ message: "Invalid onionSeedVariety" });
         }
-        if (onionSeedBrand && !ONION_SEED_BRANDS_ALLOWED.includes(String(onionSeedBrand))) {
+        if (onionSeedBrand && !MARKETPLACE_ONION_SEED_BRANDS.includes(String(onionSeedBrand) as typeof MARKETPLACE_ONION_SEED_BRANDS[number])) {
           return res.status(400).json({ message: "Invalid onionSeedBrand" });
         }
       }

@@ -21,7 +21,12 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useToast } from "@/hooks/use-toast";
 import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { MarketplaceListing } from "@shared/schema";
+import {
+  MARKETPLACE_ONION_SEED_TYPES,
+  MARKETPLACE_ONION_SEED_VARIETIES,
+  MARKETPLACE_ONION_SEED_BRANDS,
+  type MarketplaceListing,
+} from "@shared/schema";
 
 type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & { photoCount: number; avgRating: number; ratingCount: number };
 
@@ -29,36 +34,11 @@ const POTATO_VARIETIES = ["CS3", "CS1", "Torus", "Pukhraj", "Jyoti", "Lakar", "O
 const POTATO_BRANDS = ["Merino", "Technico", "Uttkal", "Jain", "Jalandhar", "Merath"];
 const MAX_PHOTOS = 3;
 
-// Onion-seed dropdown values: alphabetised, with "Others" pinned at the bottom.
-const ONION_SEED_TYPES = ["Nafed", "Nasik", "Others"];
-const ONION_SEED_VARIETIES = [
-  "Agriwell",
-  "Kalash",
-  "Nasik Fursungi",
-  "Nasik Red (N-53)",
-  "NHRDF Red / L-28",
-  "Others",
-];
-const ONION_SEED_BRANDS = [
-  "Deepak",
-  "Divya Seeds",
-  "East-West Seed",
-  "Ellora",
-  "Farmson Biotech",
-  "Indo-American Hybrid Seeds (IAHS)",
-  "Jindal Seeds",
-  "Kalash Seeds",
-  "Malav Seeds",
-  "Mukund",
-  "Namdhari Seeds",
-  "Prashant",
-  "Rudraksh Seeds",
-  "Sarpan Hybrid Seeds",
-  "Seminis (Bayer)",
-  "Syngenta",
-  "Urja Seeds",
-  "Others",
-];
+// Onion-seed dropdown values come from shared/schema.ts so the seller form
+// here and the POST /api/marketplace allow-list cannot drift apart.
+const ONION_SEED_TYPES: string[] = [...MARKETPLACE_ONION_SEED_TYPES];
+const ONION_SEED_VARIETIES: string[] = [...MARKETPLACE_ONION_SEED_VARIETIES];
+const ONION_SEED_BRANDS: string[] = [...MARKETPLACE_ONION_SEED_BRANDS];
 
 const SOYABEAN_DURATIONS = ["Long", "Short"] as const;
 

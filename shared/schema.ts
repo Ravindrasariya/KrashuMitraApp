@@ -233,6 +233,39 @@ export type InsertPanatPayment = z.infer<typeof insertPanatPaymentSchema>;
 export type LendenTransaction = typeof lendenTransactions.$inferSelect;
 export type InsertLendenTransaction = z.infer<typeof insertLendenTransactionSchema>;
 
+// Marketplace dropdown options shared between seller form (frontend) and
+// validation allow-list (backend) so they cannot drift out of sync.
+// Kept alphabetised with "Others" pinned at the bottom.
+export const MARKETPLACE_ONION_SEED_TYPES = ["Nafed", "Nasik", "Others"] as const;
+export const MARKETPLACE_ONION_SEED_VARIETIES = [
+  "Agriwell",
+  "Kalash",
+  "Nasik Fursungi",
+  "Nasik Red (N-53)",
+  "NHRDF Red / L-28",
+  "Others",
+] as const;
+export const MARKETPLACE_ONION_SEED_BRANDS = [
+  "Deepak",
+  "Divya Seeds",
+  "East-West Seed",
+  "Ellora",
+  "Farmson Biotech",
+  "Indo-American Hybrid Seeds (IAHS)",
+  "Jindal Seeds",
+  "Kalash Seeds",
+  "Malav Seeds",
+  "Mukund",
+  "Namdhari Seeds",
+  "Prashant",
+  "Rudraksh Seeds",
+  "Sarpan Hybrid Seeds",
+  "Seminis (Bayer)",
+  "Syngenta",
+  "Urja Seeds",
+  "Others",
+] as const;
+
 export const marketplaceListings = pgTable("marketplace_listings", {
   id: serial("id").primaryKey(),
   sellerId: varchar("seller_id").notNull().references(() => users.id),
