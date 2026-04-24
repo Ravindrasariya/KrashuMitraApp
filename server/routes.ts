@@ -51,6 +51,37 @@ const onionResultSchema = z.object({
   }).strict(),
 }).strict();
 
+type OnionAiResult = z.infer<typeof onionResultSchema>;
+
+type StorageRecommendation = {
+  action: "Sell Immediate" | "Store Long-term" | "Average Storage (Short-term)";
+  window: "0-15 Days" | "120-180 Days" | "30-60 Days" | "Immediate";
+  risk: "Low" | "Medium" | "High" | "Extreme";
+  rule: "high_risk_grade" | "elite_storage" | "average_storage" | "reject_liquidate";
+};
+
+function computeStorageRecommendation(data: OnionAiResult): StorageRecommendation {
+  const overall = data.quality_rating.overall_score;
+  const neck = data.visual_parameters.neck_rating;
+  const shoulder = data.visual_parameters.shoulder_geometry;
+  const skin = data.visual_parameters.luster_score;
+
+  // Rule 1 — SELL IMMEDIATE (High-Risk Grade)
+  if (shoulder === "Convex" || neck <= 2 || skin <= 2) {
+    return { action: "Sell Immediate", window: "0-15 Days", risk: "High", rule: "high_risk_grade" };
+  }
+  // Rule 2 — STORE LONG-TERM (Elite Storage Grade) — "Sharp 90°" maps to Flat in our enum
+  if (overall >= 4.0 && neck >= 4 && shoulder === "Flat") {
+    return { action: "Store Long-term", window: "120-180 Days", risk: "Low", rule: "elite_storage" };
+  }
+  // Rule 4 — SAFETY CATCH (REJECT / LIQUIDATE) — checked before fallback rule 3
+  if (overall < 3.0) {
+    return { action: "Sell Immediate", window: "Immediate", risk: "Extreme", rule: "reject_liquidate" };
+  }
+  // Rule 3 — AVERAGE STORAGE (Fallback / Short-term)
+  return { action: "Average Storage (Short-term)", window: "30-60 Days", risk: "Medium", rule: "average_storage" };
+}
+
 const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
   ...(process.env.AI_INTEGRATIONS_GEMINI_BASE_URL ? {
@@ -973,7 +1004,8 @@ If the image does not appear to be onions, return:
             } else {
               const validated = onionResultSchema.safeParse(parsed);
               if (validated.success) {
-                aiDiagnosis = JSON.stringify(validated.data);
+                const storage_recommendation = computeStorageRecommendation(validated.data);
+                aiDiagnosis = JSON.stringify({ ...validated.data, storage_recommendation });
               } else {
                 aiDiagnosis = JSON.stringify({
                   error: "invalid_shape",

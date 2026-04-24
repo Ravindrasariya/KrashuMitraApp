@@ -597,6 +597,12 @@ type OnionParsed = {
     };
     rationale_markdown?: string;
   };
+  storage_recommendation?: {
+    action?: string;
+    window?: string;
+    risk?: string;
+    rule?: string;
+  };
   error?: string;
   message?: string;
   raw?: string;
@@ -686,6 +692,69 @@ function StarBar({ score }: { score: number }) {
   );
 }
 
+const STORAGE_ACTION_KEYS: Record<string, string> = {
+  "Sell Immediate": "storageActionSell",
+  "Store Long-term": "storageActionLong",
+  "Average Storage (Short-term)": "storageActionAverage",
+};
+
+const STORAGE_WINDOW_KEYS: Record<string, string> = {
+  "0-15 Days": "storageWindow015",
+  "120-180 Days": "storageWindow120180",
+  "30-60 Days": "storageWindow3060",
+  Immediate: "storageWindowNow",
+};
+
+const STORAGE_RISK_KEYS: Record<string, string> = {
+  Low: "storageRiskLow",
+  Medium: "storageRiskMedium",
+  High: "storageRiskHigh",
+  Extreme: "storageRiskExtreme",
+};
+
+const STORAGE_RULE_KEYS: Record<string, string> = {
+  high_risk_grade: "storageRuleHighRisk",
+  elite_storage: "storageRuleElite",
+  average_storage: "storageRuleAverage",
+  reject_liquidate: "storageRuleReject",
+};
+
+function storageRiskClass(risk: string): string {
+  switch (risk) {
+    case "Low":
+      return "bg-emerald-600 hover:bg-emerald-700 text-white";
+    case "Medium":
+      return "bg-amber-500 hover:bg-amber-600 text-white";
+    case "High":
+      return "bg-orange-600 hover:bg-orange-700 text-white";
+    case "Extreme":
+      return "bg-red-600 hover:bg-red-700 text-white";
+    default:
+      return "";
+  }
+}
+
+function deriveStorageRecommendation(
+  vp?: OnionParsed["visual_parameters"],
+  qr?: OnionParsed["quality_rating"],
+): NonNullable<OnionParsed["storage_recommendation"]> | null {
+  if (!vp || !qr || qr.overall_score == null) return null;
+  const overall = Number(qr.overall_score);
+  const neck = Number(vp.neck_rating ?? 0);
+  const shoulder = vp.shoulder_geometry || "";
+  const skin = Number(vp.luster_score ?? 0);
+  if (shoulder === "Convex" || neck <= 2 || skin <= 2) {
+    return { action: "Sell Immediate", window: "0-15 Days", risk: "High", rule: "high_risk_grade" };
+  }
+  if (overall >= 4.0 && neck >= 4 && shoulder === "Flat") {
+    return { action: "Store Long-term", window: "120-180 Days", risk: "Low", rule: "elite_storage" };
+  }
+  if (overall < 3.0) {
+    return { action: "Sell Immediate", window: "Immediate", risk: "Extreme", rule: "reject_liquidate" };
+  }
+  return { action: "Average Storage (Short-term)", window: "30-60 Days", risk: "Medium", rule: "average_storage" };
+}
+
 function OnionResultView({ raw }: { raw: string }) {
   const { t } = useTranslation();
   const parsed = safeParseOnion(raw);
@@ -719,94 +788,167 @@ function OnionResultView({ raw }: { raw: string }) {
           ? "text-amber-600"
           : "text-red-600";
 
+  const storageRec = parsed.storage_recommendation || deriveStorageRecommendation(vp, parsed.quality_rating);
+
   return (
-    <Card className="p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800" data-testid="card-onion-result-view">
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <Card className="p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 space-y-4" data-testid="card-onion-result-view">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h4 className="font-semibold text-sm">{t("onionResult")}</h4>
-        {heat && (
-          <Badge className={heatColor(heat)} data-testid="badge-onion-heat-main">
-            {t("marketHeatIndex")}: {heatLabel(heat, t)}
-          </Badge>
+      </div>
+
+      {/* 1. Visual Observations */}
+      <section data-testid="section-onion-visual">
+        <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">
+          1. {t("visualParameters")}
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="bg-background/50 rounded p-2">
+            <div className="text-muted-foreground">{t("sizeGrade")}</div>
+            <div className="font-semibold" data-testid="text-onion-size-grade">{sizeGradeLabel(vp.size_grade || "", t)}</div>
+          </div>
+          <div className="bg-background/50 rounded p-2">
+            <div className="text-muted-foreground">{t("color")}</div>
+            <div className="font-semibold">{vp.color || "-"}</div>
+          </div>
+          <div className="bg-background/50 rounded p-2">
+            <div className="text-muted-foreground">{t("luster")}</div>
+            <div className="font-semibold">{vp.luster_score != null ? `${vp.luster_score}/5` : "-"}</div>
+          </div>
+          <div className="bg-background/50 rounded p-2">
+            <div className="text-muted-foreground">{t("shapeUniformity")}</div>
+            <div className="font-semibold">{vp.shape_uniformity || "-"}</div>
+          </div>
+          <div className="bg-background/50 rounded p-2">
+            <div className="text-muted-foreground">{t("paramNeck")}</div>
+            <div className="font-semibold">{vp.neck_rating != null ? `${vp.neck_rating}/5` : "-"}</div>
+          </div>
+          <div className="bg-background/50 rounded p-2">
+            <div className="text-muted-foreground">{t("paramShoulder")}</div>
+            <div className="font-semibold">{vp.shoulder_geometry || "-"}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. Quality Rating */}
+      <section data-testid="section-onion-rating">
+        <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">
+          2. {t("qualityRating")}
+        </div>
+        <QualityRatingBlock rating={parsed.quality_rating} />
+      </section>
+
+      {/* 3. Pricing */}
+      <section data-testid="section-onion-pricing">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            3. {t("pricingSection")}
+          </div>
+          {heat && (
+            <Badge className={heatColor(heat)} data-testid="badge-onion-heat-main">
+              {t("marketHeatIndex")}: {heatLabel(heat, t)}
+            </Badge>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="bg-background/60 rounded p-3">
+            <div className="text-xs text-muted-foreground">{t("marketPrice")}</div>
+            <div className="text-2xl font-bold tabular-nums" data-testid="text-onion-market-price">
+              {formatINR(market)}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">{t("perQuintal")}</div>
+          </div>
+          <div className="bg-background/60 rounded p-3">
+            <div className="text-xs text-muted-foreground">{t("collateralValue")}</div>
+            <div className={`text-2xl font-bold tabular-nums ${collateralPctClass}`} data-testid="text-onion-collateral-pct">
+              {collateralPct != null ? `${collateralPct}%` : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">{t("ofMarketPrice")}</div>
+            <div className="text-[10px] text-muted-foreground mt-1 leading-tight" data-testid="text-onion-ltv-note">
+              {t("collateralLtvNote")}
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
+          <div className="bg-background/50 rounded p-2">
+            <div className="text-muted-foreground">{t("baseMultiplier")}</div>
+            <div className="font-semibold tabular-nums" data-testid="text-onion-base-mult">
+              {vb.base_multiplier_used != null ? Number(vb.base_multiplier_used).toFixed(2) : "-"}
+            </div>
+          </div>
+          <div className="bg-background/50 rounded p-2">
+            <div className="text-muted-foreground">{t("qualityAdjustments")}</div>
+            <div className={`font-semibold ${qadjSign}`} data-testid="text-onion-qadj">{qadj || "-"}</div>
+          </div>
+          <div className="bg-background/50 rounded p-2">
+            <div className="text-muted-foreground">{t("puffyPenaltyApplied")}</div>
+            <div className="font-semibold" data-testid="text-onion-puffy">
+              {vb.puffy_penalty_applied ? t("yes") : t("no")}
+            </div>
+          </div>
+        </div>
+        {pa.underwriting_note && (
+          <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">{t("underwritingNote")}</div>
+            <p className="text-xs" data-testid="text-onion-underwriting-note">{pa.underwriting_note}</p>
+          </div>
         )}
+      </section>
+
+      {/* 4. Storage Recommendation */}
+      <section data-testid="section-onion-storage">
+        <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">
+          4. {t("storageRecommendation")}
+        </div>
+        <StorageRecommendationBlock rec={storageRec} />
+      </section>
+    </Card>
+  );
+}
+
+function StorageRecommendationBlock({
+  rec,
+}: {
+  rec?: NonNullable<OnionParsed["storage_recommendation"]> | null;
+}) {
+  const { t } = useTranslation();
+  if (!rec || !rec.action || !rec.window || !rec.risk) {
+    return null;
+  }
+  const actionLabel = STORAGE_ACTION_KEYS[rec.action] ? t(STORAGE_ACTION_KEYS[rec.action] as any) : rec.action;
+  const windowLabel = STORAGE_WINDOW_KEYS[rec.window] ? t(STORAGE_WINDOW_KEYS[rec.window] as any) : rec.window;
+  const riskLabel = STORAGE_RISK_KEYS[rec.risk] ? t(STORAGE_RISK_KEYS[rec.risk] as any) : rec.risk;
+  const ruleLabel = rec.rule && STORAGE_RULE_KEYS[rec.rule] ? t(STORAGE_RULE_KEYS[rec.rule] as any) : null;
+  return (
+    <Card
+      className="p-4 bg-background border-amber-200 dark:border-amber-800"
+      data-testid="card-onion-storage"
+    >
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="text-base font-bold" data-testid="text-storage-action">
+          {actionLabel}
+        </div>
+        <Badge className={storageRiskClass(rec.risk)} data-testid="badge-storage-risk">
+          {t("storageRiskLabel")}: {riskLabel}
+        </Badge>
       </div>
-
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-background/60 rounded p-3">
-          <div className="text-xs text-muted-foreground">{t("marketPrice")}</div>
-          <div className="text-2xl font-bold tabular-nums" data-testid="text-onion-market-price">
-            {formatINR(market)}
-          </div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">{t("perQuintal")}</div>
-        </div>
-        <div className="bg-background/60 rounded p-3">
-          <div className="text-xs text-muted-foreground">{t("collateralValue")}</div>
-          <div className={`text-2xl font-bold tabular-nums ${collateralPctClass}`} data-testid="text-onion-collateral-pct">
-            {collateralPct != null ? `${collateralPct}%` : "—"}
-          </div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">{t("ofMarketPrice")}</div>
-          <div className="text-[10px] text-muted-foreground mt-1 leading-tight" data-testid="text-onion-ltv-note">
-            {t("collateralLtvNote")}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 mb-4 text-xs">
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("baseMultiplier")}</div>
-          <div className="font-semibold tabular-nums" data-testid="text-onion-base-mult">
-            {vb.base_multiplier_used != null ? Number(vb.base_multiplier_used).toFixed(2) : "-"}
-          </div>
-        </div>
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("qualityAdjustments")}</div>
-          <div className={`font-semibold ${qadjSign}`} data-testid="text-onion-qadj">{qadj || "-"}</div>
-        </div>
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("puffyPenaltyApplied")}</div>
-          <div className="font-semibold" data-testid="text-onion-puffy">
-            {vb.puffy_penalty_applied ? t("yes") : t("no")}
-          </div>
-        </div>
-      </div>
-
-      <QualityRatingBlock rating={parsed.quality_rating} />
-
-      <div className="text-xs font-medium mb-2 text-muted-foreground">{t("visualParameters")}</div>
       <div className="grid grid-cols-2 gap-2 text-xs mb-3">
         <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("sizeGrade")}</div>
-          <div className="font-semibold" data-testid="text-onion-size-grade">{sizeGradeLabel(vp.size_grade || "", t)}</div>
+          <div className="text-muted-foreground">{t("storageWindowLabel")}</div>
+          <div className="font-semibold" data-testid="text-storage-window">{windowLabel}</div>
         </div>
         <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("color")}</div>
-          <div className="font-semibold">{vp.color || "-"}</div>
-        </div>
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("luster")}</div>
-          <div className="font-semibold">{vp.luster_score != null ? `${vp.luster_score}/5` : "-"}</div>
-        </div>
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("shapeUniformity")}</div>
-          <div className="font-semibold">{vp.shape_uniformity || "-"}</div>
-        </div>
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("paramNeck")}</div>
-          <div className="font-semibold">{vp.neck_rating != null ? `${vp.neck_rating}/5` : "-"}</div>
-        </div>
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("paramShoulder")}</div>
-          <div className="font-semibold">{vp.shoulder_geometry || "-"}</div>
+          <div className="text-muted-foreground">{t("storageRiskLabel")}</div>
+          <div className="font-semibold" data-testid="text-storage-risk-value">{riskLabel}</div>
         </div>
       </div>
-
-      {pa.underwriting_note && (
-        <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400 mb-4">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">{t("underwritingNote")}</div>
-          <p className="text-xs" data-testid="text-onion-underwriting-note">{pa.underwriting_note}</p>
+      {ruleLabel && (
+        <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">
+            {t("storageRationale")}
+          </div>
+          <p className="text-xs" data-testid="text-storage-rationale">{ruleLabel}</p>
         </div>
       )}
-
-      <QualityRatingBlock rating={parsed.quality_rating} />
     </Card>
   );
 }

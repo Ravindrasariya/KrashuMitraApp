@@ -1,0 +1,51 @@
+This one is strictly for storage recommendation
+
+## Storage Decision Logic Hierarchy (Strict Enforcement):
+
+1. **TRIGGER: SELL IMMEDIATE (High-Risk Grade)**
+   - **Condition:** IF (`shoulder_geometry` == "Convex" OR `neck_rating` <= 2 OR `skin_quality` <= 2)
+   - **Verdict:** ACTION: "Sell Immediate"; WINDOW: "0-15 Days"; RISK: "High".
+   - **Rationale:** Structural "puffiness" or poor protection indicates rapid respiration and certain weight loss.
+
+2. **TRIGGER: STORE LONG-TERM (Elite Storage Grade)**
+   - **Condition:** IF (`overall_score` >= 4.0 AND `neck_rating` >= 4 AND `shoulder_geometry` == "Sharp 90°")
+   - **Verdict:** ACTION: "Store Long-term"; WINDOW: "120-180 Days"; RISK: "Low".
+   - **Rationale:** Superior structural density (90° shoulders) and dry necks allow for maximum price appreciation through the monsoon.
+
+3. **ELSE: AVERAGE STORAGE (Fallback / Short-term Grade)**
+   - **Condition:** IF (lot did not meet the above two triggers AND `overall_score` >= 3.0)
+   - **Verdict:** ACTION: "Average Storage (Short-term)"; WINDOW: "30-60 Days"; RISK: "Medium".
+   - **Rationale:** The lot is physically sound but lacks the "Elite" combination of 90° shoulders and high neck dormancy required for a 6-month hold. 
+
+4. **SAFETY CATCH: REJECT/LIQUIDATE**
+   - **Condition:** IF `overall_score` < 3.0
+   - **Verdict:** ACTION: "Sell Immediate"; WINDOW: "Immediate"; RISK: "Extreme".
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Core Parameters for Analysis Evaluate every lot based on these five visual pillars: 1. **Neck Integrity (Dormancy Factor)** - **Target:** Paper-thin, bone-dry "straw" necks. - **Risk:** Thick, fleshy, or "open" necks (indicates lack of dormancy). 2. **Shoulder Geometry (Density Factor)** - **Target:** Sharp 90° (Flat) angle between neck and bulb body. - **Risk:** Convex (Bulging) or "Puffy" shoulders where the bulb domes upward. 3. **Parda (Skin) & Luster** - **Target:** Multiple (2-3) intact layers; waxy, vibrant pink or dark red shine. - **Risk:** Dull/matte appearance; "Kattar" (peeling) or single thin skin. 4. **Shape & Roundness Index** - **Target:** Perfectly globe-shaped bulbs. - **Risk:** "Lambe" (Elongated), pear-shaped, or "Oven" onions (indicates high water/low solids). 5. **Uniformity & Size (Reference: 45-60mm)** - **Target:** Consistent size distribution (Super, Medium, or Gola). - **Risk:** "Mix Lot" (Field-run quality) with high variance. # Scoring Matrix (1 to 5) - **Score 5 (Elite Storage):** Flat shoulders, thin necks, triple skin, vibrant color. (LTV: 75-85%) - **Score 4 (Premium Commercial):** Good size, mostly round, stable necks. (LTV: 60-70%) - **Score 3 (Standard/Domestic):** Average Mandi quality, minor peeling, mixed sizes. (LTV: 40-50%) - **Score 2 (High Risk/Puffy):** Convex shoulders, fleshy necks, dull luster. - **Score 1 (Distress/Reject):** Sprouting, rot, or severe mechanical damage. 
+
