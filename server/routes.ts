@@ -932,8 +932,8 @@ The farmer has declared the lot's size band as **${SIZE_BAND_LABELS[declared as 
           : `5. **uniformity_size** — score how tightly the visible onions cluster around the farmer-declared band (${SIZE_BAND_LABELS[declared as Exclude<SizeBand, "auto">]}). Tight, uniform sizing within that band = 5; widely scattered sizes outside it = 1.`;
 
         const sizeGradeEcho = declared === "auto"
-          ? `"size_grade": "Super" | "Medium" | "Gola" | "Golti"`
-          : `"size_grade": "${declared.charAt(0).toUpperCase() + declared.slice(1)}" — ALWAYS echo the farmer-declared band exactly as given here, do not change it`;
+          ? `"size_grade": "Super" | "Medium" | "Gola" | "Golti"  // pick EXACTLY one of these four one-word tokens — no parentheses, no mm range, no other text`
+          : `"size_grade": "${declared.charAt(0).toUpperCase() + declared.slice(1)}"  // MUST be EXACTLY this one-word token "${declared.charAt(0).toUpperCase() + declared.slice(1)}" — DO NOT include parentheses, mm range, or any other characters (write "${declared.charAt(0).toUpperCase() + declared.slice(1)}", NOT "${declared.charAt(0).toUpperCase() + declared.slice(1)} (35-45mm)" or similar)`;
 
         const kqvPrompt = `# Role: KrashuVed Commodity Pricing & Underwriting Agent
 You are a high-precision pricing engine for the Indian Onion ecosystem. Your task is to calculate two values for every lot:
@@ -1063,6 +1063,16 @@ If the image does not appear to be onions, return:
             if (parsed && typeof parsed === "object" && parsed.error === "image_not_onion") {
               aiDiagnosis = JSON.stringify(parsed);
             } else {
+              if (parsed && typeof parsed === "object" && parsed.visual_parameters && typeof parsed.visual_parameters.size_grade === "string") {
+                const sg = String(parsed.visual_parameters.size_grade)
+                  .replace(/\s*\(.*?\)\s*/g, "")
+                  .trim();
+                const sgLower = sg.toLowerCase();
+                const canonical: Record<string, string> = { super: "Super", medium: "Medium", gola: "Gola", golti: "Golti" };
+                if (canonical[sgLower]) {
+                  parsed.visual_parameters.size_grade = canonical[sgLower];
+                }
+              }
               const validated = onionResultSchema.safeParse(parsed);
               if (validated.success) {
                 const storage_recommendation = computeStorageRecommendation(validated.data);
