@@ -393,7 +393,7 @@ const translations = {
   paramShoulder: { hi: "कंधा", en: "Shoulder" },
   paramSkin: { hi: "छिलका", en: "Skin" },
   paramUniformity: { hi: "एकरूपता", en: "Uniformity" },
-  benchmarkRequired: { hi: "कृपया प्रीमियम रेट और फोटो दोनों डालें", en: "Please enter both rate and photo" },
+  benchmarkRequired: { hi: "कृपया न्यूनतम और अधिकतम प्रीमियम रेट तथा फोटो दोनों डालें", en: "Please enter Min and Max premium rate and a photo" },
   notOnionImage: { hi: "तस्वीर में प्याज नहीं दिख रहा। कृपया स्पष्ट प्याज लॉट की फोटो अपलोड करें।", en: "The image does not look like onions. Please upload a clear onion lot photo." },
   onionAnalysisFailed: { hi: "AI विश्लेषण में त्रुटि हुई। कृपया पुनः प्रयास करें।", en: "AI analysis failed. Please try again." },
   confirmBooking: { hi: "पुष्टि करें", en: "Confirm" },
