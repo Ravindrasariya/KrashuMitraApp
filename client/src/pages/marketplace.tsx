@@ -19,7 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Package } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MarketplaceListing } from "@shared/schema";
 
@@ -453,7 +453,7 @@ export default function MarketplacePage() {
     if (cat === "potato_seed") {
       return <Leaf className={`${cls} text-amber-300 dark:text-amber-700`} />;
     }
-    return <Package className={`${cls} text-rose-300 dark:text-rose-700`} />;
+    return <Sprout className={`${cls} text-rose-300 dark:text-rose-700`} />;
   };
 
   const formatPrice = (n: number | null | undefined) => {
