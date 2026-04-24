@@ -378,6 +378,7 @@ const translations = {
   benchmarkRateMinPlaceholder: { hi: "जैसे: 800", en: "e.g. 800" },
   benchmarkRateMaxPlaceholder: { hi: "जैसे: 1000", en: "e.g. 1000" },
   benchmarkMaxLessThanMin: { hi: "अधिकतम रेट न्यूनतम से अधिक होना चाहिए", en: "Max must be ≥ Min" },
+  benchmarkUsed: { hi: "उपयोग किया गया प्रीमियम रेट", en: "Premium Rate Used" },
   uploadOnionPhoto: { hi: "प्याज लॉट की फोटो अपलोड करें", en: "Upload Onion Lot Photo" },
   onionResult: { hi: "प्याज विश्लेषण रिपोर्ट", en: "Onion Analysis Report" },
   qualityScore: { hi: "गुणवत्ता स्कोर", en: "Quality Score" },

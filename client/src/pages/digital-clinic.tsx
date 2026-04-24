@@ -686,6 +686,13 @@ function OnionResultView({ raw }: { raw: string }) {
         </div>
       </div>
 
+      {la.benchmark_used && (
+        <div className="mb-3 text-xs">
+          <span className="text-muted-foreground">{t("benchmarkUsed")}: </span>
+          <span className="font-medium" data-testid="text-onion-benchmark-used">{la.benchmark_used}</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
         <div>
           <div className="text-xs text-muted-foreground">{t("expectedRate")}</div>
