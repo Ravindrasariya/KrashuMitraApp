@@ -90,7 +90,7 @@ export default function DigitalClinicPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const onionFileInputRef = useRef<HTMLInputElement>(null);
   const [onionBenchmark, setOnionBenchmark] = useState<string>("");
-  const [onionSize, setOnionSize] = useState<"super" | "medium" | "gola" | "golti" | "auto" | "">("");
+  const [onionSize, setOnionSize] = useState<"super" | "medium" | "gola" | "golti" | "auto" | null>(null);
   const [onionImages, setOnionImages] = useState<{ base64: string; mime: string; preview: string }[]>([]);
   const [latestOnionResult, setLatestOnionResult] = useState<string | null>(null);
   const ONION_MAX_IMAGES = 3;
@@ -151,7 +151,7 @@ export default function DigitalClinicPage() {
     onSuccess: (data: ServiceRequest) => {
       setLatestOnionResult(data.aiDiagnosis || null);
       setOnionImages([]);
-      setOnionSize("");
+      setOnionSize(null);
       qc.invalidateQueries({ queryKey: ["/api/service-requests"] });
     },
     onError: (err: Error) => {
@@ -288,7 +288,7 @@ export default function DigitalClinicPage() {
                   </div>
                   <div>
                     <Label htmlFor="onion-size" className="text-xs">{t("sizeBandLabel")}</Label>
-                    <Select value={onionSize} onValueChange={(v) => setOnionSize(v as typeof onionSize)}>
+                    <Select value={onionSize ?? undefined} onValueChange={(v) => setOnionSize(v as Exclude<typeof onionSize, null>)}>
                       <SelectTrigger id="onion-size" className="mt-1" data-testid="select-onion-size">
                         <SelectValue placeholder={t("selectSizeBand")} />
                       </SelectTrigger>
