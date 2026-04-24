@@ -199,6 +199,7 @@ export const serviceRequests = pgTable("service_requests", {
   imageMimeType: text("image_mime_type"),
   imageDataList: text("image_data_list").array(),
   imageMimeTypeList: text("image_mime_type_list").array(),
+  declaredSizeBand: text("declared_size_band"),
   aiDiagnosis: text("ai_diagnosis"),
   inputData: text("input_data"),
   adminRemarks: text("admin_remarks"),

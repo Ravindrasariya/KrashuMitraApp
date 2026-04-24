@@ -861,7 +861,7 @@ Rules:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { serviceType, imageData, imageMimeType, imageDataList, imageMimeTypeList, benchmarkRate } = req.body;
+      const { serviceType, imageData, imageMimeType, imageDataList, imageMimeTypeList, benchmarkRate, declaredSizeBand } = req.body;
       if (!serviceType || !["soil_test", "potato_perishability_test", "crop_doctor", "onion_price_predictor"].includes(serviceType)) {
         return res.status(400).json({ message: "Invalid service type" });
       }
@@ -906,7 +906,34 @@ Rules:
           return res.status(400).json({ message: "Valid mandi benchmark price required" });
         }
 
-        inputData = JSON.stringify({ benchmarkRate: B });
+        const VALID_SIZE_BANDS = ["super", "medium", "gola", "golti", "auto"] as const;
+        type SizeBand = typeof VALID_SIZE_BANDS[number];
+        if (typeof declaredSizeBand !== "string" || !VALID_SIZE_BANDS.includes(declaredSizeBand as SizeBand)) {
+          return res.status(400).json({ message: "Valid size band required" });
+        }
+        const declared = declaredSizeBand as SizeBand;
+        const SIZE_BAND_LABELS: Record<Exclude<SizeBand, "auto">, string> = {
+          super: "Super (>60mm)",
+          medium: "Medium (45-60mm)",
+          gola: "Gola (35-45mm)",
+          golti: "Golti (<35mm)",
+        };
+
+        inputData = JSON.stringify({ benchmarkRate: B, declaredSizeBand: declared });
+
+        const sizeSection = declared === "auto"
+          ? `# Phase 2: Dynamic Size Multipliers (M_size)
+The farmer chose **"Let AI decide"** for the size band. Visually assess the dominant grade category from the photo(s) and apply the multiplier to B based on that category and the Heat Index:`
+          : `# Phase 2: Dynamic Size Multipliers (M_size) — Farmer-Declared Size Band
+The farmer has declared the lot's size band as **${SIZE_BAND_LABELS[declared as Exclude<SizeBand, "auto">]}** (at least 50% of the lot is in this band). Use this declared category directly — do NOT re-estimate the size from the photo. Look up M_size from the table below using this band and the computed Heat Index:`;
+
+        const uniformityRule = declared === "auto"
+          ? `5. **uniformity_size** (45–60 mm reference) — tightly consistent size distribution = 5; mixed field-run lot = 1.`
+          : `5. **uniformity_size** — score how tightly the visible onions cluster around the farmer-declared band (${SIZE_BAND_LABELS[declared as Exclude<SizeBand, "auto">]}). Tight, uniform sizing within that band = 5; widely scattered sizes outside it = 1.`;
+
+        const sizeGradeEcho = declared === "auto"
+          ? `"size_grade": "Super" | "Medium" | "Gola" | "Golti"`
+          : `"size_grade": "${declared.charAt(0).toUpperCase() + declared.slice(1)}" — ALWAYS echo the farmer-declared band exactly as given here, do not change it`;
 
         const kqvPrompt = `# Role: KrashuVed Commodity Pricing & Underwriting Agent
 You are a high-precision pricing engine for the Indian Onion ecosystem. Your task is to calculate two values for every lot:
@@ -923,8 +950,7 @@ Determine the Market State based on B:
 - **H = "Medium" (Balanced):** If 15 < B < 30.
 - **H = "High" (Supply-Driven/Scarcity):** If B >= 30.
 
-# Phase 2: Dynamic Size Multipliers (M_size)
-Apply the multiplier to B based on the visually assessed Grade Category and the Heat Index:
+${sizeSection}
 
 | Grade Category   | Low Heat (B<=15) | Medium Heat (15<B<30) | High Heat (B>=30) |
 | Super (>60mm)    | 1.00             | 1.00                  | 1.00              |
@@ -963,7 +989,7 @@ Score five pillars on an integer 1–5 scale (1 = worst, 5 = best), based purely
 2. **shoulder_geometry** — sharp ~90° flat shoulders = 5; convex / puffy / bulging = 1.
 3. **parda_luster** — 2–3 waxy intact skin layers + vibrant pink/dark-red shine = 5; dull / peeling (Kattar) / single thin skin = 1.
 4. **shape_roundness** — perfectly globe / round = 5; elongated / pear-shaped / oven-shaped = 1.
-5. **uniformity_size** (45–60 mm reference) — tightly consistent size distribution = 5; mixed field-run lot = 1.
+${uniformityRule}
 
 Compute overall_score (the simple average of the five pillar scores, expressed as a number with at most one decimal, between 1.0 and 5.0) and pick exactly one score_band:
 - **5.0–4.5 → "Elite Storage"** — flat shoulders, thin necks, triple skin, vibrant color.
@@ -988,7 +1014,7 @@ The rationale_markdown must be a short markdown string (2–4 bullet points, "- 
     "underwriting_note": "<one short English sentence explaining the price drift or safety haircut applied>"
   },
   "visual_parameters": {
-    "size_grade": "Super" | "Medium" | "Gola" | "Golti",
+    ${sizeGradeEcho},
     "color": "<short description like 'Dark Red', 'Pale Yellow'>",
     "luster_score": <integer 1-5>,
     "shape_uniformity": "<short description like 'Perfectly Globe', 'Irregular', 'Mixed'>",
@@ -1155,6 +1181,7 @@ Respond in this structure:
         imageMimeType: primaryImageMime,
         imageDataList: isOnionSave ? onionImagesForStorage.map((i) => i.data) : null,
         imageMimeTypeList: isOnionSave ? onionImagesForStorage.map((i) => i.mime) : null,
+        declaredSizeBand: serviceType === "onion_price_predictor" ? (declaredSizeBand ?? null) : null,
         aiDiagnosis,
         inputData,
       });

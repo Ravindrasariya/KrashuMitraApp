@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -89,6 +90,7 @@ export default function DigitalClinicPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const onionFileInputRef = useRef<HTMLInputElement>(null);
   const [onionBenchmark, setOnionBenchmark] = useState<string>("");
+  const [onionSize, setOnionSize] = useState<"super" | "medium" | "gola" | "golti" | "auto" | "">("");
   const [onionImages, setOnionImages] = useState<{ base64: string; mime: string; preview: string }[]>([]);
   const [latestOnionResult, setLatestOnionResult] = useState<string | null>(null);
   const ONION_MAX_IMAGES = 3;
@@ -142,12 +144,14 @@ export default function DigitalClinicPage() {
         imageDataList: onionImages.map((i) => i.base64),
         imageMimeTypeList: onionImages.map((i) => i.mime),
         benchmarkRate: Number(onionBenchmark),
+        declaredSizeBand: onionSize,
       });
       return res.json() as Promise<ServiceRequest>;
     },
     onSuccess: (data: ServiceRequest) => {
       setLatestOnionResult(data.aiDiagnosis || null);
       setOnionImages([]);
+      setOnionSize("");
       qc.invalidateQueries({ queryKey: ["/api/service-requests"] });
     },
     onError: (err: Error) => {
@@ -267,19 +271,46 @@ export default function DigitalClinicPage() {
               <h3 className="font-semibold text-base mb-1">{t("onionPricePredictor")}</h3>
               <p className="text-sm text-muted-foreground mb-3">{t("onionPricePredictorDesc")}</p>
               <div className="space-y-3">
-                <div>
-                  <Label htmlFor="onion-benchmark" className="text-xs">{t("benchmarkRateLabel")}</Label>
-                  <Input
-                    id="onion-benchmark"
-                    type="number"
-                    min={1}
-                    inputMode="numeric"
-                    placeholder={t("benchmarkRatePlaceholder")}
-                    value={onionBenchmark}
-                    onChange={(e) => setOnionBenchmark(e.target.value)}
-                    className="mt-1"
-                    data-testid="input-onion-benchmark"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="onion-benchmark" className="text-xs">{t("benchmarkRateLabel")}</Label>
+                    <Input
+                      id="onion-benchmark"
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      placeholder={t("benchmarkRatePlaceholder")}
+                      value={onionBenchmark}
+                      onChange={(e) => setOnionBenchmark(e.target.value)}
+                      className="mt-1"
+                      data-testid="input-onion-benchmark"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="onion-size" className="text-xs">{t("sizeBandLabel")}</Label>
+                    <Select value={onionSize} onValueChange={(v) => setOnionSize(v as typeof onionSize)}>
+                      <SelectTrigger id="onion-size" className="mt-1" data-testid="select-onion-size">
+                        <SelectValue placeholder={t("selectSizeBand")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="golti" data-testid="option-onion-size-lt35">{t("sizeBandLt35")}</SelectItem>
+                        <SelectItem value="gola" data-testid="option-onion-size-35to45">{t("sizeBand35to45")}</SelectItem>
+                        <SelectItem value="medium" data-testid="option-onion-size-45to60">{t("sizeBand45to60")}</SelectItem>
+                        <SelectItem value="super" data-testid="option-onion-size-gt60">{t("sizeBandGt60")}</SelectItem>
+                        <SelectItem value="auto" data-testid="option-onion-size-auto">{t("sizeBandAuto")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {onionSize && onionSize !== "auto" && (
+                      <p className="text-[10px] text-muted-foreground mt-1" data-testid="text-onion-size-helper">
+                        {t("sizeBandHelper")}
+                      </p>
+                    )}
+                    {onionSize === "auto" && (
+                      <p className="text-[10px] text-muted-foreground mt-1" data-testid="text-onion-size-auto-helper">
+                        {t("sizeBandAutoHelper")}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <input
                   ref={onionFileInputRef}
@@ -334,9 +365,13 @@ export default function DigitalClinicPage() {
                         toast({ title: t("benchmarkRequired"), variant: "destructive" });
                         return;
                       }
+                      if (!onionSize) {
+                        toast({ title: t("sizeBandRequired"), variant: "destructive" });
+                        return;
+                      }
                       onionMutation.mutate();
                     }}
-                    disabled={onionMutation.isPending || onionImages.length === 0 || !(Number(onionBenchmark) > 0)}
+                    disabled={onionMutation.isPending || onionImages.length === 0 || !(Number(onionBenchmark) > 0) || !onionSize}
                     data-testid="button-analyze-onion"
                   >
                     {onionMutation.isPending ? (
