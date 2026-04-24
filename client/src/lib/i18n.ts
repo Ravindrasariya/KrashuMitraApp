@@ -414,6 +414,7 @@ const translations = {
   pillarUniformitySize: { hi: "एकरूपता और साइज़", en: "Uniformity & Size" },
   pricingSection: { hi: "मूल्य-निर्धारण", en: "Pricing" },
   storageRecommendation: { hi: "भंडारण की सलाह", en: "Storage Recommendation" },
+  sellingRecommendation: { hi: "बेचने की सलाह", en: "Selling Recommendation" },
   storageWindowLabel: { hi: "भंडारण अवधि", en: "Storage Window" },
   storageRiskLabel: { hi: "जोखिम", en: "Risk" },
   storageRationale: { hi: "कारण", en: "Rationale" },

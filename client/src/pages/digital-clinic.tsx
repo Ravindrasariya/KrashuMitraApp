@@ -676,33 +676,10 @@ function scoreBandClass(band: string): string {
   }
 }
 
-function StarBar({ score }: { score: number }) {
-  const filled = Math.round(score);
-  return (
-    <div className="flex items-center gap-0.5" aria-hidden="true">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span
-          key={i}
-          className={i <= filled ? "text-amber-500" : "text-muted-foreground/30"}
-        >
-          ★
-        </span>
-      ))}
-    </div>
-  );
-}
-
 const STORAGE_ACTION_KEYS: Record<string, string> = {
   "Sell Immediate": "storageActionSell",
   "Store Long-term": "storageActionLong",
   "Average Storage (Short-term)": "storageActionAverage",
-};
-
-const STORAGE_WINDOW_KEYS: Record<string, string> = {
-  "0-15 Days": "storageWindow015",
-  "120-180 Days": "storageWindow120180",
-  "30-60 Days": "storageWindow3060",
-  Immediate: "storageWindowNow",
 };
 
 const STORAGE_RISK_KEYS: Record<string, string> = {
@@ -710,13 +687,6 @@ const STORAGE_RISK_KEYS: Record<string, string> = {
   Medium: "storageRiskMedium",
   High: "storageRiskHigh",
   Extreme: "storageRiskExtreme",
-};
-
-const STORAGE_RULE_KEYS: Record<string, string> = {
-  high_risk_grade: "storageRuleHighRisk",
-  elite_storage: "storageRuleElite",
-  average_storage: "storageRuleAverage",
-  reject_liquidate: "storageRuleReject",
 };
 
 function storageRiskClass(risk: string): string {
@@ -775,10 +745,6 @@ function OnionResultView({ raw }: { raw: string }) {
   const market = Number(pa.calculated_market_price ?? 0);
   const collateral = Number(pa.collateral_value ?? 0);
   const collateralPct = market > 0 ? Math.round((collateral / market) * 100) : null;
-  const heat = pa.market_heat_index || "";
-  const vb = pa.valuation_breakdown || {};
-  const qadj = (vb.quality_adjustments_total || "").trim();
-  const qadjSign = qadj.startsWith("+") ? "text-green-600" : qadj.startsWith("-") ? "text-red-600" : "";
   const collateralPctClass =
     collateralPct == null
       ? ""
@@ -789,17 +755,47 @@ function OnionResultView({ raw }: { raw: string }) {
           : "text-red-600";
 
   const storageRec = parsed.storage_recommendation || deriveStorageRecommendation(vp, parsed.quality_rating);
+  const band = parsed.quality_rating?.score_band || "";
 
   return (
     <Card className="p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 space-y-4" data-testid="card-onion-result-view">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h4 className="font-semibold text-sm">{t("onionResult")}</h4>
+        {band && (
+          <Badge className={scoreBandClass(band)} data-testid="badge-onion-score-band">
+            {scoreBandLabel(band, t)}
+          </Badge>
+        )}
       </div>
 
-      {/* 1. Visual Observations */}
+      {/* Row 2: Pricing + Selling Recommendation */}
+      <section data-testid="section-onion-pricing">
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="bg-background/60 rounded p-3">
+            <div className="text-xs text-muted-foreground">{t("marketPrice")}</div>
+            <div className="text-2xl font-bold tabular-nums" data-testid="text-onion-market-price">
+              {formatINR(market)}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">{t("perQuintal")}</div>
+          </div>
+          <div className="bg-background/60 rounded p-3">
+            <div className="text-xs text-muted-foreground">{t("collateralValue")}</div>
+            <div className={`text-2xl font-bold tabular-nums ${collateralPctClass}`} data-testid="text-onion-collateral-pct">
+              {collateralPct != null ? `${collateralPct}%` : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">{t("ofMarketPrice")}</div>
+            <div className="text-[10px] text-muted-foreground mt-1 leading-tight" data-testid="text-onion-ltv-note">
+              {t("collateralLtvNote")}
+            </div>
+          </div>
+        </div>
+        <StorageRecommendationBlock rec={storageRec} />
+      </section>
+
+      {/* Row 3: Visual Parameters */}
       <section data-testid="section-onion-visual">
         <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">
-          1. {t("visualParameters")}
+          {t("visualParameters")}
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="bg-background/50 rounded p-2">
@@ -828,79 +824,6 @@ function OnionResultView({ raw }: { raw: string }) {
           </div>
         </div>
       </section>
-
-      {/* 2. Quality Rating */}
-      <section data-testid="section-onion-rating">
-        <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">
-          2. {t("qualityRating")}
-        </div>
-        <QualityRatingBlock rating={parsed.quality_rating} />
-      </section>
-
-      {/* 3. Pricing */}
-      <section data-testid="section-onion-pricing">
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            3. {t("pricingSection")}
-          </div>
-          {heat && (
-            <Badge className={heatColor(heat)} data-testid="badge-onion-heat-main">
-              {t("marketHeatIndex")}: {heatLabel(heat, t)}
-            </Badge>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div className="bg-background/60 rounded p-3">
-            <div className="text-xs text-muted-foreground">{t("marketPrice")}</div>
-            <div className="text-2xl font-bold tabular-nums" data-testid="text-onion-market-price">
-              {formatINR(market)}
-            </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5">{t("perQuintal")}</div>
-          </div>
-          <div className="bg-background/60 rounded p-3">
-            <div className="text-xs text-muted-foreground">{t("collateralValue")}</div>
-            <div className={`text-2xl font-bold tabular-nums ${collateralPctClass}`} data-testid="text-onion-collateral-pct">
-              {collateralPct != null ? `${collateralPct}%` : "—"}
-            </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5">{t("ofMarketPrice")}</div>
-            <div className="text-[10px] text-muted-foreground mt-1 leading-tight" data-testid="text-onion-ltv-note">
-              {t("collateralLtvNote")}
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
-          <div className="bg-background/50 rounded p-2">
-            <div className="text-muted-foreground">{t("baseMultiplier")}</div>
-            <div className="font-semibold tabular-nums" data-testid="text-onion-base-mult">
-              {vb.base_multiplier_used != null ? Number(vb.base_multiplier_used).toFixed(2) : "-"}
-            </div>
-          </div>
-          <div className="bg-background/50 rounded p-2">
-            <div className="text-muted-foreground">{t("qualityAdjustments")}</div>
-            <div className={`font-semibold ${qadjSign}`} data-testid="text-onion-qadj">{qadj || "-"}</div>
-          </div>
-          <div className="bg-background/50 rounded p-2">
-            <div className="text-muted-foreground">{t("puffyPenaltyApplied")}</div>
-            <div className="font-semibold" data-testid="text-onion-puffy">
-              {vb.puffy_penalty_applied ? t("yes") : t("no")}
-            </div>
-          </div>
-        </div>
-        {pa.underwriting_note && (
-          <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">{t("underwritingNote")}</div>
-            <p className="text-xs" data-testid="text-onion-underwriting-note">{pa.underwriting_note}</p>
-          </div>
-        )}
-      </section>
-
-      {/* 4. Storage Recommendation */}
-      <section data-testid="section-onion-storage">
-        <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">
-          4. {t("storageRecommendation")}
-        </div>
-        <StorageRecommendationBlock rec={storageRec} />
-      </section>
     </Card>
   );
 }
@@ -911,112 +834,25 @@ function StorageRecommendationBlock({
   rec?: NonNullable<OnionParsed["storage_recommendation"]> | null;
 }) {
   const { t } = useTranslation();
-  if (!rec || !rec.action || !rec.window || !rec.risk) {
+  if (!rec || !rec.action || !rec.risk) {
     return null;
   }
   const actionLabel = STORAGE_ACTION_KEYS[rec.action] ? t(STORAGE_ACTION_KEYS[rec.action] as any) : rec.action;
-  const windowLabel = STORAGE_WINDOW_KEYS[rec.window] ? t(STORAGE_WINDOW_KEYS[rec.window] as any) : rec.window;
   const riskLabel = STORAGE_RISK_KEYS[rec.risk] ? t(STORAGE_RISK_KEYS[rec.risk] as any) : rec.risk;
-  const ruleLabel = rec.rule && STORAGE_RULE_KEYS[rec.rule] ? t(STORAGE_RULE_KEYS[rec.rule] as any) : null;
   return (
-    <Card
-      className="p-4 bg-background border-amber-200 dark:border-amber-800"
+    <div
+      className="bg-background/60 rounded p-3 flex items-center justify-between flex-wrap gap-2"
       data-testid="card-onion-storage"
     >
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div>
+        <div className="text-xs text-muted-foreground">{t("sellingRecommendation")}</div>
         <div className="text-base font-bold" data-testid="text-storage-action">
           {actionLabel}
         </div>
-        <Badge className={storageRiskClass(rec.risk)} data-testid="badge-storage-risk">
-          {t("storageRiskLabel")}: {riskLabel}
-        </Badge>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("storageWindowLabel")}</div>
-          <div className="font-semibold" data-testid="text-storage-window">{windowLabel}</div>
-        </div>
-        <div className="bg-background/50 rounded p-2">
-          <div className="text-muted-foreground">{t("storageRiskLabel")}</div>
-          <div className="font-semibold" data-testid="text-storage-risk-value">{riskLabel}</div>
-        </div>
-      </div>
-      {ruleLabel && (
-        <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">
-            {t("storageRationale")}
-          </div>
-          <p className="text-xs" data-testid="text-storage-rationale">{ruleLabel}</p>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function QualityRatingBlock({ rating }: { rating?: OnionParsed["quality_rating"] }) {
-  const { t } = useTranslation();
-  if (!rating || rating.overall_score == null || !rating.score_band || !rating.pillar_scores) {
-    return null;
-  }
-  const score = Number(rating.overall_score);
-  const band = rating.score_band;
-  const ps = rating.pillar_scores;
-  const pillars: Array<{ key: string; labelKey: string; value?: number }> = [
-    { key: "neck_integrity", labelKey: "pillarNeckIntegrity", value: ps.neck_integrity },
-    { key: "shoulder_geometry", labelKey: "pillarShoulderGeometry", value: ps.shoulder_geometry },
-    { key: "parda_luster", labelKey: "pillarPardaLuster", value: ps.parda_luster },
-    { key: "shape_roundness", labelKey: "pillarShapeRoundness", value: ps.shape_roundness },
-    { key: "uniformity_size", labelKey: "pillarUniformitySize", value: ps.uniformity_size },
-  ];
-  return (
-    <Card
-      className="p-4 bg-background border-amber-200 dark:border-amber-800 mb-3"
-      data-testid="card-onion-quality-rating"
-    >
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h4 className="font-semibold text-sm">{t("qualityRating")}</h4>
-        <Badge className={scoreBandClass(band)} data-testid="badge-onion-score-band">
-          {scoreBandLabel(band, t)}
-        </Badge>
-      </div>
-
-      <div className="flex items-center gap-3 mb-4">
-        <div className="text-3xl font-bold tabular-nums" data-testid="text-onion-overall-score">
-          {score.toFixed(1)}
-          <span className="text-base text-muted-foreground font-normal">/5</span>
-        </div>
-        <StarBar score={score} />
-      </div>
-
-      <div className="text-xs font-medium mb-2 text-muted-foreground">{t("pillarBreakdown")}</div>
-      <div className="space-y-1.5 mb-3">
-        {pillars.map((p) => (
-          <div
-            key={p.key}
-            className="flex items-center justify-between bg-background/50 rounded px-2 py-1.5 text-xs"
-            data-testid={`row-pillar-${p.key}`}
-          >
-            <span className="text-muted-foreground">{t(p.labelKey as any)}</span>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold tabular-nums">
-                {p.value != null ? `${p.value}/5` : "-"}
-              </span>
-              {p.value != null && <StarBar score={p.value} />}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {rating.rationale_markdown && (
-        <div className="bg-background/40 rounded p-2 border-l-2 border-amber-400">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
-            {t("ratingRationale")}
-          </div>
-          <div className="text-xs" data-testid="text-onion-rating-rationale">
-            <MarkdownText text={rating.rationale_markdown} />
-          </div>
-        </div>
-      )}
-    </Card>
+      <Badge className={storageRiskClass(rec.risk)} data-testid="badge-storage-risk">
+        {t("storageRiskLabel")}: {riskLabel}
+      </Badge>
+    </div>
   );
 }
