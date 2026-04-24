@@ -271,7 +271,7 @@ export default function DigitalClinicPage() {
               <h3 className="font-semibold text-base mb-1">{t("onionPricePredictor")}</h3>
               <p className="text-sm text-muted-foreground mb-3">{t("onionPricePredictorDesc")}</p>
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <Label htmlFor="onion-benchmark" className="text-xs">{t("benchmarkRateLabel")}</Label>
                     <Input
@@ -301,7 +301,7 @@ export default function DigitalClinicPage() {
                       </SelectContent>
                     </Select>
                     {onionSize && onionSize !== "auto" && (
-                      <p className="text-[10px] text-muted-foreground mt-1" data-testid="text-onion-size-helper">
+                      <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-1" data-testid="text-onion-size-helper">
                         {t("sizeBandHelper")}
                       </p>
                     )}
