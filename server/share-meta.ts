@@ -183,6 +183,8 @@ interface MetaRequestLike {
   get(name: string): string | undefined;
 }
 
+const CANONICAL_ORIGIN = "https://km.krashuved.com";
+
 function resolveOrigin(req: MetaRequestLike): string {
   const envBase = process.env.PUBLIC_BASE_URL?.trim();
   if (envBase) {
@@ -194,11 +196,10 @@ function resolveOrigin(req: MetaRequestLike): string {
     .filter(Boolean);
   const rawHost = (req.get("host") || "").toLowerCase();
   const host = rawHost.split(",")[0]?.trim() || "";
-  if (allowedHosts.length > 0 && !allowedHosts.includes(host)) {
-    return "https://km.krashuved.com";
+  if (allowedHosts.length > 0) {
+    return allowedHosts.includes(host) ? `${req.protocol}://${host}` : CANONICAL_ORIGIN;
   }
-  if (!host) return "https://km.krashuved.com";
-  return `${req.protocol}://${host}`;
+  return CANONICAL_ORIGIN;
 }
 
 function buildBrandMeta(origin: string, pathPart: string): MetaPayload {
