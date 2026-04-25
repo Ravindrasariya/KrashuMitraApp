@@ -2011,8 +2011,9 @@ Respond in this structure:
         }
         // Determine the effective commodity type set for "Others" presence:
         // either the new array (if provided) or the existing stored array.
+        const existingTypes = existing.bagCommodityType;
         const effectiveTypes: string[] = parsedBagCommodityTypesPatch
-          ?? (Array.isArray((existing as any).bagCommodityType) ? (existing as any).bagCommodityType as string[] : []);
+          ?? (Array.isArray(existingTypes) ? existingTypes : []);
         const effectiveHasOthers = effectiveTypes.includes("Others");
         if (bagCommodityOther !== undefined) {
           // Caller explicitly sent the other-text field. Validate based on
@@ -2031,7 +2032,7 @@ Respond in this structure:
           // If the new selection includes Others, require the existing
           // other-text to still be present; otherwise clear it.
           if (effectiveHasOthers) {
-            const existingOther = (existing as any).bagCommodityOther;
+            const existingOther = existing.bagCommodityOther;
             if (typeof existingOther !== "string" || !existingOther.trim()) {
               return res.status(400).json({ message: "bagCommodityOther required when Others is selected" });
             }
