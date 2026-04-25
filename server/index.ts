@@ -5,6 +5,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import cron from "node-cron";
 import { storage } from "./storage";
+import { sweepOrphanShareImages } from "./share-image";
 
 const app = express();
 // Trust exactly one upstream hop (Replit's edge proxy). Using `true` would
@@ -129,6 +130,22 @@ app.use((req, res, next) => {
         }
       });
       log("Daily weather logging cron scheduled (1:00 AM IST)");
+
+      // Sweep orphaned share-image cache files daily. The DELETE listing
+      // route also clears its own file inline, so this is a safety net
+      // that picks up anything missed by past deletions or by edge cases
+      // (crash between DB delete and cache cleanup, manual DB edits, etc.)
+      // and keeps the on-disk cache from drifting away from the DB.
+      cron.schedule('0 21 * * *', async () => {
+        try {
+          log("Running daily share-image cache sweep (2:30 AM IST)...", "cron");
+          const removed = await sweepOrphanShareImages();
+          log(`Share-image sweep removed ${removed} orphan file(s)`, "cron");
+        } catch (error) {
+          console.error("Cron share-image sweep error:", error);
+        }
+      });
+      log("Daily share-image cache sweep scheduled (2:30 AM IST)");
     },
   );
 })();

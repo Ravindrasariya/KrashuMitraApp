@@ -23,7 +23,7 @@ import {
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import sharp from "sharp";
-import { composeListingShareImage, getListingShareImageMeta, computeShareVersion, precomposeListingShareImage, persistedShareImagePath } from "./share-image";
+import { composeListingShareImage, getListingShareImageMeta, computeShareVersion, precomposeListingShareImage, persistedShareImagePath, deletePersistedShareImagesForListing } from "./share-image";
 import { createReadStream } from "fs";
 import { stat as fsStat } from "fs/promises";
 import { pingListingShareCache } from "./share-meta";
@@ -2622,6 +2622,12 @@ Respond in this structure:
       // Best-effort: flush Meta's cache so old WhatsApp shares stop showing
       // a now-deactivated listing's preview and fall back to the brand card.
       pingListingShareCache(listing.id, shareVersion);
+      // Reclaim the on-disk share-preview file. The edit path already
+      // sweeps stale per-listing entries on each new write, but a delete
+      // never produces a new write — without this, the cache file would
+      // sit on disk indefinitely. Fire-and-forget; failures are swallowed
+      // inside the helper.
+      void deletePersistedShareImagesForListing(listing.id);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete listing" });

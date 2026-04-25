@@ -362,6 +362,89 @@ async function writePersistedBuffer(
   } catch {}
 }
 
+// Strip every persisted (and in-memory cached) share-image for a listing.
+// Used by the DELETE /api/marketplace/:id route so that removing a listing
+// also reclaims its on-disk preview file — without this, the cache dir
+// grows monotonically as listings come and go. Best-effort: any I/O error
+// is logged and swallowed so the deletion request itself never fails on
+// account of stale-file cleanup.
+export async function deletePersistedShareImagesForListing(
+  listingId: number,
+): Promise<void> {
+  if (process.env.NODE_ENV === "test") return;
+  // Drop in-memory LRU entries first — keys are the strong ETag
+  // (`l<id>-<createdAtMs>-<sigHash>`), so a prefix match is exact.
+  const memPrefix = `l${listingId}-`;
+  for (const key of Array.from(imageCache.keys())) {
+    if (key.startsWith(memPrefix)) imageCache.delete(key);
+  }
+  const dir = ensureCacheDir();
+  if (!dir) return;
+  try {
+    const entries = await fsp.readdir(dir);
+    const filePrefix = `l${listingId}-`;
+    for (const name of entries) {
+      if (name.startsWith(filePrefix) && name.endsWith(".jpg")) {
+        try { await fsp.unlink(path.join(dir, name)); } catch {}
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[share-image] failed to clean cache for deleted listing ${listingId}:`,
+      err,
+    );
+  }
+}
+
+// Periodic sweep: walk every `l<id>-*.jpg` in the cache dir and unlink any
+// whose listing id is no longer present in the database. Catches files that
+// would otherwise be orphaned by past deletions (before this cleanup landed)
+// or by edge cases like crashes between DB delete and cache cleanup.
+//
+// Returns the number of files removed. Best-effort: per-file errors are
+// logged and skipped.
+export async function sweepOrphanShareImages(): Promise<number> {
+  if (process.env.NODE_ENV === "test") return 0;
+  const dir = ensureCacheDir();
+  if (!dir) return 0;
+  let aliveIds: number[];
+  try {
+    aliveIds = await storage.getAllMarketplaceListingIds();
+  } catch (err) {
+    console.warn("[share-image] sweep failed to read listing ids:", err);
+    return 0;
+  }
+  const alive = new Set<number>(aliveIds);
+  let removed = 0;
+  let entries: string[];
+  try {
+    entries = await fsp.readdir(dir);
+  } catch (err) {
+    console.warn("[share-image] sweep failed to read cache dir:", err);
+    return 0;
+  }
+  for (const name of entries) {
+    if (!name.endsWith(".jpg")) continue;
+    // Strong ETag shape: `l<id>-<createdAtMs>-<sigHash>.jpg`
+    const m = name.match(/^l(\d+)-/);
+    if (!m) continue;
+    const id = Number(m[1]);
+    if (!Number.isFinite(id) || alive.has(id)) continue;
+    try {
+      await fsp.unlink(path.join(dir, name));
+      removed += 1;
+      // Also drop any matching in-memory LRU entry.
+      const memPrefix = `l${id}-`;
+      for (const key of Array.from(imageCache.keys())) {
+        if (key.startsWith(memPrefix)) imageCache.delete(key);
+      }
+    } catch (err) {
+      console.warn(`[share-image] sweep failed to unlink ${name}:`, err);
+    }
+  }
+  return removed;
+}
+
 export interface ShareImageMeta {
   etag: string;
   listing: MarketplaceListing;

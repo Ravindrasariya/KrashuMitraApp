@@ -59,6 +59,7 @@ export interface IStorage {
   getMarketplaceListing(id: number): Promise<MarketplaceListing | undefined>;
   updateMarketplaceListing(id: number, data: Partial<InsertMarketplaceListing>): Promise<MarketplaceListing | undefined>;
   deleteMarketplaceListing(id: number): Promise<void>;
+  getAllMarketplaceListingIds(): Promise<number[]>;
   addListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void>;
   replaceListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void>;
   getListingPhotos(listingId: number): Promise<MarketplacePhoto[]>;
@@ -619,6 +620,11 @@ class DatabaseStorage implements IStorage {
   async deleteMarketplaceListing(id: number): Promise<void> {
     await db.delete(marketplacePhotos).where(eq(marketplacePhotos.listingId, id));
     await db.delete(marketplaceListings).where(eq(marketplaceListings.id, id));
+  }
+
+  async getAllMarketplaceListingIds(): Promise<number[]> {
+    const rows = await db.select({ id: marketplaceListings.id }).from(marketplaceListings);
+    return rows.map(r => r.id);
   }
 
   async addListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void> {
