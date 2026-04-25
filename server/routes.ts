@@ -23,7 +23,7 @@ import {
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import sharp from "sharp";
-import { composeListingShareImage, getListingShareImageMeta } from "./share-image";
+import { composeListingShareImage, getListingShareImageMeta, computeShareVersion } from "./share-image";
 
 async function compressOnionImageForStorage(
   base64Data: string,
@@ -1662,12 +1662,24 @@ Respond in this structure:
     try {
       const category = req.query.category as string | undefined;
       const listings = await storage.getMarketplaceListings(category ? { category } : undefined);
-      const results = await Promise.all(listings.map(async ({ photoData, ...rest }) => {
-        const [photoCount, ratingInfo] = await Promise.all([
-          storage.getListingPhotoCount(rest.id),
+      const results = await Promise.all(listings.map(async (listing) => {
+        const { photoData, ...rest } = listing;
+        const [photoIds, ratingInfo] = await Promise.all([
+          storage.getListingPhotoIds(rest.id),
           storage.getListingAvgRating(rest.id),
         ]);
-        return { ...rest, photoCount, avgRating: ratingInfo.avg, ratingCount: ratingInfo.count };
+        // shareVersion is the per-listing cache-bust token the client puts in
+        // `&v=...` on share URLs so WhatsApp / Facebook re-scrape after every
+        // edit. Same content → same token, so we don't double-cache shares of
+        // an unchanged listing.
+        const shareVersion = computeShareVersion(listing, { photoIds });
+        return {
+          ...rest,
+          photoCount: photoIds.length,
+          avgRating: ratingInfo.avg,
+          ratingCount: ratingInfo.count,
+          shareVersion,
+        };
       }));
       res.json(results);
     } catch (error) {
@@ -2085,9 +2097,10 @@ Respond in this structure:
         }]);
       }
 
-      const photoCount = await storage.getListingPhotoCount(listing.id);
+      const photoIds = await storage.getListingPhotoIds(listing.id);
+      const shareVersion = computeShareVersion(listing, { photoIds });
       const { photoData: _, ...listingWithoutPhoto } = listing;
-      res.status(201).json({ ...listingWithoutPhoto, photoCount });
+      res.status(201).json({ ...listingWithoutPhoto, photoCount: photoIds.length, shareVersion });
     } catch (error) {
       console.error("Error creating listing:", error);
       res.status(500).json({ message: "Failed to create listing" });
@@ -2470,9 +2483,10 @@ Respond in this structure:
       }
 
       const refreshed = await storage.getMarketplaceListing(existing.id);
-      const photoCount = await storage.getListingPhotoCount(existing.id);
+      const photoIds = await storage.getListingPhotoIds(existing.id);
+      const shareVersion = computeShareVersion(refreshed!, { photoIds });
       const { photoData: _, ...listingWithoutPhoto } = refreshed!;
-      res.json({ ...listingWithoutPhoto, photoCount });
+      res.json({ ...listingWithoutPhoto, photoCount: photoIds.length, shareVersion });
     } catch (error) {
       console.error("Error updating listing:", error);
       res.status(500).json({ message: "Failed to update listing" });

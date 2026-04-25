@@ -38,22 +38,22 @@ import {
   type MarketplaceListing,
 } from "@shared/schema";
 
-type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & { photoCount: number; avgRating: number; ratingCount: number };
+type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & {
+  photoCount: number;
+  avgRating: number;
+  ratingCount: number;
+  // Stable per-listing cache-bust token computed by the server. Same content +
+  // same photo set → same token. The server folds in createdAt + every
+  // share-card-relevant content field + the listing's photo IDs (so adding,
+  // removing, or replacing a photo all change the token even when the count
+  // stays the same). The client just appends it as `&v=...` on share URLs so
+  // WhatsApp / Facebook re-scrape after a real edit but reuse their cache when
+  // the listing is unchanged.
+  shareVersion?: string;
+};
 
-// Per-listing version token for share URLs. Tied to `updatedAt`, which the
-// server bumps on every content edit, photo add/replace, and active-state
-// toggle — so any change that affects the share-image card naturally busts
-// WhatsApp's / Facebook's URL-keyed preview cache. Falls back to createdAt
-// (and finally to the listing id) so we always emit a stable token.
 function computeListingShareVersion(l: ListingNoPhoto): string {
-  const ts = l.updatedAt ?? l.createdAt;
-  if (ts) {
-    const ms = new Date(ts as unknown as string | Date).getTime();
-    if (Number.isFinite(ms) && ms > 0) {
-      return Math.floor(ms / 1000).toString(36);
-    }
-  }
-  return `l${l.id}`;
+  return l.shareVersion ?? `l${l.id}`;
 }
 
 const POTATO_VARIETIES = ["CS3", "CS1", "Torus", "Pukhraj", "Jyoti", "Lakar", "Others"];

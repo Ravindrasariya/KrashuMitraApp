@@ -156,15 +156,18 @@ function truncate(s: string, max: number): string {
   return s.slice(0, Math.max(1, max - 1)) + "…";
 }
 
-function buildEtag(listing: MarketplaceListing, photos: MarketplacePhoto[]): string {
-  const createdAtMs = listing.createdAt ? new Date(listing.createdAt as unknown as string).getTime() : 0;
-  const photoSig = photos.map((p) => p.id).join(",");
-  // Legacy listings store the cover image inline as base64 in `photoData` (no
-  // photo row). When the modern photos table is empty, fold a hash of that
-  // legacy blob into the ETag so replacing the inline cover busts caches.
-  const legacyPhotoSig = photos.length === 0 && listing.photoData
-    ? crypto.createHash("sha1").update(listing.photoData).digest("hex").slice(0, 12)
-    : "";
+// Photo signature inputs the share version needs. Splitting this out so the
+// list endpoint can compute share-version without loading the (huge) base64
+// photo blobs every photo row carries — only photo ids are needed for the
+// signature in the modern photos table case.
+export interface PhotoSigInput {
+  photoIds: number[];
+  // Hash of the legacy inline photo blob (`listing.photoData`) when the
+  // modern photos table is empty. Pass undefined / empty string otherwise.
+  legacyPhotoSig?: string;
+}
+
+function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInput): string {
   const summarySig = JSON.stringify({
     c: listing.category,
     v: listing.sellerVillage,
@@ -179,6 +182,7 @@ function buildEtag(listing: MarketplaceListing, photos: MarketplacePhoto[]): str
     ot: listing.onionType,
     pv: listing.potatoVariety,
     pb: listing.potatoBrand,
+    ost: listing.onionSeedType,
     osv: listing.onionSeedVariety,
     osb: listing.onionSeedBrand,
     ssd: listing.soyabeanSeedDuration,
@@ -189,11 +193,38 @@ function buildEtag(listing: MarketplaceListing, photos: MarketplacePhoto[]): str
     fbo: listing.fanBrandOther,
     fw: listing.fanWattage,
     a: listing.isActive,
-    ph: photoSig,
-    lph: legacyPhotoSig,
+    ph: photoSig.photoIds.join(","),
+    lph: photoSig.legacyPhotoSig ?? "",
   });
-  const sigHash = crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
-  return `W/"l${listing.id}-${createdAtMs}-${sigHash}"`;
+  return crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
+}
+
+// Compact, URL-safe per-listing version token. Encodes createdAt + a hash
+// of all share-card-relevant content fields + photo ids (so adding,
+// removing, or replacing a photo all bust the token even when the count
+// stays the same). This is what the marketplace API attaches to each
+// listing as `shareVersion`, and what the client puts in `&v=...` on
+// share URLs so WhatsApp / Facebook re-scrape after every edit.
+export function computeShareVersion(listing: MarketplaceListing, photoSig: PhotoSigInput): string {
+  const createdAtMs = listing.createdAt ? new Date(listing.createdAt as unknown as string).getTime() : 0;
+  return `${createdAtMs.toString(36)}-${buildContentSigHash(listing, photoSig)}`;
+}
+
+// Helper used by the share-image route. Identical signature material to
+// computeShareVersion; the W/" wrapper is the only HTTP-specific bit.
+function legacyPhotoSigFor(listing: MarketplaceListing, photos: MarketplacePhoto[]): string {
+  return photos.length === 0 && listing.photoData
+    ? crypto.createHash("sha1").update(listing.photoData).digest("hex").slice(0, 12)
+    : "";
+}
+
+function buildEtag(listing: MarketplaceListing, photos: MarketplacePhoto[]): string {
+  const sig: PhotoSigInput = {
+    photoIds: photos.map((p) => p.id),
+    legacyPhotoSig: legacyPhotoSigFor(listing, photos),
+  };
+  const createdAtMs = listing.createdAt ? new Date(listing.createdAt as unknown as string).getTime() : 0;
+  return `W/"l${listing.id}-${createdAtMs}-${buildContentSigHash(listing, sig)}"`;
 }
 
 // Tiny in-memory LRU cache for composed image buffers. Keyed by the strong
