@@ -1092,7 +1092,24 @@ export default function MarketplacePage() {
     } else if (!isLoading && filterCategory === "all") {
       if (!notFoundToastShownRef.current.has(pendingListingId)) {
         notFoundToastShownRef.current.add(pendingListingId);
-        toast({ title: t("shareListingNotFound") });
+        const idToCheck = pendingListingId;
+        // Ask the backend whether this listing was deleted or just paused so
+        // the buyer sees a more specific reason than a generic "not available".
+        fetch(`/api/marketplace/${idToCheck}/status`, { credentials: "include" })
+          .then(r => (r.ok ? r.json() : null))
+          .then(data => {
+            const status = data?.status;
+            const title =
+              status === "inactive"
+                ? t("shareListingInactive")
+                : status === "deleted"
+                ? t("shareListingDeleted")
+                : t("shareListingNotFound");
+            toast({ title });
+          })
+          .catch(() => {
+            toast({ title: t("shareListingNotFound") });
+          });
       }
       setPendingListingId(null);
       try {

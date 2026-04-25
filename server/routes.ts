@@ -1675,6 +1675,32 @@ Respond in this structure:
     }
   });
 
+  // Lightweight status endpoint used by deep-link handlers to tell buyers
+  // why a shared listing link no longer resolves to a viewable listing.
+  // Returns "active" if the listing is live, "inactive" if the seller has
+  // paused it, or "deleted" if no row exists. Exposes only the status flag
+  // (and sellerId when a row exists, so the UI can suggest the seller's
+  // other live listings) — never the full listing payload.
+  app.get("/api/marketplace/:id/status", async (req: any, res) => {
+    try {
+      const listingId = parseInt(req.params.id);
+      if (!listingId || Number.isNaN(listingId)) {
+        return res.status(400).json({ message: "Invalid id" });
+      }
+      const listing = await storage.getMarketplaceListing(listingId);
+      if (!listing) {
+        return res.json({ status: "deleted" });
+      }
+      if (!listing.isActive) {
+        return res.json({ status: "inactive", sellerId: listing.sellerId });
+      }
+      return res.json({ status: "active", sellerId: listing.sellerId });
+    } catch (error) {
+      console.error("Error fetching listing status:", error);
+      res.status(500).json({ message: "Failed to fetch listing status" });
+    }
+  });
+
   app.get("/api/marketplace/:id/image", async (req: any, res) => {
     try {
       const listingId = parseInt(req.params.id);
