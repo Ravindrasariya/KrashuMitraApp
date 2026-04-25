@@ -611,7 +611,14 @@ class DatabaseStorage implements IStorage {
   }
 
   async updateMarketplaceListing(id: number, data: Partial<InsertMarketplaceListing>): Promise<MarketplaceListing | undefined> {
-    const [updated] = await db.update(marketplaceListings).set(data).where(eq(marketplaceListings.id, id)).returning();
+    // Always bump updatedAt on edits — buyers' shared WhatsApp previews use
+    // this timestamp as a per-listing cache-buster (`&v=...`), and the
+    // server's share-image ETag also includes it.
+    const [updated] = await db
+      .update(marketplaceListings)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(marketplaceListings.id, id))
+      .returning();
     return updated;
   }
 
@@ -623,12 +630,19 @@ class DatabaseStorage implements IStorage {
   async addListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void> {
     if (photos.length === 0) return;
     await db.insert(marketplacePhotos).values(photos.map(p => ({ ...p, listingId })));
+    // Photo additions affect the share image — bump updatedAt so shared
+    // WhatsApp previews and the share-image ETag both refresh.
+    await db.update(marketplaceListings).set({ updatedAt: new Date() }).where(eq(marketplaceListings.id, listingId));
   }
 
   async replaceListingPhotos(listingId: number, photos: { photoData: string; photoMime: string; sortOrder: number }[]): Promise<void> {
     await db.delete(marketplacePhotos).where(eq(marketplacePhotos.listingId, listingId));
-    if (photos.length === 0) return;
-    await db.insert(marketplacePhotos).values(photos.map(p => ({ ...p, listingId })));
+    if (photos.length > 0) {
+      await db.insert(marketplacePhotos).values(photos.map(p => ({ ...p, listingId })));
+    }
+    // Photo replacement affects the share image even if the count is the
+    // same — always bump updatedAt.
+    await db.update(marketplaceListings).set({ updatedAt: new Date() }).where(eq(marketplaceListings.id, listingId));
   }
 
   async getListingPhotos(listingId: number): Promise<MarketplacePhoto[]> {

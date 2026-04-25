@@ -327,11 +327,13 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   sellerLng: varchar("seller_lng"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 export const insertMarketplaceListingSchema = createInsertSchema(marketplaceListings).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export type MarketplaceListing = typeof marketplaceListings.$inferSelect;

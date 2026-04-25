@@ -40,48 +40,20 @@ import {
 
 type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & { photoCount: number; avgRating: number; ratingCount: number };
 
-// Build a stable per-listing fingerprint used as the `&v=` token on share
-// URLs (so WhatsApp / Facebook re-scrape the preview after the seller edits
-// the listing instead of showing the cached card forever). Includes only
-// fields the buyer actually sees in the share-image card + photo count, so
-// adding/removing a photo or changing price/location/etc. naturally busts
-// the upstream cache. Same content → same fingerprint → same cache entry.
+// Per-listing version token for share URLs. Tied to `updatedAt`, which the
+// server bumps on every content edit, photo add/replace, and active-state
+// toggle — so any change that affects the share-image card naturally busts
+// WhatsApp's / Facebook's URL-keyed preview cache. Falls back to createdAt
+// (and finally to the listing id) so we always emit a stable token.
 function computeListingShareVersion(l: ListingNoPhoto): string {
-  const created = l.createdAt ? new Date(l.createdAt as unknown as string | Date).getTime() : 0;
-  const sig = JSON.stringify({
-    c: l.category,
-    v: l.sellerVillage ?? "",
-    d: l.sellerDistrict ?? "",
-    t: l.sellerTehsil ?? "",
-    qb: l.quantityBigha ?? "",
-    qg: l.quantityBags ?? "",
-    aad: l.availableAfterDays ?? "",
-    ot: l.onionType ?? "",
-    pv: l.potatoVariety ?? "",
-    pb: l.potatoBrand ?? "",
-    osv: l.onionSeedVariety ?? "",
-    osb: l.onionSeedBrand ?? "",
-    osp: l.onionSeedPricePerKg ?? "",
-    ssd: l.soyabeanSeedDuration ?? "",
-    ssv: l.soyabeanSeedVariety ?? "",
-    ssp: l.soyabeanSeedPricePerQuintal ?? "",
-    bmt: l.bagMaterialType ?? "",
-    bd: l.bagDimension ?? "",
-    bp: l.bagPricePerBag ?? "",
-    fb: l.fanBrand ?? "",
-    fbo: l.fanBrandOther ?? "",
-    fw: l.fanWattage ?? "",
-    fp: l.fanPricePerPiece ?? "",
-    a: l.isActive,
-    pc: l.photoCount,
-  });
-  // djb2 — small deterministic non-crypto hash, fine for cache busting.
-  let h = 5381;
-  for (let i = 0; i < sig.length; i++) {
-    h = (((h << 5) + h) + sig.charCodeAt(i)) | 0;
+  const ts = l.updatedAt ?? l.createdAt;
+  if (ts) {
+    const ms = new Date(ts as unknown as string | Date).getTime();
+    if (Number.isFinite(ms) && ms > 0) {
+      return Math.floor(ms / 1000).toString(36);
+    }
   }
-  // base36-encoded created-epoch + content hash. Stays short and URL-safe.
-  return `${created.toString(36)}${(h >>> 0).toString(36)}`;
+  return `l${l.id}`;
 }
 
 const POTATO_VARIETIES = ["CS3", "CS1", "Torus", "Pukhraj", "Jyoti", "Lakar", "Others"];
