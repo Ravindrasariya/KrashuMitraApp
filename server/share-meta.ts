@@ -50,6 +50,8 @@ function categoryLabel(category: string): string {
   return map[category] || "Listing";
 }
 
+const BRAND_TITLE = "कृषु मित्र — किसानों का स्मार्ट साथी";
+
 function summarizeListing(listing: MarketplaceListing): { title: string; description: string } {
   const cat = categoryLabel(listing.category);
   const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");
@@ -92,9 +94,9 @@ function summarizeListing(listing: MarketplaceListing): { title: string; descrip
   }
 
   const detail = parts.join(" · ");
-  const title = `${cat}${location ? ` in ${location}` : ""} | Krashu Mitra`;
-  const description = [detail, location ? `📍 ${location}` : ""].filter(Boolean).join(" — ")
-    || "Listed on Krashu Mitra — the smart companion for Indian farmers";
+  const summary = [cat, detail, location ? `📍 ${location}` : ""].filter(Boolean).join(" — ");
+  const title = BRAND_TITLE;
+  const description = summary || "Listed on Krashu Mitra — the smart companion for Indian farmers";
   return { title, description };
 }
 

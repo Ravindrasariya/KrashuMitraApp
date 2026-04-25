@@ -1125,9 +1125,8 @@ export default function MarketplacePage() {
 
   const composeShareInfo = (listing: ListingNoPhoto): ShareInfo => {
     const envBase = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined)?.replace(/\/+$/, "");
-    const origin = envBase || (typeof window !== "undefined" ? window.location.origin : "");
-    const homepage = origin || "https://km.krashuved.com";
-    const url = `${origin || "https://km.krashuved.com"}/marketplace?listing=${listing.id}`;
+    const origin = envBase || (typeof window !== "undefined" ? window.location.origin : "") || "https://km.krashuved.com";
+    const url = `${origin}/marketplace?listing=${listing.id}`;
     const cat = categoryLabel(listing.category);
     const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");
     const parts: string[] = [];
@@ -1174,8 +1173,9 @@ export default function MarketplacePage() {
       summary,
       location ? `📍 ${location}` : "",
     ].filter(Boolean).join(" — ");
+    void homepage;
     const lines = [
-      `${t("shareBrandTagline")} — ${homepage}`,
+      t("shareBrandTagline"),
       summaryLine,
     ];
     return {
