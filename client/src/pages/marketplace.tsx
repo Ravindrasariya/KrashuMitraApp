@@ -223,10 +223,12 @@ function ShareButton({
   shareInfo,
   variant,
   testId,
+  listingId,
 }: {
   shareInfo: ShareInfo;
   variant: "card" | "detail";
   testId: string;
+  listingId?: number;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -283,6 +285,19 @@ function ShareButton({
 
   const handleShareClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (listingId) {
+      // Fire-and-forget: ask the server to pre-render and persist the share
+      // preview so WhatsApp's bot — which scrapes the URL a few seconds
+      // after the user picks a contact and hits send — finds the composed
+      // JPEG already on disk and returns it as a static byte stream
+      // instead of triggering a cold ~250 ms render. Failures are ignored;
+      // the share-image GET endpoint still composes on demand as a safety
+      // net for legacy listings whose preview was never pre-rendered.
+      fetch(`/api/marketplace/${listingId}/prewarm-share-image`, {
+        method: "POST",
+        credentials: "same-origin",
+      }).catch(() => {});
+    }
     const ok = await tryNativeShare();
     if (!ok) setPopoverOpen(true);
   };
@@ -1519,6 +1534,7 @@ export default function MarketplacePage() {
                         shareInfo={composeShareInfo(listing)}
                         variant="card"
                         testId={`button-share-listing-${listing.id}`}
+                        listingId={listing.id}
                       />
                       {canManage && (
                         <>
@@ -2229,6 +2245,7 @@ export default function MarketplacePage() {
                             shareInfo={composeShareInfo(listing)}
                             variant="detail"
                             testId="button-share-detail"
+                            listingId={listing.id}
                           />
                         </div>
                       </div>

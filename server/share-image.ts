@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
@@ -250,6 +251,99 @@ function cacheSet(key: string, value: Buffer): void {
   }
 }
 
+// Persistent on-disk cache for composed share-images. Survives across
+// restarts, so WhatsApp / Facebook bots scraping a freshly-versioned URL
+// hit a static byte stream instead of paying ~250 ms of cold sharp work
+// on the request path. Files are content-addressed by the strong ETag
+// key (`l<id>-<createdAtMs>-<sigHash>.jpg`), so a stale file can never
+// be served — any content change produces a new key.
+function resolveShareImageCacheDir(): string {
+  const env = process.env.SHARE_IMAGE_CACHE_DIR?.trim();
+  if (env) return path.resolve(env);
+  // Sibling of the module's parent dir.
+  // - Dev (tsx): server/.. → repo root → <repo>/.share-image-cache
+  // - Prod (CJS): dist/..  → install root → <install>/.share-image-cache
+  return path.resolve(moduleDir(), "..", ".share-image-cache");
+}
+
+let cacheDirReady = false;
+let cacheDirPath: string | null = null;
+function ensureCacheDir(): string | null {
+  if (cacheDirReady && cacheDirPath) return cacheDirPath;
+  const dir = resolveShareImageCacheDir();
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    cacheDirReady = true;
+    cacheDirPath = dir;
+    return dir;
+  } catch (err) {
+    console.warn("[share-image] failed to mkdir persistent cache dir:", err);
+    return null;
+  }
+}
+
+function etagToFileKey(etag: string): string | null {
+  // ETag shape from buildEtag: `W/"l<id>-<createdAtMs>-<sigHash>"`. Pull the
+  // strong key. Defensive: if shape is unexpected, refuse to touch disk.
+  const m = etag.match(/^W\/"([A-Za-z0-9_\-]+)"$/);
+  return m ? m[1] : null;
+}
+
+async function readPersistedBuffer(etag: string): Promise<Buffer | null> {
+  if (process.env.NODE_ENV === "test") return null;
+  const key = etagToFileKey(etag);
+  if (!key) return null;
+  const dir = ensureCacheDir();
+  if (!dir) return null;
+  try {
+    return await fsp.readFile(path.join(dir, `${key}.jpg`));
+  } catch {
+    return null;
+  }
+}
+
+// Atomic write via tmp + rename so concurrent reads never see a partial
+// file. Cleans up other persisted versions for the same listing — when a
+// seller edits, the old `l<id>-<oldCreatedAt>-<oldSig>.jpg` is removed
+// after the new one lands. Best-effort throughout: any error is logged and
+// swallowed (the in-memory LRU still holds the fresh buffer).
+async function writePersistedBuffer(
+  etag: string,
+  listingId: number,
+  buffer: Buffer,
+): Promise<void> {
+  if (process.env.NODE_ENV === "test") return;
+  const key = etagToFileKey(etag);
+  if (!key) return;
+  const dir = ensureCacheDir();
+  if (!dir) return;
+  const finalPath = path.join(dir, `${key}.jpg`);
+  const tmpPath = `${finalPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await fsp.writeFile(tmpPath, buffer);
+    await fsp.rename(tmpPath, finalPath);
+  } catch (err) {
+    console.warn("[share-image] persistent cache write failed:", err);
+    try { await fsp.unlink(tmpPath); } catch {}
+    return;
+  }
+  // Best-effort cleanup of stale per-listing entries. Match on `l<id>-`
+  // prefix so we only touch this listing's files.
+  try {
+    const prefix = `l${listingId}-`;
+    const entries = await fsp.readdir(dir);
+    for (const name of entries) {
+      if (
+        name.startsWith(prefix) &&
+        name.endsWith(".jpg") &&
+        name !== `${key}.jpg`
+      ) {
+        try { await fsp.unlink(path.join(dir, name)); } catch {}
+      }
+    }
+  } catch {}
+}
+
 export interface ShareImageMeta {
   etag: string;
   listing: MarketplaceListing;
@@ -309,12 +403,41 @@ async function buildTopLayer(
   }).png().toBuffer();
 }
 
+// Per-ETag single-flight: when N concurrent requests for the same versioned
+// share-image arrive (e.g., WhatsApp's bot + the on-create prewarm + the
+// seller's share-button prewarm + a debugger refresh), only one sharp job
+// runs and the rest await its result. Without this, a cold burst would
+// trigger N parallel ~250 ms renders, spiking CPU and tail latency.
+const inFlightCompose = new Map<string, Promise<ShareImageResult>>();
+
 export async function composeListingShareImage(meta: ShareImageMeta): Promise<ShareImageResult> {
   const { listing, photos, etag } = meta;
   const cached = cacheGet(etag);
   if (cached) {
     return { buffer: cached, etag, contentType: "image/jpeg" };
   }
+  // Persistent disk cache: survives restarts so WhatsApp's first scrape of
+  // a freshly-versioned URL is a static-disk read instead of cold sharp work.
+  const persisted = await readPersistedBuffer(etag);
+  if (persisted) {
+    cacheSet(etag, persisted);
+    return { buffer: persisted, etag, contentType: "image/jpeg" };
+  }
+  // Single-flight: if another caller is already composing this exact ETag,
+  // share its work instead of starting a duplicate render.
+  const existing = inFlightCompose.get(etag);
+  if (existing) return existing;
+  const job = composeListingShareImageInner(meta);
+  inFlightCompose.set(etag, job);
+  try {
+    return await job;
+  } finally {
+    inFlightCompose.delete(etag);
+  }
+}
+
+async function composeListingShareImageInner(meta: ShareImageMeta): Promise<ShareImageResult> {
+  const { listing, photos, etag } = meta;
   await ensureDevanagariFont();
 
   const topLayer = await buildTopLayer(listing, photos);
@@ -355,9 +478,67 @@ export async function composeListingShareImage(meta: ShareImageMeta): Promise<Sh
   const buffer = await sharp(topLayer)
     .extend({ top: 0, bottom: BAND_H, left: 0, right: 0, background: { r: 255, g: 255, b: 255, alpha: 1 } })
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
-    .jpeg({ quality: 86, progressive: true, mozjpeg: false })
+    // mozjpeg + lower quality together cut the composed preview from
+    // ~145 KB at q=86 down to ~60–80 KB with no visible degradation at
+    // WhatsApp / Facebook preview thumbnail size. This only affects the
+    // share-preview JPEG returned by /api/marketplace/:id/share-image —
+    // the listing's actual photos in the DB are byte-identical and the
+    // marketplace UI keeps reading them at full quality.
+    .jpeg({ quality: 78, progressive: true, mozjpeg: true })
     .toBuffer();
 
   cacheSet(etag, buffer);
+  // Await the persistent write so callers (e.g., precomposeListingShareImage
+  // → routes.ts create/edit handlers chaining the Meta ping) only see the
+  // promise resolve once disk is warm. Without this await, Meta could fire
+  // its scrape before the file lands and still hit a cold path on its first
+  // hit. The write itself is small (~45 KB) and atomic (tmp + rename), so
+  // the added latency is bounded (~1-5 ms typical) and stays off the
+  // request's critical path because the route handler doesn't await it.
+  await writePersistedBuffer(etag, listing.id, buffer);
   return { buffer, etag, contentType: "image/jpeg" };
+}
+
+/**
+ * Per-listing single-flight for the prewarm path. The public prewarm
+ * endpoint is unauthenticated (it has to be — same as the GET share-image
+ * endpoint that crawlers hit), so a flood of POSTs for the same listing
+ * could otherwise queue up parallel meta-lookups + sharp jobs. Collapsing
+ * by listingId means at most one prewarm runs per listing at a time;
+ * subsequent calls reuse the in-flight promise. Combined with the in-memory
+ * + disk caches checked inside composeListingShareImage, a flood across
+ * different shareVersions of the same listing also stays bounded.
+ */
+const inFlightPrecompose = new Map<number, Promise<void>>();
+
+/**
+ * Pre-compose and persist a listing's share-image. Used by the create / edit
+ * route handlers and the client's "share button clicked" pre-warm endpoint
+ * so WhatsApp's bot — which scrapes the URL a few seconds after the user
+ * actually shares — finds the composed JPEG already on disk and returns it
+ * immediately instead of triggering a cold render on its first hit.
+ *
+ * Returns a promise that resolves once the share-image is in cache (in-memory
+ * and on-disk). Caller may await it to ensure subsequent dependent work
+ * (e.g., pinging Meta to re-scrape) lands against a warm cache. Failures are
+ * swallowed and logged — never throws.
+ */
+export function precomposeListingShareImage(listingId: number): Promise<void> {
+  const existing = inFlightPrecompose.get(listingId);
+  if (existing) return existing;
+  const job = (async () => {
+    try {
+      const meta = await getListingShareImageMeta(listingId);
+      if (!meta) return;
+      // composeListingShareImage handles in-memory + on-disk caching as a
+      // side effect; calling it here is enough to warm both layers.
+      await composeListingShareImage(meta);
+    } catch (err) {
+      console.warn(`[share-image] precompose failed for listing ${listingId}:`, err);
+    } finally {
+      inFlightPrecompose.delete(listingId);
+    }
+  })();
+  inFlightPrecompose.set(listingId, job);
+  return job;
 }

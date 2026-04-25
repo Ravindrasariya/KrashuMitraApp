@@ -321,9 +321,16 @@ function buildListingMeta(
   origin: string,
   listing: MarketplaceListing,
   _hasPhoto: boolean,
+  shareVersion?: string | null,
 ): MetaPayload {
   const { title, description } = summarizeListing(listing);
-  const url = `${origin}/marketplace?listing=${listing.id}`;
+  // Echo the share-version token from the request URL into the canonical
+  // og:url so WhatsApp / Facebook key their preview cache by *the exact URL
+  // the seller actually shared*. Without this, the un-versioned canonical
+  // collapses every versioned share into the same cache entry — defeating
+  // the whole point of the per-listing cache-bust token.
+  const base = `${origin}/marketplace?listing=${listing.id}`;
+  const url = shareVersion ? `${base}&v=${shareVersion}` : base;
   return {
     title,
     description,
@@ -349,13 +356,19 @@ export async function maybeInjectListingMeta(req: MetaRequestLike, html: string)
   if (pathPart === "/marketplace" || pathPart === "/marketplace/") {
     const params = new URLSearchParams(queryPart);
     const raw = params.get("listing");
+    const rawV = params.get("v");
+    // Defensive sanitization: the legitimate share-version token shape is
+    // `<base36>-<12-char-hex>`. Reject anything else before echoing it into
+    // the canonical og:url so we can't be tricked into emitting attacker-
+    // controlled query strings to crawlers.
+    const safeV = rawV && /^[A-Za-z0-9_-]{1,64}$/.test(rawV) ? rawV : null;
     const listingId = parseInt(String(raw ?? ""), 10);
     if (listingId && !Number.isNaN(listingId)) {
       try {
         const { listing, photoCount } = await getListingCached(listingId);
         if (listing && listing.isActive) {
           const hasPhoto = photoCount > 0 || !!listing.photoMime;
-          return injectMeta(html, buildListingMeta(origin, listing, hasPhoto));
+          return injectMeta(html, buildListingMeta(origin, listing, hasPhoto, safeV));
         }
       } catch (err) {
         console.error("[share-meta] failed to inject listing meta:", err);

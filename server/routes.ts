@@ -23,7 +23,7 @@ import {
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import sharp from "sharp";
-import { composeListingShareImage, getListingShareImageMeta, computeShareVersion } from "./share-image";
+import { composeListingShareImage, getListingShareImageMeta, computeShareVersion, precomposeListingShareImage } from "./share-image";
 import { pingListingShareCache } from "./share-meta";
 
 async function compressOnionImageForStorage(
@@ -1767,6 +1767,31 @@ Respond in this structure:
     }
   });
 
+  // Pre-warm the persistent share-image cache. Called fire-and-forget by the
+  // client when a seller taps the share button — by the time WhatsApp's bot
+  // actually scrapes the URL (a few seconds after the user picks a contact
+  // and hits send), the composed JPEG is already on disk and gets served as
+  // a static byte stream. Public on purpose: the underlying GET endpoint is
+  // public too (it's hit by social-media bots), and this endpoint does the
+  // exact same work — no new attack surface, no auth needed.
+  app.post("/api/marketplace/:id/prewarm-share-image", async (req: any, res) => {
+    try {
+      const raw = String(req.params.id ?? "");
+      if (!/^\d+$/.test(raw)) {
+        return res.status(400).json({ message: "Invalid listing id" });
+      }
+      const listingId = parseInt(raw, 10);
+      // Fire-and-forget so the seller's click stays snappy. The compose
+      // itself is idempotent and already de-duped via in-memory + disk
+      // caches, so concurrent prewarms for the same listing are fine.
+      void precomposeListingShareImage(listingId);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("[prewarm-share-image] failed:", error);
+      res.status(500).json({ message: "Failed to prewarm share image" });
+    }
+  });
+
   app.get("/api/marketplace/:id/photos", async (req: any, res) => {
     try {
       const photos = await storage.getListingPhotos(parseInt(req.params.id));
@@ -2100,9 +2125,14 @@ Respond in this structure:
 
       const photoIds = await storage.getListingPhotoIds(listing.id);
       const shareVersion = computeShareVersion(listing, { photoIds });
-      // Best-effort: ask Meta to re-scrape the share URL so any old WhatsApp
-      // messages linking to this listing pick up the fresh preview card.
-      pingListingShareCache(listing.id, shareVersion);
+      // Pre-warm the persistent share-image cache *before* asking Meta to
+      // re-scrape, so the first scrape lands on a warm cache (static-disk
+      // read, ~5 ms) instead of a cold ~250 ms sharp render. Both stages
+      // stay fire-and-forget from the request's perspective so the seller's
+      // create response isn't blocked.
+      precomposeListingShareImage(listing.id)
+        .then(() => pingListingShareCache(listing.id, shareVersion))
+        .catch(() => {});
       const { photoData: _, ...listingWithoutPhoto } = listing;
       res.status(201).json({ ...listingWithoutPhoto, photoCount: photoIds.length, shareVersion });
     } catch (error) {
@@ -2489,9 +2519,13 @@ Respond in this structure:
       const refreshed = await storage.getMarketplaceListing(existing.id);
       const photoIds = await storage.getListingPhotoIds(existing.id);
       const shareVersion = computeShareVersion(refreshed!, { photoIds });
-      // Best-effort: ask Meta to re-scrape the share URL so already-shared
-      // WhatsApp messages refresh to the latest preview card after this edit.
-      pingListingShareCache(existing.id, shareVersion);
+      // Pre-warm the persistent share-image cache for the new content version
+      // *before* asking Meta to re-scrape, so the bot's first hit lands on a
+      // warm cache. Both stages stay fire-and-forget from the request's
+      // perspective so the seller's edit response isn't blocked.
+      precomposeListingShareImage(existing.id)
+        .then(() => pingListingShareCache(existing.id, shareVersion))
+        .catch(() => {});
       const { photoData: _, ...listingWithoutPhoto } = refreshed!;
       res.json({ ...listingWithoutPhoto, photoCount: photoIds.length, shareVersion });
     } catch (error) {
