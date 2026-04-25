@@ -579,6 +579,7 @@ const translations = {
   shareLinkCopied: { hi: "लिंक कॉपी हो गया", en: "Link copied" },
   shareEmailSubject: { hi: "कृषु मित्र पर एक सूची देखें", en: "Take a look at this listing on Krashu Mitra" },
   shareCopyFailed: { hi: "लिंक कॉपी नहीं हो सका", en: "Could not copy link" },
+  shareListingNotFound: { hi: "यह सूची अब उपलब्ध नहीं है", en: "This listing is no longer available" },
   shareBrandTagline: { hi: "🌾 कृषु मित्र — किसानों का स्मार्ट साथी", en: "🌾 Krashu Mitra — smart companion for farmers" },
   editPhotoFetchFailed: { hi: "मौजूदा फ़ोटो लोड नहीं हो सके — मौजूदा फ़ोटो वैसे ही रहेंगे जब तक आप कोई फ़ोटो जोड़ें या हटाएँ नहीं।", en: "Could not load existing photos — they'll stay as they are unless you add or remove a photo." },
   photosUnchangedHint: { hi: "मौजूदा फ़ोटो अपरिवर्तित रहेंगे", en: "Existing photos will stay unchanged" },

@@ -389,6 +389,7 @@ export default function MarketplacePage() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [cardPhotoIndex, setCardPhotoIndex] = useState<Record<number, number>>({});
   const cardSwipeRef = useRef<Map<number, { startX: number; startY: number; swiped: boolean }>>(new Map());
+  const notFoundToastShownRef = useRef<Set<number>>(new Set());
 
   const advanceCardPhoto = (id: number, total: number, dir: 1 | -1) => {
     setCardPhotoIndex(s => {
@@ -1089,6 +1090,10 @@ export default function MarketplacePage() {
     } else if (!isLoading && filterCategory !== "all") {
       setFilterCategory("all");
     } else if (!isLoading && filterCategory === "all") {
+      if (!notFoundToastShownRef.current.has(pendingListingId)) {
+        notFoundToastShownRef.current.add(pendingListingId);
+        toast({ title: t("shareListingNotFound") });
+      }
       setPendingListingId(null);
       try {
         const params = new URLSearchParams(window.location.search);
