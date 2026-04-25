@@ -24,6 +24,40 @@ interface SuggestionData {
   suggestion: string | null;
 }
 
+const CROP_GRADIENT_BASE = "border-2 border-transparent [background-origin:border-box] [background-clip:padding-box,border-box]";
+
+function cropBorderGradient(cropName: string | null | undefined): string {
+  const name = (cropName || "").trim();
+  if (/soy|सोयाबीन/i.test(name)) {
+    return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#ddd6fe,#8b5cf6,#5b21b6)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#c4b5fd,#7c3aed,#4c1d95)]`;
+  }
+  if (/onion|प्याज|प्याज़/i.test(name)) {
+    return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fecdd3,#f43f5e,#9f1239)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fda4af,#e11d48,#881337)]`;
+  }
+  if (/potato|आलू/i.test(name)) {
+    return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fde68a,#f59e0b,#b45309)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fcd34d,#d97706,#92400e)]`;
+  }
+  if (/wheat|गेहूँ|गेहूं/i.test(name)) {
+    return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fef08a,#eab308,#854d0e)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fde047,#ca8a04,#713f12)]`;
+  }
+  if (/rice|paddy|धान|चावल/i.test(name)) {
+    return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#a7f3d0,#10b981,#065f46)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#6ee7b7,#059669,#064e3b)]`;
+  }
+  if (/maize|corn|मक्का|मक्की/i.test(name)) {
+    return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fed7aa,#f97316,#9a3412)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fdba74,#ea580c,#7c2d12)]`;
+  }
+  if (/tomato|टमाटर/i.test(name)) {
+    return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fecaca,#ef4444,#991b1b)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fca5a5,#dc2626,#7f1d1d)]`;
+  }
+  if (/cotton|कपास/i.test(name)) {
+    return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bae6fd,#0ea5e9,#075985)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#7dd3fc,#0284c7,#0c4a6e)]`;
+  }
+  if (/mustard|सरसों|सरसो/i.test(name)) {
+    return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fef9c3,#facc15,#a16207)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fef08a,#eab308,#854d0e)]`;
+  }
+  return `${CROP_GRADIENT_BASE} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bbf7d0,#22c55e,#15803d)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#86efac,#16a34a,#166534)]`;
+}
+
 function getLocationFromCache(): { lat: number; lng: number } {
   try {
     const raw = localStorage.getItem("krashu-weather-cache");
@@ -111,7 +145,7 @@ export function CropCardItem({ card, onDelete, onArchive }: CropCardItemProps) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card className={`relative ${card.isArchived ? "opacity-60" : ""}`} data-testid={`card-crop-${card.id}`}>
+      <Card className={`relative ${cropBorderGradient(card.cropName)} ${card.isArchived ? "opacity-60" : ""}`} data-testid={`card-crop-${card.id}`}>
         <CollapsibleTrigger className={`w-full text-left ${isOpen ? "sticky top-16 md:top-0 z-10 bg-card rounded-t-xl shadow-sm" : ""}`} data-testid={`button-expand-crop-${card.id}`}>
           <div className="p-4">
             <div className="flex items-start justify-between gap-2">
