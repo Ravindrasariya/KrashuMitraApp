@@ -40,6 +40,50 @@ import {
 
 type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & { photoCount: number; avgRating: number; ratingCount: number };
 
+// Build a stable per-listing fingerprint used as the `&v=` token on share
+// URLs (so WhatsApp / Facebook re-scrape the preview after the seller edits
+// the listing instead of showing the cached card forever). Includes only
+// fields the buyer actually sees in the share-image card + photo count, so
+// adding/removing a photo or changing price/location/etc. naturally busts
+// the upstream cache. Same content → same fingerprint → same cache entry.
+function computeListingShareVersion(l: ListingNoPhoto): string {
+  const created = l.createdAt ? new Date(l.createdAt as unknown as string | Date).getTime() : 0;
+  const sig = JSON.stringify({
+    c: l.category,
+    v: l.sellerVillage ?? "",
+    d: l.sellerDistrict ?? "",
+    t: l.sellerTehsil ?? "",
+    qb: l.quantityBigha ?? "",
+    qg: l.quantityBags ?? "",
+    aad: l.availableAfterDays ?? "",
+    ot: l.onionType ?? "",
+    pv: l.potatoVariety ?? "",
+    pb: l.potatoBrand ?? "",
+    osv: l.onionSeedVariety ?? "",
+    osb: l.onionSeedBrand ?? "",
+    osp: l.onionSeedPricePerKg ?? "",
+    ssd: l.soyabeanSeedDuration ?? "",
+    ssv: l.soyabeanSeedVariety ?? "",
+    ssp: l.soyabeanSeedPricePerQuintal ?? "",
+    bmt: l.bagMaterialType ?? "",
+    bd: l.bagDimension ?? "",
+    bp: l.bagPricePerBag ?? "",
+    fb: l.fanBrand ?? "",
+    fbo: l.fanBrandOther ?? "",
+    fw: l.fanWattage ?? "",
+    fp: l.fanPricePerPiece ?? "",
+    a: l.isActive,
+    pc: l.photoCount,
+  });
+  // djb2 — small deterministic non-crypto hash, fine for cache busting.
+  let h = 5381;
+  for (let i = 0; i < sig.length; i++) {
+    h = (((h << 5) + h) + sig.charCodeAt(i)) | 0;
+  }
+  // base36-encoded created-epoch + content hash. Stays short and URL-safe.
+  return `${created.toString(36)}${(h >>> 0).toString(36)}`;
+}
+
 const POTATO_VARIETIES = ["CS3", "CS1", "Torus", "Pukhraj", "Jyoti", "Lakar", "Others"];
 const POTATO_BRANDS = ["Merino", "Technico", "Uttkal", "Jain", "Jalandhar", "Merath"];
 const MAX_PHOTOS = 3;
@@ -1148,7 +1192,16 @@ export default function MarketplacePage() {
   const composeShareInfo = (listing: ListingNoPhoto): ShareInfo => {
     const envBase = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined)?.replace(/\/+$/, "");
     const origin = envBase || "https://km.krashuved.com";
-    const url = `${origin}/marketplace?listing=${listing.id}`;
+    // Append a per-listing version token so WhatsApp / Facebook treat the
+    // URL as new whenever the listing's content actually changes. Their
+    // preview cache is keyed by the exact URL and held for ~7 days, so
+    // without this any prior cached preview (e.g. one fetched while prod
+    // was misconfigured) sticks forever. The token is a stable fingerprint
+    // of the listing's content + photo count, so two shares of the same
+    // unchanged listing produce the same URL (and therefore share the same
+    // upstream cache entry — no pollution).
+    const v = computeListingShareVersion(listing);
+    const url = `${origin}/marketplace?listing=${listing.id}&v=${v}`;
     const cat = categoryLabel(listing.category);
     return {
       title: `${cat} | KrashuVed`,
