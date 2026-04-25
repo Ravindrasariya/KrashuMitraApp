@@ -16,6 +16,8 @@ import {
   MARKETPLACE_BAG_COMMODITY_TYPES,
   MARKETPLACE_BAG_MATERIAL_TYPES,
   MARKETPLACE_BAG_COLORS,
+  MARKETPLACE_FAN_BRANDS,
+  MARKETPLACE_FAN_COLORS,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -1730,8 +1732,8 @@ Respond in this structure:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag } = req.body || {};
-      if (!category || !["onion_seedling", "potato_seed", "onion_seed", "soyabean_seed", "bardan_bag"].includes(category)) {
+      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece } = req.body || {};
+      if (!category || !["onion_seedling", "potato_seed", "onion_seed", "soyabean_seed", "bardan_bag", "exhaust_fan"].includes(category)) {
         return res.status(400).json({ message: "Invalid category" });
       }
       if (category === "onion_seedling" && !quantityBigha) {
@@ -1758,6 +1760,11 @@ Respond in this structure:
         }
         if (bagPricePerBag === undefined || bagPricePerBag === null || String(bagPricePerBag).trim() === "") {
           return res.status(400).json({ message: "bagPricePerBag required for bardan_bag" });
+        }
+      }
+      if (category === "exhaust_fan") {
+        if (fanPricePerPiece === undefined || fanPricePerPiece === null || String(fanPricePerPiece).trim() === "") {
+          return res.status(400).json({ message: "fanPricePerPiece required for exhaust_fan" });
         }
       }
 
@@ -1852,6 +1859,74 @@ Respond in this structure:
         }
       }
 
+      // Exhaust fan parsing/validation. All fields are optional except price.
+      let parsedFanBrand: string | null = null;
+      let parsedFanBrandOther: string | null = null;
+      let parsedFanColor: string | null = null;
+      let parsedFanColorOther: string | null = null;
+      let parsedFanWattage: number | null = null;
+      let parsedFanVoltage: number | null = null;
+      let parsedFanAirflowCmh: number | null = null;
+      let parsedFanBladeLengthMm: number | null = null;
+      let parsedFanSpeedRpm: number | null = null;
+      let parsedFanBladeMaterial: string | null = null;
+      let parsedFanBladeCount: number | null = null;
+      let parsedFanCountryOfOrigin: string | null = null;
+      let parsedFanWarrantyYears: number | null = null;
+      let parsedFanDimensions: string | null = null;
+      let parsedFanPricePerPiece: number | null = null;
+      if (category === "exhaust_fan") {
+        const intRange = (raw: any, min: number, max: number, label: string): number | null => {
+          if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+          const s = String(raw).trim();
+          if (!/^\d+$/.test(s)) throw new Error(`Invalid ${label}`);
+          const n = parseInt(s, 10);
+          if (Number.isNaN(n) || n < min || n > max) throw new Error(`Invalid ${label}`);
+          return n;
+        };
+        try {
+          if (fanBrand !== undefined && fanBrand !== null && String(fanBrand).trim() !== "" && String(fanBrand) !== "none") {
+            if (!MARKETPLACE_FAN_BRANDS.includes(String(fanBrand) as typeof MARKETPLACE_FAN_BRANDS[number])) {
+              return res.status(400).json({ message: "Invalid fanBrand" });
+            }
+            parsedFanBrand = String(fanBrand);
+            if (parsedFanBrand === "Others") {
+              const otherStr = typeof fanBrandOther === "string" ? fanBrandOther.trim() : "";
+              if (!otherStr) return res.status(400).json({ message: "fanBrandOther required when Others is selected" });
+              if (otherStr.length > 40) return res.status(400).json({ message: "fanBrandOther must be 40 characters or fewer" });
+              parsedFanBrandOther = otherStr;
+            }
+          }
+          if (fanColor !== undefined && fanColor !== null && String(fanColor).trim() !== "" && String(fanColor) !== "none") {
+            if (!MARKETPLACE_FAN_COLORS.includes(String(fanColor) as typeof MARKETPLACE_FAN_COLORS[number])) {
+              return res.status(400).json({ message: "Invalid fanColor" });
+            }
+            parsedFanColor = String(fanColor);
+            if (parsedFanColor === "Others") {
+              const otherStr = typeof fanColorOther === "string" ? fanColorOther.trim() : "";
+              if (!otherStr) return res.status(400).json({ message: "fanColorOther required when Others is selected" });
+              if (otherStr.length > 40) return res.status(400).json({ message: "fanColorOther must be 40 characters or fewer" });
+              parsedFanColorOther = otherStr;
+            }
+          }
+          parsedFanWattage = intRange(fanWattage, 1, 10000, "fanWattage");
+          parsedFanVoltage = intRange(fanVoltage, 1, 1000, "fanVoltage");
+          parsedFanAirflowCmh = intRange(fanAirflowCmh, 1, 100000, "fanAirflowCmh");
+          parsedFanBladeLengthMm = intRange(fanBladeLengthMm, 1, 5000, "fanBladeLengthMm");
+          parsedFanSpeedRpm = intRange(fanSpeedRpm, 1, 10000, "fanSpeedRpm");
+          parsedFanBladeCount = intRange(fanBladeCount, 1, 50, "fanBladeCount");
+          parsedFanWarrantyYears = intRange(fanWarrantyYears, 0, 50, "fanWarrantyYears");
+          const priceN = intRange(fanPricePerPiece, 1, 9999999, "fanPricePerPiece");
+          if (priceN === null) return res.status(400).json({ message: "Invalid fanPricePerPiece" });
+          parsedFanPricePerPiece = priceN;
+          if (typeof fanBladeMaterial === "string" && fanBladeMaterial.trim()) parsedFanBladeMaterial = fanBladeMaterial.trim().slice(0, 40);
+          if (typeof fanCountryOfOrigin === "string" && fanCountryOfOrigin.trim()) parsedFanCountryOfOrigin = fanCountryOfOrigin.trim().slice(0, 40);
+          if (typeof fanDimensions === "string" && fanDimensions.trim()) parsedFanDimensions = fanDimensions.trim().slice(0, 60);
+        } catch (e: any) {
+          return res.status(400).json({ message: e?.message || "Invalid exhaust_fan field" });
+        }
+      }
+
       let parsedPricePerKg: number | null = null;
       if (category === "onion_seed" && onionSeedPricePerKg !== undefined && onionSeedPricePerKg !== null && String(onionSeedPricePerKg).trim() !== "") {
         const n = parseInt(String(onionSeedPricePerKg), 10);
@@ -1900,6 +1975,21 @@ Respond in this structure:
         bagColor: category === "bardan_bag" && bagColor && String(bagColor) !== "none" && String(bagColor).trim() !== "" ? String(bagColor).slice(0, 20) : null,
         bagMinQuantity: category === "bardan_bag" ? parsedBagMinQuantity : null,
         bagPricePerBag: category === "bardan_bag" ? parsedBagPricePerBag : null,
+        fanBrand: category === "exhaust_fan" ? parsedFanBrand : null,
+        fanBrandOther: category === "exhaust_fan" ? parsedFanBrandOther : null,
+        fanColor: category === "exhaust_fan" ? parsedFanColor : null,
+        fanColorOther: category === "exhaust_fan" ? parsedFanColorOther : null,
+        fanWattage: category === "exhaust_fan" ? parsedFanWattage : null,
+        fanVoltage: category === "exhaust_fan" ? parsedFanVoltage : null,
+        fanAirflowCmh: category === "exhaust_fan" ? parsedFanAirflowCmh : null,
+        fanBladeLengthMm: category === "exhaust_fan" ? parsedFanBladeLengthMm : null,
+        fanSpeedRpm: category === "exhaust_fan" ? parsedFanSpeedRpm : null,
+        fanBladeMaterial: category === "exhaust_fan" ? parsedFanBladeMaterial : null,
+        fanBladeCount: category === "exhaust_fan" ? parsedFanBladeCount : null,
+        fanCountryOfOrigin: category === "exhaust_fan" ? parsedFanCountryOfOrigin : null,
+        fanWarrantyYears: category === "exhaust_fan" ? parsedFanWarrantyYears : null,
+        fanDimensions: category === "exhaust_fan" ? parsedFanDimensions : null,
+        fanPricePerPiece: category === "exhaust_fan" ? parsedFanPricePerPiece : null,
         sellerVillage: user.village || null,
         sellerTehsil: user.tehsil || null,
         sellerDistrict: user.district || null,
@@ -1940,7 +2030,7 @@ Respond in this structure:
       if (existing.sellerId !== userId) return res.status(403).json({ message: "Not authorized" });
 
       const category = existing.category;
-      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag } = req.body || {};
+      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece } = req.body || {};
 
       if (category === "onion_seedling" && quantityBigha !== undefined && !quantityBigha) {
         return res.status(400).json({ message: "quantityBigha required for onion_seedling" });
@@ -2094,6 +2184,119 @@ Respond in this structure:
         }
       }
 
+      // Exhaust fan parsing/validation for PATCH. All fields use undefined to
+      // signal "no change" so partial edits don't wipe other columns.
+      let parsedFanBrandPatch: string | null | undefined = undefined;
+      let parsedFanBrandOtherPatch: string | null | undefined = undefined;
+      let parsedFanColorPatch: string | null | undefined = undefined;
+      let parsedFanColorOtherPatch: string | null | undefined = undefined;
+      let parsedFanWattagePatch: number | null | undefined = undefined;
+      let parsedFanVoltagePatch: number | null | undefined = undefined;
+      let parsedFanAirflowCmhPatch: number | null | undefined = undefined;
+      let parsedFanBladeLengthMmPatch: number | null | undefined = undefined;
+      let parsedFanSpeedRpmPatch: number | null | undefined = undefined;
+      let parsedFanBladeMaterialPatch: string | null | undefined = undefined;
+      let parsedFanBladeCountPatch: number | null | undefined = undefined;
+      let parsedFanCountryOfOriginPatch: string | null | undefined = undefined;
+      let parsedFanWarrantyYearsPatch: number | null | undefined = undefined;
+      let parsedFanDimensionsPatch: string | null | undefined = undefined;
+      let parsedFanPricePerPiecePatch: number | null | undefined = undefined;
+      if (category === "exhaust_fan") {
+        const intRangePatch = (raw: any, min: number, max: number, label: string): number | null => {
+          if (raw === null || String(raw).trim() === "") return null;
+          const s = String(raw).trim();
+          if (!/^\d+$/.test(s)) throw new Error(`Invalid ${label}`);
+          const n = parseInt(s, 10);
+          if (Number.isNaN(n) || n < min || n > max) throw new Error(`Invalid ${label}`);
+          return n;
+        };
+        try {
+          if (fanBrand !== undefined) {
+            if (fanBrand === null || String(fanBrand).trim() === "" || String(fanBrand) === "none") {
+              parsedFanBrandPatch = null;
+              parsedFanBrandOtherPatch = null;
+            } else {
+              if (!MARKETPLACE_FAN_BRANDS.includes(String(fanBrand) as typeof MARKETPLACE_FAN_BRANDS[number])) {
+                return res.status(400).json({ message: "Invalid fanBrand" });
+              }
+              parsedFanBrandPatch = String(fanBrand);
+              if (parsedFanBrandPatch !== "Others") {
+                parsedFanBrandOtherPatch = null;
+              }
+            }
+          }
+          // Determine effective brand for "Others" presence check.
+          const effectiveBrand = parsedFanBrandPatch !== undefined ? parsedFanBrandPatch : existing.fanBrand;
+          if (fanBrandOther !== undefined) {
+            if (effectiveBrand === "Others") {
+              const otherStr = typeof fanBrandOther === "string" ? fanBrandOther.trim() : "";
+              if (!otherStr) return res.status(400).json({ message: "fanBrandOther required when Others is selected" });
+              if (otherStr.length > 40) return res.status(400).json({ message: "fanBrandOther must be 40 characters or fewer" });
+              parsedFanBrandOtherPatch = otherStr;
+            } else {
+              parsedFanBrandOtherPatch = null;
+            }
+          } else if (parsedFanBrandPatch === "Others" && (typeof existing.fanBrandOther !== "string" || !existing.fanBrandOther.trim())) {
+            return res.status(400).json({ message: "fanBrandOther required when Others is selected" });
+          }
+
+          if (fanColor !== undefined) {
+            if (fanColor === null || String(fanColor).trim() === "" || String(fanColor) === "none") {
+              parsedFanColorPatch = null;
+              parsedFanColorOtherPatch = null;
+            } else {
+              if (!MARKETPLACE_FAN_COLORS.includes(String(fanColor) as typeof MARKETPLACE_FAN_COLORS[number])) {
+                return res.status(400).json({ message: "Invalid fanColor" });
+              }
+              parsedFanColorPatch = String(fanColor);
+              if (parsedFanColorPatch !== "Others") {
+                parsedFanColorOtherPatch = null;
+              }
+            }
+          }
+          const effectiveColor = parsedFanColorPatch !== undefined ? parsedFanColorPatch : existing.fanColor;
+          if (fanColorOther !== undefined) {
+            if (effectiveColor === "Others") {
+              const otherStr = typeof fanColorOther === "string" ? fanColorOther.trim() : "";
+              if (!otherStr) return res.status(400).json({ message: "fanColorOther required when Others is selected" });
+              if (otherStr.length > 40) return res.status(400).json({ message: "fanColorOther must be 40 characters or fewer" });
+              parsedFanColorOtherPatch = otherStr;
+            } else {
+              parsedFanColorOtherPatch = null;
+            }
+          } else if (parsedFanColorPatch === "Others" && (typeof existing.fanColorOther !== "string" || !existing.fanColorOther.trim())) {
+            return res.status(400).json({ message: "fanColorOther required when Others is selected" });
+          }
+
+          if (fanWattage !== undefined) parsedFanWattagePatch = intRangePatch(fanWattage, 1, 10000, "fanWattage");
+          if (fanVoltage !== undefined) parsedFanVoltagePatch = intRangePatch(fanVoltage, 1, 1000, "fanVoltage");
+          if (fanAirflowCmh !== undefined) parsedFanAirflowCmhPatch = intRangePatch(fanAirflowCmh, 1, 100000, "fanAirflowCmh");
+          if (fanBladeLengthMm !== undefined) parsedFanBladeLengthMmPatch = intRangePatch(fanBladeLengthMm, 1, 5000, "fanBladeLengthMm");
+          if (fanSpeedRpm !== undefined) parsedFanSpeedRpmPatch = intRangePatch(fanSpeedRpm, 1, 10000, "fanSpeedRpm");
+          if (fanBladeCount !== undefined) parsedFanBladeCountPatch = intRangePatch(fanBladeCount, 1, 50, "fanBladeCount");
+          if (fanWarrantyYears !== undefined) parsedFanWarrantyYearsPatch = intRangePatch(fanWarrantyYears, 0, 50, "fanWarrantyYears");
+          if (fanPricePerPiece !== undefined) {
+            const priceN = intRangePatch(fanPricePerPiece, 1, 9999999, "fanPricePerPiece");
+            if (priceN === null) return res.status(400).json({ message: "fanPricePerPiece required for exhaust_fan" });
+            parsedFanPricePerPiecePatch = priceN;
+          }
+          if (fanBladeMaterial !== undefined) {
+            parsedFanBladeMaterialPatch = typeof fanBladeMaterial === "string" && fanBladeMaterial.trim()
+              ? fanBladeMaterial.trim().slice(0, 40) : null;
+          }
+          if (fanCountryOfOrigin !== undefined) {
+            parsedFanCountryOfOriginPatch = typeof fanCountryOfOrigin === "string" && fanCountryOfOrigin.trim()
+              ? fanCountryOfOrigin.trim().slice(0, 40) : null;
+          }
+          if (fanDimensions !== undefined) {
+            parsedFanDimensionsPatch = typeof fanDimensions === "string" && fanDimensions.trim()
+              ? fanDimensions.trim().slice(0, 60) : null;
+          }
+        } catch (e: any) {
+          return res.status(400).json({ message: e?.message || "Invalid exhaust_fan field" });
+        }
+      }
+
       let parsedPricePerKg: number | null | undefined = undefined;
       if (category === "onion_seed" && onionSeedPricePerKg !== undefined) {
         if (onionSeedPricePerKg === null || String(onionSeedPricePerKg).trim() === "") {
@@ -2157,6 +2360,22 @@ Respond in this structure:
         }
         if (parsedBagMinQuantityPatch !== undefined) updates.bagMinQuantity = parsedBagMinQuantityPatch;
         if (parsedBagPricePerBagPatch !== undefined) updates.bagPricePerBag = parsedBagPricePerBagPatch;
+      } else if (category === "exhaust_fan") {
+        if (parsedFanBrandPatch !== undefined) updates.fanBrand = parsedFanBrandPatch;
+        if (parsedFanBrandOtherPatch !== undefined) updates.fanBrandOther = parsedFanBrandOtherPatch;
+        if (parsedFanColorPatch !== undefined) updates.fanColor = parsedFanColorPatch;
+        if (parsedFanColorOtherPatch !== undefined) updates.fanColorOther = parsedFanColorOtherPatch;
+        if (parsedFanWattagePatch !== undefined) updates.fanWattage = parsedFanWattagePatch;
+        if (parsedFanVoltagePatch !== undefined) updates.fanVoltage = parsedFanVoltagePatch;
+        if (parsedFanAirflowCmhPatch !== undefined) updates.fanAirflowCmh = parsedFanAirflowCmhPatch;
+        if (parsedFanBladeLengthMmPatch !== undefined) updates.fanBladeLengthMm = parsedFanBladeLengthMmPatch;
+        if (parsedFanSpeedRpmPatch !== undefined) updates.fanSpeedRpm = parsedFanSpeedRpmPatch;
+        if (parsedFanBladeMaterialPatch !== undefined) updates.fanBladeMaterial = parsedFanBladeMaterialPatch;
+        if (parsedFanBladeCountPatch !== undefined) updates.fanBladeCount = parsedFanBladeCountPatch;
+        if (parsedFanCountryOfOriginPatch !== undefined) updates.fanCountryOfOrigin = parsedFanCountryOfOriginPatch;
+        if (parsedFanWarrantyYearsPatch !== undefined) updates.fanWarrantyYears = parsedFanWarrantyYearsPatch;
+        if (parsedFanDimensionsPatch !== undefined) updates.fanDimensions = parsedFanDimensionsPatch;
+        if (parsedFanPricePerPiecePatch !== undefined) updates.fanPricePerPiece = parsedFanPricePerPiecePatch;
       }
 
       if (Object.keys(updates).length > 0) {

@@ -20,7 +20,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2, Package } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2, Package, Fan } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import {
@@ -30,6 +30,8 @@ import {
   MARKETPLACE_BAG_COMMODITY_TYPES,
   MARKETPLACE_BAG_MATERIAL_TYPES,
   MARKETPLACE_BAG_COLORS,
+  MARKETPLACE_FAN_BRANDS,
+  MARKETPLACE_FAN_COLORS,
   type MarketplaceListing,
 } from "@shared/schema";
 
@@ -50,6 +52,8 @@ const SOYABEAN_DURATIONS = ["Long", "Short"] as const;
 const BAG_COMMODITY_TYPES: string[] = [...MARKETPLACE_BAG_COMMODITY_TYPES];
 const BAG_MATERIAL_TYPES: string[] = [...MARKETPLACE_BAG_MATERIAL_TYPES];
 const BAG_COLORS: string[] = [...MARKETPLACE_BAG_COLORS];
+const FAN_BRANDS: string[] = [...MARKETPLACE_FAN_BRANDS];
+const FAN_COLORS: string[] = [...MARKETPLACE_FAN_COLORS];
 
 const HINDI_NAMES: Record<string, string> = {
   CS3: "सीएस3", CS1: "सीएस1", Torus: "टोरस", Pukhraj: "पुखराज",
@@ -221,6 +225,21 @@ export default function MarketplacePage() {
   const [bagColor, setBagColor] = useState("none");
   const [bagMinQuantity, setBagMinQuantity] = useState("");
   const [bagPricePerBag, setBagPricePerBag] = useState("");
+  const [fanBrand, setFanBrand] = useState("none");
+  const [fanBrandOther, setFanBrandOther] = useState("");
+  const [fanColor, setFanColor] = useState("none");
+  const [fanColorOther, setFanColorOther] = useState("");
+  const [fanWattage, setFanWattage] = useState("");
+  const [fanVoltage, setFanVoltage] = useState("");
+  const [fanAirflowCmh, setFanAirflowCmh] = useState("");
+  const [fanBladeLengthMm, setFanBladeLengthMm] = useState("");
+  const [fanSpeedRpm, setFanSpeedRpm] = useState("");
+  const [fanBladeMaterial, setFanBladeMaterial] = useState("");
+  const [fanBladeCount, setFanBladeCount] = useState("");
+  const [fanCountryOfOrigin, setFanCountryOfOrigin] = useState("");
+  const [fanWarrantyYears, setFanWarrantyYears] = useState("");
+  const [fanDimensions, setFanDimensions] = useState("");
+  const [fanPricePerPiece, setFanPricePerPiece] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"latest" | "nearest" | "oldest">("latest");
   const [sortOpen, setSortOpen] = useState(false);
@@ -351,6 +370,21 @@ export default function MarketplacePage() {
     setBagColor("none");
     setBagMinQuantity("");
     setBagPricePerBag("");
+    setFanBrand("none");
+    setFanBrandOther("");
+    setFanColor("none");
+    setFanColorOther("");
+    setFanWattage("");
+    setFanVoltage("");
+    setFanAirflowCmh("");
+    setFanBladeLengthMm("");
+    setFanSpeedRpm("");
+    setFanBladeMaterial("");
+    setFanBladeCount("");
+    setFanCountryOfOrigin("");
+    setFanWarrantyYears("");
+    setFanDimensions("");
+    setFanPricePerPiece("");
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -469,6 +503,72 @@ export default function MarketplacePage() {
       data.bagColor = bagColor && bagColor !== "none" ? bagColor : null;
       data.bagMinQuantity = minQtyNum;
       data.bagPricePerBag = priceNum;
+    } else if (category === "exhaust_fan") {
+      const priceStr = fanPricePerPiece.trim();
+      if (!/^\d+$/.test(priceStr)) {
+        toast({ title: t("pricePerPiece"), variant: "destructive" });
+        return;
+      }
+      const priceNum = parseInt(priceStr, 10);
+      if (priceNum < 1 || priceNum > 9999999) {
+        toast({ title: t("pricePerPiece"), variant: "destructive" });
+        return;
+      }
+      const intRange = (raw: string, min: number, max: number, label: string): number | null | "ERR" => {
+        const s = raw.trim();
+        if (!s) return null;
+        if (!/^\d+$/.test(s)) return "ERR";
+        const n = parseInt(s, 10);
+        if (n < min || n > max) return "ERR";
+        return n;
+      };
+      const fields: { val: string; min: number; max: number; key: string; label: string }[] = [
+        { val: fanWattage, min: 1, max: 10000, key: "fanWattage", label: t("fanWattage") },
+        { val: fanVoltage, min: 1, max: 1000, key: "fanVoltage", label: t("fanVoltage") },
+        { val: fanAirflowCmh, min: 1, max: 100000, key: "fanAirflowCmh", label: t("fanAirflowCmh") },
+        { val: fanBladeLengthMm, min: 1, max: 5000, key: "fanBladeLengthMm", label: t("fanBladeLength") },
+        { val: fanSpeedRpm, min: 1, max: 10000, key: "fanSpeedRpm", label: t("fanSpeedRpm") },
+        { val: fanBladeCount, min: 1, max: 50, key: "fanBladeCount", label: t("fanBladeCount") },
+        { val: fanWarrantyYears, min: 0, max: 50, key: "fanWarrantyYears", label: t("fanWarrantyYears") },
+      ];
+      for (const f of fields) {
+        const r = intRange(f.val, f.min, f.max, f.label);
+        if (r === "ERR") {
+          toast({ title: f.label, variant: "destructive" });
+          return;
+        }
+        data[f.key] = r;
+      }
+      const brandSelected = fanBrand && fanBrand !== "none" ? fanBrand : null;
+      if (brandSelected === "Others") {
+        const otherTrim = fanBrandOther.trim();
+        if (!otherTrim) {
+          toast({ title: t("fanBrandOtherLabel"), variant: "destructive" });
+          return;
+        }
+        data.fanBrand = "Others";
+        data.fanBrandOther = otherTrim.slice(0, 40);
+      } else {
+        data.fanBrand = brandSelected;
+        data.fanBrandOther = null;
+      }
+      const colorSelected = fanColor && fanColor !== "none" ? fanColor : null;
+      if (colorSelected === "Others") {
+        const otherTrim = fanColorOther.trim();
+        if (!otherTrim) {
+          toast({ title: t("fanColorOtherLabel"), variant: "destructive" });
+          return;
+        }
+        data.fanColor = "Others";
+        data.fanColorOther = otherTrim.slice(0, 40);
+      } else {
+        data.fanColor = colorSelected;
+        data.fanColorOther = null;
+      }
+      data.fanBladeMaterial = fanBladeMaterial.trim() || null;
+      data.fanCountryOfOrigin = fanCountryOfOrigin.trim() || null;
+      data.fanDimensions = fanDimensions.trim() || null;
+      data.fanPricePerPiece = priceNum;
     }
     if (editingListingId != null) {
       updateMutation.mutate({ id: editingListingId, data });
@@ -506,6 +606,22 @@ export default function MarketplacePage() {
       setBagColor(listing.bagColor || "none");
       setBagMinQuantity(listing.bagMinQuantity != null ? String(listing.bagMinQuantity) : "");
       setBagPricePerBag(listing.bagPricePerBag != null ? String(listing.bagPricePerBag) : "");
+    } else if (listing.category === "exhaust_fan") {
+      setFanBrand(listing.fanBrand || "none");
+      setFanBrandOther(listing.fanBrandOther || "");
+      setFanColor(listing.fanColor || "none");
+      setFanColorOther(listing.fanColorOther || "");
+      setFanWattage(listing.fanWattage != null ? String(listing.fanWattage) : "");
+      setFanVoltage(listing.fanVoltage != null ? String(listing.fanVoltage) : "");
+      setFanAirflowCmh(listing.fanAirflowCmh != null ? String(listing.fanAirflowCmh) : "");
+      setFanBladeLengthMm(listing.fanBladeLengthMm != null ? String(listing.fanBladeLengthMm) : "");
+      setFanSpeedRpm(listing.fanSpeedRpm != null ? String(listing.fanSpeedRpm) : "");
+      setFanBladeMaterial(listing.fanBladeMaterial || "");
+      setFanBladeCount(listing.fanBladeCount != null ? String(listing.fanBladeCount) : "");
+      setFanCountryOfOrigin(listing.fanCountryOfOrigin || "");
+      setFanWarrantyYears(listing.fanWarrantyYears != null ? String(listing.fanWarrantyYears) : "");
+      setFanDimensions(listing.fanDimensions || "");
+      setFanPricePerPiece(listing.fanPricePerPiece != null ? String(listing.fanPricePerPiece) : "");
     }
     setEditingListingId(listing.id);
     setPhotosDirty(false);
@@ -628,6 +744,7 @@ export default function MarketplacePage() {
       : cat === "onion_seed" ? t("onionSeed")
       : cat === "soyabean_seed" ? t("soyabeanSeed")
       : cat === "bardan_bag" ? t("bardanBag")
+      : cat === "exhaust_fan" ? t("exhaustFan")
       : cat;
 
   const categoryBadgeColor = (cat: string) =>
@@ -639,6 +756,8 @@ export default function MarketplacePage() {
       ? "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
       : cat === "soyabean_seed"
       ? "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300"
+      : cat === "exhaust_fan"
+      ? "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-200"
       : "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300";
 
   const categoryBorderGradient = (cat: string) => {
@@ -655,6 +774,9 @@ export default function MarketplacePage() {
     if (cat === "soyabean_seed") {
       return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#ddd6fe,#8b5cf6,#5b21b6)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#c4b5fd,#7c3aed,#4c1d95)]`;
     }
+    if (cat === "exhaust_fan") {
+      return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#e2e8f0,#64748b,#1e293b)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#cbd5e1,#475569,#0f172a)]`;
+    }
     return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bae6fd,#0ea5e9,#075985)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#7dd3fc,#0284c7,#0c4a6e)]`;
   };
 
@@ -667,6 +789,8 @@ export default function MarketplacePage() {
       ? "bg-rose-50 dark:bg-rose-950/30"
       : cat === "soyabean_seed"
       ? "bg-violet-50 dark:bg-violet-950/30"
+      : cat === "exhaust_fan"
+      ? "bg-slate-50 dark:bg-slate-900/40"
       : "bg-sky-50 dark:bg-sky-950/30";
 
   const renderPlaceholderIcon = (cat: string, size: "sm" | "lg") => {
@@ -683,7 +807,38 @@ export default function MarketplacePage() {
     if (cat === "bardan_bag") {
       return <Package className={`${cls} text-sky-300 dark:text-sky-700`} />;
     }
+    if (cat === "exhaust_fan") {
+      return <Fan className={`${cls} text-slate-300 dark:text-slate-600`} />;
+    }
     return <Sprout className={`${cls} text-violet-300 dark:text-violet-700`} />;
+  };
+
+  const fanBrandLabel = (val: string | null | undefined) => {
+    if (val === "Crompton") return t("fanBrandCrompton");
+    if (val === "Havells") return t("fanBrandHavells");
+    if (val === "Usha") return t("fanBrandUsha");
+    if (val === "Others") return t("fanBrandOthers");
+    return val || "";
+  };
+
+  const fanColorLabelLocal = (val: string | null | undefined) => {
+    if (val === "Grey") return t("fanColorGrey");
+    if (val === "Brown") return t("fanColorBrown");
+    if (val === "Black") return t("fanColorBlack");
+    if (val === "Others") return t("fanColorOthers");
+    return val || "";
+  };
+
+  const fanBrandText = (b: string | null | undefined, other: string | null | undefined) => {
+    if (!b) return "";
+    if (b === "Others") return (other || "").trim();
+    return fanBrandLabel(b);
+  };
+
+  const fanColorText = (c: string | null | undefined, other: string | null | undefined) => {
+    if (!c) return "";
+    if (c === "Others") return (other || "").trim();
+    return fanColorLabelLocal(c);
   };
 
   const formatPrice = (n: number | null | undefined) => {
@@ -782,6 +937,7 @@ export default function MarketplacePage() {
             <SelectItem value="onion_seed" data-testid="filter-onion_seed">{t("onionSeed")}</SelectItem>
             <SelectItem value="soyabean_seed" data-testid="filter-soyabean_seed">{t("soyabeanSeed")}</SelectItem>
             <SelectItem value="bardan_bag" data-testid="filter-bardan_bag">{t("bardanBag")}</SelectItem>
+            <SelectItem value="exhaust_fan" data-testid="filter-exhaust_fan">{t("exhaustFan")}</SelectItem>
           </SelectContent>
         </Select>
         <div className="ml-auto relative">
@@ -836,6 +992,7 @@ export default function MarketplacePage() {
             const isOnionSeed = listing.category === "onion_seed";
             const isSoyabeanSeed = listing.category === "soyabean_seed";
             const isBardanBag = listing.category === "bardan_bag";
+            const isFan = listing.category === "exhaust_fan";
             const hasPhoto = listing.photoCount > 0 || listing.photoMime;
             const cardTotalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
             const cardIdxRaw = cardPhotoIndex[listing.id] ?? 0;
@@ -961,7 +1118,7 @@ export default function MarketplacePage() {
                         </p>
                       </>
                     )}
-                    {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && (
+                    {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && !isFan && (
                       <>
                         {listing.quantityBags && (
                           <p className="text-sm font-bold leading-snug" data-testid={`text-qty-${listing.id}`}>
@@ -986,6 +1143,20 @@ export default function MarketplacePage() {
                             {[bagColorLabel(listing.bagColor), listing.bagDimension].filter(Boolean).join(" · ")}
                           </p>
                         )}
+                      </>
+                    )}
+                    {isFan && (
+                      <>
+                        <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {language === "hi" ? `₹${listing.fanPricePerPiece} / पीस` : `₹${listing.fanPricePerPiece} / piece`}
+                        </p>
+                        <p className="text-xs font-medium text-foreground leading-snug truncate">
+                          {[
+                            fanBrandText(listing.fanBrand, listing.fanBrandOther),
+                            listing.fanWattage != null ? `${listing.fanWattage}W` : null,
+                            listing.fanSpeedRpm != null ? `${listing.fanSpeedRpm} RPM` : null,
+                          ].filter(Boolean).join(" · ") || "—"}
+                        </p>
                       </>
                     )}
                     {isOnionSeed && (
@@ -1133,6 +1304,7 @@ export default function MarketplacePage() {
                   <SelectItem value="onion_seed">{t("onionSeed")}</SelectItem>
                   <SelectItem value="soyabean_seed">{t("soyabeanSeed")}</SelectItem>
                   <SelectItem value="bardan_bag">{t("bardanBag")}</SelectItem>
+                  <SelectItem value="exhaust_fan">{t("exhaustFan")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1478,6 +1650,199 @@ export default function MarketplacePage() {
                 </div>
               </>
             )}
+
+            {category === "exhaust_fan" && (
+              <>
+                <div>
+                  <Label className="text-sm">{t("fanBrand")}</Label>
+                  <Select value={fanBrand} onValueChange={(v) => { setFanBrand(v); if (v !== "Others") setFanBrandOther(""); }}>
+                    <SelectTrigger data-testid="select-fan-brand">
+                      <SelectValue placeholder={t("selectOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" data-testid="option-fan-brand-none">{t("selectOption")}</SelectItem>
+                      {FAN_BRANDS.map(v => (
+                        <SelectItem key={v} value={v} data-testid={`option-fan-brand-${v}`}>
+                          {fanBrandLabel(v)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fanBrand === "Others" && (
+                    <div className="mt-2">
+                      <Label className="text-sm">{t("fanBrandOtherLabel")}</Label>
+                      <Input
+                        value={fanBrandOther}
+                        onChange={(e) => setFanBrandOther(e.target.value.slice(0, 40))}
+                        placeholder={t("fanBrandOtherPlaceholder")}
+                        maxLength={40}
+                        data-testid="input-fan-brand-other"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanColor")}</Label>
+                  <Select value={fanColor} onValueChange={(v) => { setFanColor(v); if (v !== "Others") setFanColorOther(""); }}>
+                    <SelectTrigger data-testid="select-fan-color">
+                      <SelectValue placeholder={t("selectOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" data-testid="option-fan-color-none">{t("selectOption")}</SelectItem>
+                      {FAN_COLORS.map(v => (
+                        <SelectItem key={v} value={v} data-testid={`option-fan-color-${v}`}>
+                          {fanColorLabelLocal(v)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fanColor === "Others" && (
+                    <div className="mt-2">
+                      <Label className="text-sm">{t("fanColorOtherLabel")}</Label>
+                      <Input
+                        value={fanColorOther}
+                        onChange={(e) => setFanColorOther(e.target.value.slice(0, 40))}
+                        placeholder={t("fanColorOtherPlaceholder")}
+                        maxLength={40}
+                        data-testid="input-fan-color-other"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanWattage")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={10000}
+                    value={fanWattage}
+                    onChange={(e) => setFanWattage(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-fan-wattage"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanVoltage")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={1000}
+                    value={fanVoltage}
+                    onChange={(e) => setFanVoltage(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-fan-voltage"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanAirflowCmh")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={100000}
+                    value={fanAirflowCmh}
+                    onChange={(e) => setFanAirflowCmh(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-fan-airflow"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanBladeLength")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={5000}
+                    value={fanBladeLengthMm}
+                    onChange={(e) => setFanBladeLengthMm(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-fan-blade-length"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanSpeedRpm")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={10000}
+                    value={fanSpeedRpm}
+                    onChange={(e) => setFanSpeedRpm(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-fan-speed-rpm"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanBladeMaterial")}</Label>
+                  <Input
+                    value={fanBladeMaterial}
+                    onChange={(e) => setFanBladeMaterial(e.target.value.slice(0, 40))}
+                    maxLength={40}
+                    data-testid="input-fan-blade-material"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanBladeCount")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={50}
+                    value={fanBladeCount}
+                    onChange={(e) => setFanBladeCount(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-fan-blade-count"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanCountryOfOrigin")}</Label>
+                  <Input
+                    value={fanCountryOfOrigin}
+                    onChange={(e) => setFanCountryOfOrigin(e.target.value.slice(0, 40))}
+                    maxLength={40}
+                    data-testid="input-fan-country"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanWarrantyYears")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={50}
+                    value={fanWarrantyYears}
+                    onChange={(e) => setFanWarrantyYears(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-fan-warranty"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("fanDimensions")}</Label>
+                  <Input
+                    value={fanDimensions}
+                    onChange={(e) => setFanDimensions(e.target.value.slice(0, 60))}
+                    placeholder={t("fanDimensionsPlaceholder")}
+                    maxLength={60}
+                    data-testid="input-fan-dimensions"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("pricePerPiece")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={9999999}
+                    value={fanPricePerPiece}
+                    onChange={(e) => setFanPricePerPiece(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-fan-price"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <DialogFooter>
@@ -1504,6 +1869,7 @@ export default function MarketplacePage() {
                 const isOnionSeed = listing.category === "onion_seed";
                 const isSoyabeanSeed = listing.category === "soyabean_seed";
                 const isBardanBag = listing.category === "bardan_bag";
+                const isFan = listing.category === "exhaust_fan";
                 const totalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
                 const hasPhotos = totalPhotos > 0;
                 const dist = getDistanceKm(listing);
@@ -1577,7 +1943,7 @@ export default function MarketplacePage() {
                           )}
                         </div>
                       )}
-                      {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && (
+                      {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && !isFan && (
                         <div>
                           {listing.quantityBags && (
                             <p className="text-xl font-bold">{listing.quantityBags} {t("bags")}</p>
@@ -1646,6 +2012,51 @@ export default function MarketplacePage() {
                           {listing.soyabeanSeedVariety && (
                             <p className="text-sm font-medium">{t("soyabeanVariety")}: {listing.soyabeanSeedVariety}</p>
                           )}
+                        </div>
+                      )}
+                      {isFan && (
+                        <div>
+                          <p className="text-xl font-bold" data-testid="text-detail-price">
+                            {language === "hi" ? `₹${listing.fanPricePerPiece} / पीस` : `₹${listing.fanPricePerPiece} / piece`}
+                          </p>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
+                            {listing.fanBrand && (
+                              <p className="text-sm font-medium">{t("fanBrand")}: {fanBrandText(listing.fanBrand, listing.fanBrandOther)}</p>
+                            )}
+                            {listing.fanColor && (
+                              <p className="text-sm font-medium">{t("fanColor")}: {fanColorText(listing.fanColor, listing.fanColorOther)}</p>
+                            )}
+                            {listing.fanWattage != null && (
+                              <p className="text-sm font-medium">{t("fanWattage")}: {listing.fanWattage}</p>
+                            )}
+                            {listing.fanVoltage != null && (
+                              <p className="text-sm font-medium">{t("fanVoltage")}: {listing.fanVoltage}</p>
+                            )}
+                            {listing.fanAirflowCmh != null && (
+                              <p className="text-sm font-medium">{t("fanAirflowCmh")}: {listing.fanAirflowCmh}</p>
+                            )}
+                            {listing.fanBladeLengthMm != null && (
+                              <p className="text-sm font-medium">{t("fanBladeLength")}: {listing.fanBladeLengthMm}</p>
+                            )}
+                            {listing.fanSpeedRpm != null && (
+                              <p className="text-sm font-medium">{t("fanSpeedRpm")}: {listing.fanSpeedRpm}</p>
+                            )}
+                            {listing.fanBladeMaterial && (
+                              <p className="text-sm font-medium">{t("fanBladeMaterial")}: {listing.fanBladeMaterial}</p>
+                            )}
+                            {listing.fanBladeCount != null && (
+                              <p className="text-sm font-medium">{t("fanBladeCount")}: {listing.fanBladeCount}</p>
+                            )}
+                            {listing.fanCountryOfOrigin && (
+                              <p className="text-sm font-medium">{t("fanCountryOfOrigin")}: {listing.fanCountryOfOrigin}</p>
+                            )}
+                            {listing.fanWarrantyYears != null && (
+                              <p className="text-sm font-medium">{t("fanWarrantyYears")}: {listing.fanWarrantyYears}</p>
+                            )}
+                            {listing.fanDimensions && (
+                              <p className="text-sm font-medium col-span-2">{t("fanDimensions")}: {listing.fanDimensions}</p>
+                            )}
+                          </div>
                         </div>
                       )}
 

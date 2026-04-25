@@ -272,6 +272,11 @@ export const MARKETPLACE_BAG_COMMODITY_TYPES = ["Onion", "Potato", "Garlic", "Ot
 export const MARKETPLACE_BAG_MATERIAL_TYPES = ["Jute/Hessian", "LENO Mesh", "PP", "Others"] as const;
 export const MARKETPLACE_BAG_COLORS = ["Red", "Orange", "Blue", "Violet", "Yellow", "Pink"] as const;
 
+// Exhaust Fan allow-lists shared between client form dropdowns and
+// server-side validation so the two never drift.
+export const MARKETPLACE_FAN_BRANDS = ["Crompton", "Havells", "Usha", "Others"] as const;
+export const MARKETPLACE_FAN_COLORS = ["Grey", "Brown", "Black", "Others"] as const;
+
 export const marketplaceListings = pgTable("marketplace_listings", {
   id: serial("id").primaryKey(),
   sellerId: varchar("seller_id").notNull().references(() => users.id),
@@ -299,6 +304,21 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   bagColor: text("bag_color"),
   bagMinQuantity: integer("bag_min_quantity"),
   bagPricePerBag: integer("bag_price_per_bag"),
+  fanBrand: text("fan_brand"),
+  fanBrandOther: text("fan_brand_other"),
+  fanColor: text("fan_color"),
+  fanColorOther: text("fan_color_other"),
+  fanWattage: integer("fan_wattage"),
+  fanVoltage: integer("fan_voltage"),
+  fanAirflowCmh: integer("fan_airflow_cmh"),
+  fanBladeLengthMm: integer("fan_blade_length_mm"),
+  fanSpeedRpm: integer("fan_speed_rpm"),
+  fanBladeMaterial: text("fan_blade_material"),
+  fanBladeCount: integer("fan_blade_count"),
+  fanCountryOfOrigin: text("fan_country_of_origin"),
+  fanWarrantyYears: integer("fan_warranty_years"),
+  fanDimensions: text("fan_dimensions"),
+  fanPricePerPiece: integer("fan_price_per_piece"),
   sellerVillage: text("seller_village"),
   sellerTehsil: text("seller_tehsil"),
   sellerDistrict: text("seller_district"),
