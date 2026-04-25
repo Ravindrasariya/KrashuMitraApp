@@ -2211,96 +2211,83 @@ Respond in this structure:
       let parsedFanDimensionsPatch: string | null | undefined = undefined;
       let parsedFanPricePerPiecePatch: number | null | undefined = undefined;
       if (category === "exhaust_fan") {
-        const intRangePatch = (raw: any, min: number, max: number, label: string): number | null => {
-          if (raw === null || String(raw).trim() === "") return null;
+        const intRangeReqPatch = (raw: any, min: number, max: number, label: string): number => {
+          if (raw === undefined || raw === null || String(raw).trim() === "") throw new Error(`${label} required`);
           const s = String(raw).trim();
           if (!/^\d+$/.test(s)) throw new Error(`Invalid ${label}`);
           const n = parseInt(s, 10);
           if (Number.isNaN(n) || n < min || n > max) throw new Error(`Invalid ${label}`);
           return n;
         };
+        const reqStr = (raw: any, max: number, label: string): string => {
+          if (raw === undefined || raw === null || typeof raw !== "string" || !raw.trim()) {
+            throw new Error(`${label} required`);
+          }
+          const s = raw.trim();
+          if (s.length > max) throw new Error(`${label} must be ${max} characters or fewer`);
+          return s;
+        };
         try {
-          if (fanBrand !== undefined) {
-            if (fanBrand === null || String(fanBrand).trim() === "" || String(fanBrand) === "none") {
-              parsedFanBrandPatch = null;
-              parsedFanBrandOtherPatch = null;
-            } else {
-              if (!MARKETPLACE_FAN_BRANDS.includes(String(fanBrand) as typeof MARKETPLACE_FAN_BRANDS[number])) {
-                return res.status(400).json({ message: "Invalid fanBrand" });
-              }
-              parsedFanBrandPatch = String(fanBrand);
-              if (parsedFanBrandPatch !== "Others") {
-                parsedFanBrandOtherPatch = null;
-              }
-            }
+          // Resolve effective values (use existing when not provided in body).
+          const brandRaw = fanBrand !== undefined ? fanBrand : existing.fanBrand;
+          if (brandRaw === undefined || brandRaw === null || String(brandRaw).trim() === "" || String(brandRaw) === "none") {
+            return res.status(400).json({ message: "fanBrand required for exhaust_fan" });
           }
-          // Determine effective brand for "Others" presence check.
-          const effectiveBrand = parsedFanBrandPatch !== undefined ? parsedFanBrandPatch : existing.fanBrand;
-          if (fanBrandOther !== undefined) {
-            if (effectiveBrand === "Others") {
-              const otherStr = typeof fanBrandOther === "string" ? fanBrandOther.trim() : "";
-              if (!otherStr) return res.status(400).json({ message: "fanBrandOther required when Others is selected" });
-              if (otherStr.length > 40) return res.status(400).json({ message: "fanBrandOther must be 40 characters or fewer" });
-              parsedFanBrandOtherPatch = otherStr;
-            } else {
-              parsedFanBrandOtherPatch = null;
-            }
-          } else if (parsedFanBrandPatch === "Others" && (typeof existing.fanBrandOther !== "string" || !existing.fanBrandOther.trim())) {
-            return res.status(400).json({ message: "fanBrandOther required when Others is selected" });
+          if (!MARKETPLACE_FAN_BRANDS.includes(String(brandRaw) as typeof MARKETPLACE_FAN_BRANDS[number])) {
+            return res.status(400).json({ message: "Invalid fanBrand" });
+          }
+          parsedFanBrandPatch = String(brandRaw);
+          if (parsedFanBrandPatch === "Others") {
+            const brandOtherRaw = fanBrandOther !== undefined ? fanBrandOther : existing.fanBrandOther;
+            const otherStr = typeof brandOtherRaw === "string" ? brandOtherRaw.trim() : "";
+            if (!otherStr) return res.status(400).json({ message: "fanBrandOther required when Others is selected" });
+            if (otherStr.length > 40) return res.status(400).json({ message: "fanBrandOther must be 40 characters or fewer" });
+            parsedFanBrandOtherPatch = otherStr;
+          } else {
+            parsedFanBrandOtherPatch = null;
           }
 
-          if (fanColor !== undefined) {
-            if (fanColor === null || String(fanColor).trim() === "" || String(fanColor) === "none") {
-              parsedFanColorPatch = null;
-              parsedFanColorOtherPatch = null;
-            } else {
-              if (!MARKETPLACE_FAN_COLORS.includes(String(fanColor) as typeof MARKETPLACE_FAN_COLORS[number])) {
-                return res.status(400).json({ message: "Invalid fanColor" });
-              }
-              parsedFanColorPatch = String(fanColor);
-              if (parsedFanColorPatch !== "Others") {
-                parsedFanColorOtherPatch = null;
-              }
-            }
+          const colorRaw = fanColor !== undefined ? fanColor : existing.fanColor;
+          if (colorRaw === undefined || colorRaw === null || String(colorRaw).trim() === "" || String(colorRaw) === "none") {
+            return res.status(400).json({ message: "fanColor required for exhaust_fan" });
           }
-          const effectiveColor = parsedFanColorPatch !== undefined ? parsedFanColorPatch : existing.fanColor;
-          if (fanColorOther !== undefined) {
-            if (effectiveColor === "Others") {
-              const otherStr = typeof fanColorOther === "string" ? fanColorOther.trim() : "";
-              if (!otherStr) return res.status(400).json({ message: "fanColorOther required when Others is selected" });
-              if (otherStr.length > 40) return res.status(400).json({ message: "fanColorOther must be 40 characters or fewer" });
-              parsedFanColorOtherPatch = otherStr;
-            } else {
-              parsedFanColorOtherPatch = null;
-            }
-          } else if (parsedFanColorPatch === "Others" && (typeof existing.fanColorOther !== "string" || !existing.fanColorOther.trim())) {
-            return res.status(400).json({ message: "fanColorOther required when Others is selected" });
+          if (!MARKETPLACE_FAN_COLORS.includes(String(colorRaw) as typeof MARKETPLACE_FAN_COLORS[number])) {
+            return res.status(400).json({ message: "Invalid fanColor" });
+          }
+          parsedFanColorPatch = String(colorRaw);
+          if (parsedFanColorPatch === "Others") {
+            const colorOtherRaw = fanColorOther !== undefined ? fanColorOther : existing.fanColorOther;
+            const otherStr = typeof colorOtherRaw === "string" ? colorOtherRaw.trim() : "";
+            if (!otherStr) return res.status(400).json({ message: "fanColorOther required when Others is selected" });
+            if (otherStr.length > 40) return res.status(400).json({ message: "fanColorOther must be 40 characters or fewer" });
+            parsedFanColorOtherPatch = otherStr;
+          } else {
+            parsedFanColorOtherPatch = null;
           }
 
-          if (fanWattage !== undefined) parsedFanWattagePatch = intRangePatch(fanWattage, 1, 10000, "fanWattage");
-          if (fanVoltage !== undefined) parsedFanVoltagePatch = intRangePatch(fanVoltage, 1, 1000, "fanVoltage");
-          if (fanAirflowCmh !== undefined) parsedFanAirflowCmhPatch = intRangePatch(fanAirflowCmh, 1, 999999, "fanAirflowCmh");
-          if (fanBladeLengthMm !== undefined) parsedFanBladeLengthMmPatch = intRangePatch(fanBladeLengthMm, 1, 10000, "fanBladeLengthMm");
-          if (fanSpeedRpm !== undefined) parsedFanSpeedRpmPatch = intRangePatch(fanSpeedRpm, 1, 10000, "fanSpeedRpm");
-          if (fanBladeCount !== undefined) parsedFanBladeCountPatch = intRangePatch(fanBladeCount, 1, 50, "fanBladeCount");
-          if (fanWarrantyYears !== undefined) parsedFanWarrantyYearsPatch = intRangePatch(fanWarrantyYears, 0, 50, "fanWarrantyYears");
-          if (fanPricePerPiece !== undefined) {
-            const priceN = intRangePatch(fanPricePerPiece, 1, 999999, "fanPricePerPiece");
-            if (priceN === null) return res.status(400).json({ message: "fanPricePerPiece required for exhaust_fan" });
-            parsedFanPricePerPiecePatch = priceN;
-          }
-          if (fanBladeMaterial !== undefined) {
-            parsedFanBladeMaterialPatch = typeof fanBladeMaterial === "string" && fanBladeMaterial.trim()
-              ? fanBladeMaterial.trim().slice(0, 40) : null;
-          }
-          if (fanCountryOfOrigin !== undefined) {
-            parsedFanCountryOfOriginPatch = typeof fanCountryOfOrigin === "string" && fanCountryOfOrigin.trim()
-              ? fanCountryOfOrigin.trim().slice(0, 40) : null;
-          }
-          if (fanDimensions !== undefined) {
-            parsedFanDimensionsPatch = typeof fanDimensions === "string" && fanDimensions.trim()
-              ? fanDimensions.trim().slice(0, 60) : null;
-          }
+          const wattageRaw = fanWattage !== undefined ? fanWattage : existing.fanWattage;
+          parsedFanWattagePatch = intRangeReqPatch(wattageRaw, 1, 10000, "fanWattage");
+          const voltageRaw = fanVoltage !== undefined ? fanVoltage : existing.fanVoltage;
+          parsedFanVoltagePatch = intRangeReqPatch(voltageRaw, 1, 1000, "fanVoltage");
+          const airflowRaw = fanAirflowCmh !== undefined ? fanAirflowCmh : existing.fanAirflowCmh;
+          parsedFanAirflowCmhPatch = intRangeReqPatch(airflowRaw, 1, 999999, "fanAirflowCmh");
+          const bladeLenRaw = fanBladeLengthMm !== undefined ? fanBladeLengthMm : existing.fanBladeLengthMm;
+          parsedFanBladeLengthMmPatch = intRangeReqPatch(bladeLenRaw, 1, 10000, "fanBladeLengthMm");
+          const speedRaw = fanSpeedRpm !== undefined ? fanSpeedRpm : existing.fanSpeedRpm;
+          parsedFanSpeedRpmPatch = intRangeReqPatch(speedRaw, 1, 10000, "fanSpeedRpm");
+          const bladeCountRaw = fanBladeCount !== undefined ? fanBladeCount : existing.fanBladeCount;
+          parsedFanBladeCountPatch = intRangeReqPatch(bladeCountRaw, 1, 50, "fanBladeCount");
+          const warrantyRaw = fanWarrantyYears !== undefined ? fanWarrantyYears : existing.fanWarrantyYears;
+          parsedFanWarrantyYearsPatch = intRangeReqPatch(warrantyRaw, 0, 50, "fanWarrantyYears");
+          const priceRaw = fanPricePerPiece !== undefined ? fanPricePerPiece : existing.fanPricePerPiece;
+          parsedFanPricePerPiecePatch = intRangeReqPatch(priceRaw, 1, 999999, "fanPricePerPiece");
+
+          const bladeMatRaw = fanBladeMaterial !== undefined ? fanBladeMaterial : existing.fanBladeMaterial;
+          parsedFanBladeMaterialPatch = reqStr(bladeMatRaw, 40, "fanBladeMaterial");
+          const countryRaw = fanCountryOfOrigin !== undefined ? fanCountryOfOrigin : existing.fanCountryOfOrigin;
+          parsedFanCountryOfOriginPatch = reqStr(countryRaw, 40, "fanCountryOfOrigin");
+          const dimRaw = fanDimensions !== undefined ? fanDimensions : existing.fanDimensions;
+          parsedFanDimensionsPatch = reqStr(dimRaw, 80, "fanDimensions");
         } catch (e: any) {
           return res.status(400).json({ message: e?.message || "Invalid exhaust_fan field" });
         }

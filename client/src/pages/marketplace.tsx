@@ -2026,42 +2026,18 @@ export default function MarketplacePage() {
                             {language === "hi" ? `₹${listing.fanPricePerPiece} / पीस` : `₹${listing.fanPricePerPiece} / piece`}
                           </p>
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
-                            {listing.fanBrand && (
-                              <p className="text-sm font-medium">{t("fanBrand")}: {fanBrandText(listing.fanBrand, listing.fanBrandOther)}</p>
-                            )}
-                            {listing.fanColor && (
-                              <p className="text-sm font-medium">{t("fanColor")}: {fanColorText(listing.fanColor, listing.fanColorOther)}</p>
-                            )}
-                            {listing.fanWattage != null && (
-                              <p className="text-sm font-medium">{t("fanWattage")}: {listing.fanWattage}</p>
-                            )}
-                            {listing.fanVoltage != null && (
-                              <p className="text-sm font-medium">{t("fanVoltage")}: {listing.fanVoltage}</p>
-                            )}
-                            {listing.fanAirflowCmh != null && (
-                              <p className="text-sm font-medium">{t("fanAirflowCmh")}: {listing.fanAirflowCmh}</p>
-                            )}
-                            {listing.fanBladeLengthMm != null && (
-                              <p className="text-sm font-medium">{t("fanBladeLength")}: {listing.fanBladeLengthMm}</p>
-                            )}
-                            {listing.fanSpeedRpm != null && (
-                              <p className="text-sm font-medium">{t("fanSpeedRpm")}: {listing.fanSpeedRpm}</p>
-                            )}
-                            {listing.fanBladeMaterial && (
-                              <p className="text-sm font-medium">{t("fanBladeMaterial")}: {listing.fanBladeMaterial}</p>
-                            )}
-                            {listing.fanBladeCount != null && (
-                              <p className="text-sm font-medium">{t("fanBladeCount")}: {listing.fanBladeCount}</p>
-                            )}
-                            {listing.fanCountryOfOrigin && (
-                              <p className="text-sm font-medium">{t("fanCountryOfOrigin")}: {listing.fanCountryOfOrigin}</p>
-                            )}
-                            {listing.fanWarrantyYears != null && (
-                              <p className="text-sm font-medium">{t("fanWarrantyYears")}: {listing.fanWarrantyYears}</p>
-                            )}
-                            {listing.fanDimensions && (
-                              <p className="text-sm font-medium col-span-2">{t("fanDimensions")}: {listing.fanDimensions}</p>
-                            )}
+                            <p className="text-sm font-medium">{t("fanBrand")}: {fanBrandText(listing.fanBrand, listing.fanBrandOther) || "—"}</p>
+                            <p className="text-sm font-medium">{t("fanColor")}: {fanColorText(listing.fanColor, listing.fanColorOther) || "—"}</p>
+                            <p className="text-sm font-medium">{t("fanWattage")}: {listing.fanWattage != null ? listing.fanWattage : "—"}</p>
+                            <p className="text-sm font-medium">{t("fanVoltage")}: {listing.fanVoltage != null ? listing.fanVoltage : "—"}</p>
+                            <p className="text-sm font-medium">{t("fanAirflowCmh")}: {listing.fanAirflowCmh != null ? listing.fanAirflowCmh : "—"}</p>
+                            <p className="text-sm font-medium">{t("fanSpeedRpm")}: {listing.fanSpeedRpm != null ? listing.fanSpeedRpm : "—"}</p>
+                            <p className="text-sm font-medium">{t("fanBladeLength")}: {listing.fanBladeLengthMm != null ? listing.fanBladeLengthMm : "—"}</p>
+                            <p className="text-sm font-medium">{t("fanBladeCount")}: {listing.fanBladeCount != null ? listing.fanBladeCount : "—"}</p>
+                            <p className="text-sm font-medium">{t("fanBladeMaterial")}: {listing.fanBladeMaterial || "—"}</p>
+                            <p className="text-sm font-medium">{t("fanCountryOfOrigin")}: {listing.fanCountryOfOrigin || "—"}</p>
+                            <p className="text-sm font-medium col-span-2">{t("fanWarrantyYears")}: {listing.fanWarrantyYears != null ? listing.fanWarrantyYears : "—"}</p>
+                            <p className="text-sm font-medium col-span-2">{t("fanDimensions")}: {listing.fanDimensions || "—"}</p>
                           </div>
                         </div>
                       )}
