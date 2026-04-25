@@ -1150,58 +1150,9 @@ export default function MarketplacePage() {
     const origin = envBase || "https://km.krashuved.com";
     const url = `${origin}/marketplace?listing=${listing.id}`;
     const cat = categoryLabel(listing.category);
-    const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");
-    const parts: string[] = [];
-    switch (listing.category) {
-      case "onion_seedling":
-        if (listing.quantityBigha) parts.push(`${listing.quantityBigha} ${t("bigha")}`);
-        if (listing.availableAfterDays != null) parts.push(`${listing.availableAfterDays} ${t("daysAvailable")}`);
-        if (listing.onionType) parts.push(listing.onionType);
-        break;
-      case "potato":
-      case "potato_seed":
-        if (listing.quantityBags) parts.push(`${listing.quantityBags} ${t("bags")}`);
-        if (listing.potatoVariety) parts.push(hn(listing.potatoVariety) || "");
-        if (listing.potatoBrand) parts.push(hn(listing.potatoBrand) || "");
-        break;
-      case "onion_seed":
-        if (listing.onionSeedPricePerKg != null) parts.push(formatPrice(listing.onionSeedPricePerKg) || "");
-        if (listing.onionSeedType) parts.push(hn(listing.onionSeedType) || "");
-        if (listing.onionSeedVariety) parts.push(hn(listing.onionSeedVariety) || "");
-        break;
-      case "soyabean_seed":
-        if (listing.soyabeanSeedPricePerQuintal != null) parts.push(formatPricePerQuintal(listing.soyabeanSeedPricePerQuintal) || "");
-        if (listing.soyabeanSeedDuration) parts.push(soyabeanDurationLabel(listing.soyabeanSeedDuration) || "");
-        if (listing.soyabeanSeedVariety) parts.push(listing.soyabeanSeedVariety);
-        break;
-      case "bardan_bag":
-        if (listing.bagPricePerBag != null) {
-          parts.push(language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`);
-        }
-        if (listing.bagMaterialType) parts.push(bagMaterialLabel(listing.bagMaterialType) || "");
-        if (listing.bagDimension) parts.push(listing.bagDimension);
-        break;
-      case "exhaust_fan":
-        if (listing.fanPricePerPiece != null) {
-          parts.push(language === "hi" ? `₹${listing.fanPricePerPiece} / पीस` : `₹${listing.fanPricePerPiece} / piece`);
-        }
-        if (listing.fanBrand) parts.push(fanBrandText(listing.fanBrand, listing.fanBrandOther) || "");
-        if (listing.fanWattage != null) parts.push(`${listing.fanWattage} W`);
-        break;
-    }
-    const summary = parts.filter(Boolean).join(" · ");
-    const summaryLine = [
-      cat,
-      summary,
-      location ? `📍 ${location}` : "",
-    ].filter(Boolean).join(" — ");
-    const lines = [
-      t("shareBrandTagline"),
-      summaryLine,
-    ];
     return {
       title: `${cat} | KrashuVed`,
-      text: lines.join("\n"),
+      text: t("shareBrandTagline"),
       url,
       emailSubject: t("shareEmailSubject"),
     };
