@@ -642,19 +642,20 @@ export default function MarketplacePage() {
       : "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300";
 
   const categoryBorderGradient = (cat: string) => {
+    const base = "border-2 border-transparent [background-origin:border-box] [background-clip:padding-box,border-box]";
     if (cat === "onion_seedling") {
-      return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bbf7d0,#22c55e,#15803d)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+      return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bbf7d0,#22c55e,#15803d)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#86efac,#16a34a,#166534)]`;
     }
     if (cat === "potato_seed") {
-      return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fde68a,#f59e0b,#b45309)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+      return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fde68a,#f59e0b,#b45309)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fcd34d,#d97706,#92400e)]`;
     }
     if (cat === "onion_seed") {
-      return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fecdd3,#f43f5e,#9f1239)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+      return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fecdd3,#f43f5e,#9f1239)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fda4af,#e11d48,#881337)]`;
     }
     if (cat === "soyabean_seed") {
-      return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#ddd6fe,#8b5cf6,#5b21b6)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+      return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#ddd6fe,#8b5cf6,#5b21b6)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#c4b5fd,#7c3aed,#4c1d95)]`;
     }
-    return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bae6fd,#0ea5e9,#075985)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+    return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bae6fd,#0ea5e9,#075985)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#7dd3fc,#0284c7,#0c4a6e)]`;
   };
 
   const categoryPlaceholderBg = (cat: string) =>
