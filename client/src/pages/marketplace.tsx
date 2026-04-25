@@ -641,6 +641,22 @@ export default function MarketplacePage() {
       ? "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300"
       : "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300";
 
+  const categoryBorderGradient = (cat: string) => {
+    if (cat === "onion_seedling") {
+      return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bbf7d0,#22c55e,#15803d)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+    }
+    if (cat === "potato_seed") {
+      return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fde68a,#f59e0b,#b45309)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+    }
+    if (cat === "onion_seed") {
+      return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#fecdd3,#f43f5e,#9f1239)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+    }
+    if (cat === "soyabean_seed") {
+      return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#ddd6fe,#8b5cf6,#5b21b6)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+    }
+    return "border-2 border-transparent [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bae6fd,#0ea5e9,#075985)] [background-origin:border-box] [background-clip:padding-box,border-box]";
+  };
+
   const categoryPlaceholderBg = (cat: string) =>
     cat === "onion_seedling"
       ? "bg-green-50 dark:bg-green-950/30"
@@ -827,7 +843,7 @@ export default function MarketplacePage() {
             return (
               <Card
                 key={listing.id}
-                className="group relative overflow-hidden flex flex-col cursor-pointer rounded-2xl border-card-border/80 bg-gradient-to-br from-card via-card to-card/70 dark:from-card dark:via-card dark:to-background/60 shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/20 transition-all duration-300 ease-out will-change-transform"
+                className={`group relative overflow-hidden flex flex-col cursor-pointer rounded-2xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ease-out will-change-transform ${categoryBorderGradient(listing.category)}`}
                 onClick={() => { setDetailListing(listing); setDetailPhotoIndex(0); }}
                 data-testid={`card-listing-${listing.id}`}
               >
