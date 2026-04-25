@@ -582,7 +582,7 @@ const translations = {
   shareListingNotFound: { hi: "यह सूची अब उपलब्ध नहीं है", en: "This listing is no longer available" },
   shareListingDeleted: { hi: "यह सूची विक्रेता द्वारा हटा दी गई है", en: "This listing was removed by the seller" },
   shareListingInactive: { hi: "यह सूची अभी रोकी हुई है — बाद में फिर देखें", en: "This listing is currently paused — check back later" },
-  shareBrandTagline: { hi: "🌾 KrashuVed | कृषुवेद — किसानों का साथी", en: "🌾 KrashuVed — companion for Indian farmers" },
+  shareBrandTagline: { hi: "🌾 KrashuVed — किसानों का साथी", en: "🌾 KrashuVed — किसानों का साथी" },
   editPhotoFetchFailed: { hi: "मौजूदा फ़ोटो लोड नहीं हो सके — मौजूदा फ़ोटो वैसे ही रहेंगे जब तक आप कोई फ़ोटो जोड़ें या हटाएँ नहीं।", en: "Could not load existing photos — they'll stay as they are unless you add or remove a photo." },
   photosUnchangedHint: { hi: "मौजूदा फ़ोटो अपरिवर्तित रहेंगे", en: "Existing photos will stay unchanged" },
   daysAvailable: { hi: "दिन बाद उपलब्ध", en: "days available" },
