@@ -23,7 +23,9 @@ import {
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import sharp from "sharp";
-import { composeListingShareImage, getListingShareImageMeta, computeShareVersion, precomposeListingShareImage } from "./share-image";
+import { composeListingShareImage, getListingShareImageMeta, computeShareVersion, precomposeListingShareImage, persistedShareImagePath } from "./share-image";
+import { createReadStream } from "fs";
+import { stat as fsStat } from "fs/promises";
 import { pingListingShareCache } from "./share-meta";
 
 async function compressOnionImageForStorage(
@@ -1755,6 +1757,38 @@ Respond in this structure:
         res.setHeader("ETag", meta.etag);
         res.setHeader("Cache-Control", "public, max-age=3600, must-revalidate");
         return res.status(304).end();
+      }
+      // Fast path: if the persistent disk cache already holds this exact
+      // version, stream the file directly to the response instead of
+      // round-tripping through composeListingShareImage (which would
+      // readFile the whole JPEG into memory just to send it back). For
+      // a ~45 KB asset the in-memory difference is small, but createReadStream
+      // is the canonical "serve a static byte range" pattern and lets the
+      // OS handle backpressure to slow clients without buffering.
+      const diskPath = persistedShareImagePath(meta.etag);
+      if (diskPath) {
+        try {
+          const st = await fsStat(diskPath);
+          if (st.isFile() && st.size > 0) {
+            res.setHeader("Content-Type", "image/jpeg");
+            res.setHeader("Content-Length", String(st.size));
+            res.setHeader("Cache-Control", "public, max-age=3600, must-revalidate");
+            res.setHeader("ETag", meta.etag);
+            const stream = createReadStream(diskPath);
+            stream.on("error", (err) => {
+              console.warn("[share-image] disk stream error, falling through:", err);
+              if (!res.headersSent) {
+                res.status(500).json({ message: "Failed to read share image" });
+              } else {
+                res.end();
+              }
+            });
+            return stream.pipe(res);
+          }
+        } catch {
+          // File missing / unreadable — fall through to compose, which will
+          // also re-populate the disk cache as a side effect.
+        }
       }
       const result = await composeListingShareImage(meta);
       res.setHeader("Content-Type", result.contentType);

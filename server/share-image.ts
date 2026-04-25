@@ -289,6 +289,24 @@ function etagToFileKey(etag: string): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Resolve the on-disk filesystem path where a persisted share-image for the
+ * given ETag would live, or null if the ETag is malformed / cache dir is
+ * unavailable. Used by the GET share-image route to stream the file directly
+ * (createReadStream → pipe) on a disk-cache hit, avoiding loading the whole
+ * JPEG into memory just to send it. Does NOT verify that the file exists —
+ * the caller should fs.stat / fs.access first and fall back to compose on
+ * failure.
+ */
+export function persistedShareImagePath(etag: string): string | null {
+  if (process.env.NODE_ENV === "test") return null;
+  const key = etagToFileKey(etag);
+  if (!key) return null;
+  const dir = ensureCacheDir();
+  if (!dir) return null;
+  return path.join(dir, `${key}.jpg`);
+}
+
 async function readPersistedBuffer(etag: string): Promise<Buffer | null> {
   if (process.env.NODE_ENV === "test") return null;
   const key = etagToFileKey(etag);
