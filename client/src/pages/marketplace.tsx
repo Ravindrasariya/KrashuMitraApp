@@ -244,12 +244,13 @@ function ShareButton({
         ta.value = shareInfo.url;
         document.body.appendChild(ta);
         ta.select();
-        document.execCommand("copy");
+        const ok = document.execCommand("copy");
         document.body.removeChild(ta);
+        if (!ok) throw new Error("execCommand copy failed");
       }
       toast({ title: t("shareLinkCopied") });
     } catch {
-      toast({ title: t("shareLinkCopied") });
+      toast({ title: t("shareCopyFailed"), variant: "destructive" });
     }
   };
 
@@ -1168,11 +1169,15 @@ export default function MarketplacePage() {
         break;
     }
     const summary = parts.filter(Boolean).join(" · ");
+    const summaryLine = [
+      cat,
+      summary,
+      location ? `📍 ${location}` : "",
+    ].filter(Boolean).join(" — ");
     const lines = [
       `${t("shareBrandTagline")} — ${homepage}`,
-      `${cat}${summary ? ` — ${summary}` : ""}`,
+      summaryLine,
     ];
-    if (location) lines.push(`📍 ${location}`);
     return {
       title: `${cat} | Krashu Mitra`,
       text: lines.join("\n"),
