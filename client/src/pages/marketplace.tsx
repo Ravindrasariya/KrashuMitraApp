@@ -1202,10 +1202,6 @@ export default function MarketplacePage() {
                     )}
                   </div>
 
-                  <div className="text-xs font-medium text-foreground/70">
-                    {new Date(listing.createdAt).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN")}
-                  </div>
-
                   {(listing.ratingCount > 0) && (
                     <StarDisplay avg={listing.avgRating} count={listing.ratingCount} />
                   )}
