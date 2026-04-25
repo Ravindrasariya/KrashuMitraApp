@@ -504,42 +504,24 @@ export default function MarketplacePage() {
       data.bagMinQuantity = minQtyNum;
       data.bagPricePerBag = priceNum;
     } else if (category === "exhaust_fan") {
-      const priceStr = fanPricePerPiece.trim();
-      if (!/^\d+$/.test(priceStr)) {
-        toast({ title: t("pricePerPiece"), variant: "destructive" });
-        return;
-      }
-      const priceNum = parseInt(priceStr, 10);
-      if (priceNum < 1 || priceNum > 9999999) {
-        toast({ title: t("pricePerPiece"), variant: "destructive" });
-        return;
-      }
-      const intRange = (raw: string, min: number, max: number, label: string): number | null | "ERR" => {
+      const intReq = (raw: string, min: number, max: number, label: string): number | null => {
         const s = raw.trim();
-        if (!s) return null;
-        if (!/^\d+$/.test(s)) return "ERR";
+        if (!s || !/^\d+$/.test(s)) {
+          toast({ title: label, variant: "destructive" });
+          return null;
+        }
         const n = parseInt(s, 10);
-        if (n < min || n > max) return "ERR";
+        if (n < min || n > max) {
+          toast({ title: label, variant: "destructive" });
+          return null;
+        }
         return n;
       };
-      const fields: { val: string; min: number; max: number; key: string; label: string }[] = [
-        { val: fanWattage, min: 1, max: 10000, key: "fanWattage", label: t("fanWattage") },
-        { val: fanVoltage, min: 1, max: 1000, key: "fanVoltage", label: t("fanVoltage") },
-        { val: fanAirflowCmh, min: 1, max: 100000, key: "fanAirflowCmh", label: t("fanAirflowCmh") },
-        { val: fanBladeLengthMm, min: 1, max: 5000, key: "fanBladeLengthMm", label: t("fanBladeLength") },
-        { val: fanSpeedRpm, min: 1, max: 10000, key: "fanSpeedRpm", label: t("fanSpeedRpm") },
-        { val: fanBladeCount, min: 1, max: 50, key: "fanBladeCount", label: t("fanBladeCount") },
-        { val: fanWarrantyYears, min: 0, max: 50, key: "fanWarrantyYears", label: t("fanWarrantyYears") },
-      ];
-      for (const f of fields) {
-        const r = intRange(f.val, f.min, f.max, f.label);
-        if (r === "ERR") {
-          toast({ title: f.label, variant: "destructive" });
-          return;
-        }
-        data[f.key] = r;
+      const brandSelected = fanBrand && fanBrand !== "none" ? fanBrand : "";
+      if (!brandSelected) {
+        toast({ title: t("fanBrand"), variant: "destructive" });
+        return;
       }
-      const brandSelected = fanBrand && fanBrand !== "none" ? fanBrand : null;
       if (brandSelected === "Others") {
         const otherTrim = fanBrandOther.trim();
         if (!otherTrim) {
@@ -552,7 +534,11 @@ export default function MarketplacePage() {
         data.fanBrand = brandSelected;
         data.fanBrandOther = null;
       }
-      const colorSelected = fanColor && fanColor !== "none" ? fanColor : null;
+      const colorSelected = fanColor && fanColor !== "none" ? fanColor : "";
+      if (!colorSelected) {
+        toast({ title: t("fanColor"), variant: "destructive" });
+        return;
+      }
       if (colorSelected === "Others") {
         const otherTrim = fanColorOther.trim();
         if (!otherTrim) {
@@ -565,10 +551,30 @@ export default function MarketplacePage() {
         data.fanColor = colorSelected;
         data.fanColorOther = null;
       }
-      data.fanBladeMaterial = fanBladeMaterial.trim() || null;
-      data.fanCountryOfOrigin = fanCountryOfOrigin.trim() || null;
-      data.fanDimensions = fanDimensions.trim() || null;
-      data.fanPricePerPiece = priceNum;
+      const numFields: { val: string; min: number; max: number; key: string; label: string }[] = [
+        { val: fanWattage, min: 1, max: 10000, key: "fanWattage", label: t("fanWattage") },
+        { val: fanVoltage, min: 1, max: 1000, key: "fanVoltage", label: t("fanVoltage") },
+        { val: fanAirflowCmh, min: 1, max: 999999, key: "fanAirflowCmh", label: t("fanAirflowCmh") },
+        { val: fanBladeLengthMm, min: 1, max: 10000, key: "fanBladeLengthMm", label: t("fanBladeLength") },
+        { val: fanSpeedRpm, min: 1, max: 10000, key: "fanSpeedRpm", label: t("fanSpeedRpm") },
+        { val: fanBladeCount, min: 1, max: 50, key: "fanBladeCount", label: t("fanBladeCount") },
+        { val: fanWarrantyYears, min: 0, max: 50, key: "fanWarrantyYears", label: t("fanWarrantyYears") },
+        { val: fanPricePerPiece, min: 1, max: 999999, key: "fanPricePerPiece", label: t("pricePerPiece") },
+      ];
+      for (const f of numFields) {
+        const r = intReq(f.val, f.min, f.max, f.label);
+        if (r === null) return;
+        data[f.key] = r;
+      }
+      const bladeMat = fanBladeMaterial.trim();
+      if (!bladeMat) { toast({ title: t("fanBladeMaterial"), variant: "destructive" }); return; }
+      data.fanBladeMaterial = bladeMat.slice(0, 40);
+      const country = fanCountryOfOrigin.trim();
+      if (!country) { toast({ title: t("fanCountryOfOrigin"), variant: "destructive" }); return; }
+      data.fanCountryOfOrigin = country.slice(0, 40);
+      const dim = fanDimensions.trim();
+      if (!dim) { toast({ title: t("fanDimensions"), variant: "destructive" }); return; }
+      data.fanDimensions = dim.slice(0, 80);
     }
     if (editingListingId != null) {
       updateMutation.mutate({ id: editingListingId, data });
@@ -1822,9 +1828,9 @@ export default function MarketplacePage() {
                   <Label className="text-sm">{t("fanDimensions")}</Label>
                   <Input
                     value={fanDimensions}
-                    onChange={(e) => setFanDimensions(e.target.value.slice(0, 60))}
+                    onChange={(e) => setFanDimensions(e.target.value.slice(0, 80))}
                     placeholder={t("fanDimensionsPlaceholder")}
-                    maxLength={60}
+                    maxLength={80}
                     data-testid="input-fan-dimensions"
                   />
                 </div>
@@ -1834,7 +1840,7 @@ export default function MarketplacePage() {
                     type="number"
                     inputMode="numeric"
                     min={1}
-                    max={9999999}
+                    max={999999}
                     value={fanPricePerPiece}
                     onChange={(e) => setFanPricePerPiece(e.target.value)}
                     placeholder="0"

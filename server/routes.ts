@@ -1876,8 +1876,8 @@ Respond in this structure:
       let parsedFanDimensions: string | null = null;
       let parsedFanPricePerPiece: number | null = null;
       if (category === "exhaust_fan") {
-        const intRange = (raw: any, min: number, max: number, label: string): number | null => {
-          if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+        const intRangeReq = (raw: any, min: number, max: number, label: string): number => {
+          if (raw === undefined || raw === null || String(raw).trim() === "") throw new Error(`${label} required`);
           const s = String(raw).trim();
           if (!/^\d+$/.test(s)) throw new Error(`Invalid ${label}`);
           const n = parseInt(s, 10);
@@ -1885,43 +1885,52 @@ Respond in this structure:
           return n;
         };
         try {
-          if (fanBrand !== undefined && fanBrand !== null && String(fanBrand).trim() !== "" && String(fanBrand) !== "none") {
-            if (!MARKETPLACE_FAN_BRANDS.includes(String(fanBrand) as typeof MARKETPLACE_FAN_BRANDS[number])) {
-              return res.status(400).json({ message: "Invalid fanBrand" });
-            }
-            parsedFanBrand = String(fanBrand);
-            if (parsedFanBrand === "Others") {
-              const otherStr = typeof fanBrandOther === "string" ? fanBrandOther.trim() : "";
-              if (!otherStr) return res.status(400).json({ message: "fanBrandOther required when Others is selected" });
-              if (otherStr.length > 40) return res.status(400).json({ message: "fanBrandOther must be 40 characters or fewer" });
-              parsedFanBrandOther = otherStr;
-            }
+          if (fanBrand === undefined || fanBrand === null || String(fanBrand).trim() === "" || String(fanBrand) === "none") {
+            return res.status(400).json({ message: "fanBrand required for exhaust_fan" });
           }
-          if (fanColor !== undefined && fanColor !== null && String(fanColor).trim() !== "" && String(fanColor) !== "none") {
-            if (!MARKETPLACE_FAN_COLORS.includes(String(fanColor) as typeof MARKETPLACE_FAN_COLORS[number])) {
-              return res.status(400).json({ message: "Invalid fanColor" });
-            }
-            parsedFanColor = String(fanColor);
-            if (parsedFanColor === "Others") {
-              const otherStr = typeof fanColorOther === "string" ? fanColorOther.trim() : "";
-              if (!otherStr) return res.status(400).json({ message: "fanColorOther required when Others is selected" });
-              if (otherStr.length > 40) return res.status(400).json({ message: "fanColorOther must be 40 characters or fewer" });
-              parsedFanColorOther = otherStr;
-            }
+          if (!MARKETPLACE_FAN_BRANDS.includes(String(fanBrand) as typeof MARKETPLACE_FAN_BRANDS[number])) {
+            return res.status(400).json({ message: "Invalid fanBrand" });
           }
-          parsedFanWattage = intRange(fanWattage, 1, 10000, "fanWattage");
-          parsedFanVoltage = intRange(fanVoltage, 1, 1000, "fanVoltage");
-          parsedFanAirflowCmh = intRange(fanAirflowCmh, 1, 100000, "fanAirflowCmh");
-          parsedFanBladeLengthMm = intRange(fanBladeLengthMm, 1, 5000, "fanBladeLengthMm");
-          parsedFanSpeedRpm = intRange(fanSpeedRpm, 1, 10000, "fanSpeedRpm");
-          parsedFanBladeCount = intRange(fanBladeCount, 1, 50, "fanBladeCount");
-          parsedFanWarrantyYears = intRange(fanWarrantyYears, 0, 50, "fanWarrantyYears");
-          const priceN = intRange(fanPricePerPiece, 1, 9999999, "fanPricePerPiece");
-          if (priceN === null) return res.status(400).json({ message: "Invalid fanPricePerPiece" });
-          parsedFanPricePerPiece = priceN;
-          if (typeof fanBladeMaterial === "string" && fanBladeMaterial.trim()) parsedFanBladeMaterial = fanBladeMaterial.trim().slice(0, 40);
-          if (typeof fanCountryOfOrigin === "string" && fanCountryOfOrigin.trim()) parsedFanCountryOfOrigin = fanCountryOfOrigin.trim().slice(0, 40);
-          if (typeof fanDimensions === "string" && fanDimensions.trim()) parsedFanDimensions = fanDimensions.trim().slice(0, 60);
+          parsedFanBrand = String(fanBrand);
+          if (parsedFanBrand === "Others") {
+            const otherStr = typeof fanBrandOther === "string" ? fanBrandOther.trim() : "";
+            if (!otherStr) return res.status(400).json({ message: "fanBrandOther required when Others is selected" });
+            if (otherStr.length > 40) return res.status(400).json({ message: "fanBrandOther must be 40 characters or fewer" });
+            parsedFanBrandOther = otherStr;
+          }
+          if (fanColor === undefined || fanColor === null || String(fanColor).trim() === "" || String(fanColor) === "none") {
+            return res.status(400).json({ message: "fanColor required for exhaust_fan" });
+          }
+          if (!MARKETPLACE_FAN_COLORS.includes(String(fanColor) as typeof MARKETPLACE_FAN_COLORS[number])) {
+            return res.status(400).json({ message: "Invalid fanColor" });
+          }
+          parsedFanColor = String(fanColor);
+          if (parsedFanColor === "Others") {
+            const otherStr = typeof fanColorOther === "string" ? fanColorOther.trim() : "";
+            if (!otherStr) return res.status(400).json({ message: "fanColorOther required when Others is selected" });
+            if (otherStr.length > 40) return res.status(400).json({ message: "fanColorOther must be 40 characters or fewer" });
+            parsedFanColorOther = otherStr;
+          }
+          parsedFanWattage = intRangeReq(fanWattage, 1, 10000, "fanWattage");
+          parsedFanVoltage = intRangeReq(fanVoltage, 1, 1000, "fanVoltage");
+          parsedFanAirflowCmh = intRangeReq(fanAirflowCmh, 1, 999999, "fanAirflowCmh");
+          parsedFanBladeLengthMm = intRangeReq(fanBladeLengthMm, 1, 10000, "fanBladeLengthMm");
+          parsedFanSpeedRpm = intRangeReq(fanSpeedRpm, 1, 10000, "fanSpeedRpm");
+          parsedFanBladeCount = intRangeReq(fanBladeCount, 1, 50, "fanBladeCount");
+          parsedFanWarrantyYears = intRangeReq(fanWarrantyYears, 0, 50, "fanWarrantyYears");
+          parsedFanPricePerPiece = intRangeReq(fanPricePerPiece, 1, 999999, "fanPricePerPiece");
+          const bladeMatStr = typeof fanBladeMaterial === "string" ? fanBladeMaterial.trim() : "";
+          if (!bladeMatStr) return res.status(400).json({ message: "fanBladeMaterial required for exhaust_fan" });
+          if (bladeMatStr.length > 40) return res.status(400).json({ message: "fanBladeMaterial must be 40 characters or fewer" });
+          parsedFanBladeMaterial = bladeMatStr;
+          const countryStr = typeof fanCountryOfOrigin === "string" ? fanCountryOfOrigin.trim() : "";
+          if (!countryStr) return res.status(400).json({ message: "fanCountryOfOrigin required for exhaust_fan" });
+          if (countryStr.length > 40) return res.status(400).json({ message: "fanCountryOfOrigin must be 40 characters or fewer" });
+          parsedFanCountryOfOrigin = countryStr;
+          const dimStr = typeof fanDimensions === "string" ? fanDimensions.trim() : "";
+          if (!dimStr) return res.status(400).json({ message: "fanDimensions required for exhaust_fan" });
+          if (dimStr.length > 80) return res.status(400).json({ message: "fanDimensions must be 80 characters or fewer" });
+          parsedFanDimensions = dimStr;
         } catch (e: any) {
           return res.status(400).json({ message: e?.message || "Invalid exhaust_fan field" });
         }
@@ -2270,13 +2279,13 @@ Respond in this structure:
 
           if (fanWattage !== undefined) parsedFanWattagePatch = intRangePatch(fanWattage, 1, 10000, "fanWattage");
           if (fanVoltage !== undefined) parsedFanVoltagePatch = intRangePatch(fanVoltage, 1, 1000, "fanVoltage");
-          if (fanAirflowCmh !== undefined) parsedFanAirflowCmhPatch = intRangePatch(fanAirflowCmh, 1, 100000, "fanAirflowCmh");
-          if (fanBladeLengthMm !== undefined) parsedFanBladeLengthMmPatch = intRangePatch(fanBladeLengthMm, 1, 5000, "fanBladeLengthMm");
+          if (fanAirflowCmh !== undefined) parsedFanAirflowCmhPatch = intRangePatch(fanAirflowCmh, 1, 999999, "fanAirflowCmh");
+          if (fanBladeLengthMm !== undefined) parsedFanBladeLengthMmPatch = intRangePatch(fanBladeLengthMm, 1, 10000, "fanBladeLengthMm");
           if (fanSpeedRpm !== undefined) parsedFanSpeedRpmPatch = intRangePatch(fanSpeedRpm, 1, 10000, "fanSpeedRpm");
           if (fanBladeCount !== undefined) parsedFanBladeCountPatch = intRangePatch(fanBladeCount, 1, 50, "fanBladeCount");
           if (fanWarrantyYears !== undefined) parsedFanWarrantyYearsPatch = intRangePatch(fanWarrantyYears, 0, 50, "fanWarrantyYears");
           if (fanPricePerPiece !== undefined) {
-            const priceN = intRangePatch(fanPricePerPiece, 1, 9999999, "fanPricePerPiece");
+            const priceN = intRangePatch(fanPricePerPiece, 1, 999999, "fanPricePerPiece");
             if (priceN === null) return res.status(400).json({ message: "fanPricePerPiece required for exhaust_fan" });
             parsedFanPricePerPiecePatch = priceN;
           }
