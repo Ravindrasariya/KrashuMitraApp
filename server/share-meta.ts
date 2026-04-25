@@ -111,6 +111,7 @@ interface MetaPayload {
   imageUrl: string;
   imageWidth?: number;
   imageHeight?: number;
+  imageMime?: string;
   type: "website" | "product";
   cardType: "summary" | "summary_large_image";
 }
@@ -159,7 +160,7 @@ function injectMeta(html: string, meta: MetaPayload): string {
     additions.push(
       `<meta property="og:image:width" content="${meta.imageWidth}" />`,
       `<meta property="og:image:height" content="${meta.imageHeight}" />`,
-      `<meta property="og:image:type" content="image/png" />`,
+      `<meta property="og:image:type" content="${meta.imageMime || "image/png"}" />`,
     );
   }
   const additionsHtml = additions.join("\n    ");
@@ -218,27 +219,18 @@ function buildBrandMeta(origin: string, pathPart: string): MetaPayload {
 function buildListingMeta(
   origin: string,
   listing: MarketplaceListing,
-  hasPhoto: boolean,
+  _hasPhoto: boolean,
 ): MetaPayload {
   const { title, description } = summarizeListing(listing);
   const url = `${origin}/marketplace?listing=${listing.id}`;
-  if (hasPhoto) {
-    return {
-      title,
-      description,
-      url,
-      imageUrl: `${origin}/api/marketplace/${listing.id}/image?index=0`,
-      type: "product",
-      cardType: "summary_large_image",
-    };
-  }
   return {
     title,
     description,
     url,
-    imageUrl: `${origin}${SHARE_COVER_PATH}`,
+    imageUrl: `${origin}/api/marketplace/${listing.id}/share-image`,
     imageWidth: SHARE_COVER_WIDTH,
     imageHeight: SHARE_COVER_HEIGHT,
+    imageMime: "image/jpeg",
     type: "product",
     cardType: "summary_large_image",
   };

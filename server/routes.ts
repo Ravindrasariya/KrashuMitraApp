@@ -23,6 +23,7 @@ import {
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import sharp from "sharp";
+import { composeListingShareImage, getListingShareImageMeta } from "./share-image";
 
 async function compressOnionImageForStorage(
   base64Data: string,
@@ -1722,6 +1723,34 @@ Respond in this structure:
       res.send(buffer);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch image" });
+    }
+  });
+
+  app.get("/api/marketplace/:id/share-image", async (req: any, res) => {
+    try {
+      const raw = String(req.params.id ?? "");
+      if (!/^\d+$/.test(raw)) {
+        return res.status(400).json({ message: "Invalid listing id" });
+      }
+      const listingId = parseInt(raw, 10);
+      const meta = await getListingShareImageMeta(listingId);
+      if (!meta) {
+        return res.status(404).json({ message: "Listing not found" });
+      }
+      const ifNoneMatch = req.headers["if-none-match"];
+      if (typeof ifNoneMatch === "string" && ifNoneMatch === meta.etag) {
+        res.setHeader("ETag", meta.etag);
+        res.setHeader("Cache-Control", "public, max-age=3600, must-revalidate");
+        return res.status(304).end();
+      }
+      const result = await composeListingShareImage(meta);
+      res.setHeader("Content-Type", result.contentType);
+      res.setHeader("Cache-Control", "public, max-age=3600, must-revalidate");
+      res.setHeader("ETag", result.etag);
+      res.send(result.buffer);
+    } catch (error) {
+      console.error("[share-image] failed:", error);
+      res.status(500).json({ message: "Failed to compose share image" });
     }
   });
 
