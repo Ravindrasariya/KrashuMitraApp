@@ -1293,7 +1293,6 @@ export default function MarketplacePage() {
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={handleFileSelect}
         data-testid="input-listing-photo"
