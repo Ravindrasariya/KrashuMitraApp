@@ -289,19 +289,21 @@ export function pingMetaScrape(url: string): void {
 }
 
 /**
- * Ping Meta's scrape endpoint for both the un-versioned and versioned share
- * URLs of a listing. The un-versioned URL is what's actually cached in old
- * WhatsApp messages (the only one that existed before per-listing share
- * versions were introduced); the versioned URL is what new shares use, so
- * pre-warming both means the next viewer of *either* link gets fresh
- * preview data.
+ * Ping Meta's scrape endpoint for a listing's canonical share URL so any
+ * already-shared WhatsApp / Facebook messages start showing the up-to-date
+ * preview card within seconds. Fire-and-forget; failures are swallowed.
+ *
+ * The second `_shareVersion` parameter is intentionally ignored — kept only
+ * so existing call sites compile unchanged. See Task #76 in `replit.md`:
+ * client share URLs no longer carry a `&v=<token>` cache-bust query param,
+ * so there's no second versioned URL to ping. Old shares already in
+ * WhatsApp threads with `&v=...` are still rendered correctly because the
+ * server-side OG injector (`maybeInjectListingMeta` + `buildListingMeta`)
+ * still parses and echoes `v` defensively.
  */
-export function pingListingShareCache(listingId: number, shareVersion?: string | null): void {
+export function pingListingShareCache(listingId: number, _shareVersion?: string | null): void {
   const origin = canonicalShareOrigin();
   pingMetaScrape(`${origin}/marketplace?listing=${listingId}`);
-  if (shareVersion) {
-    pingMetaScrape(`${origin}/marketplace?listing=${listingId}&v=${shareVersion}`);
-  }
 }
 
 function buildBrandMeta(origin: string, pathPart: string): MetaPayload {

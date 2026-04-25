@@ -42,19 +42,13 @@ type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & {
   photoCount: number;
   avgRating: number;
   ratingCount: number;
-  // Stable per-listing cache-bust token computed by the server. Same content +
-  // same photo set → same token. The server folds in createdAt + every
-  // share-card-relevant content field + the listing's photo IDs (so adding,
-  // removing, or replacing a photo all change the token even when the count
-  // stays the same). The client just appends it as `&v=...` on share URLs so
-  // WhatsApp / Facebook re-scrape after a real edit but reuse their cache when
-  // the listing is unchanged.
+  // Server still computes and returns this; we keep the field so the API
+  // response type stays accurate and so the server can continue using it
+  // for its own ETag / cache-key purposes. The client no longer appends
+  // it to share URLs — see composeShareInfo and the Task #76 doc note in
+  // replit.md for why.
   shareVersion?: string;
 };
-
-function computeListingShareVersion(l: ListingNoPhoto): string {
-  return l.shareVersion ?? `l${l.id}`;
-}
 
 const POTATO_VARIETIES = ["CS3", "CS1", "Torus", "Pukhraj", "Jyoti", "Lakar", "Others"];
 const POTATO_BRANDS = ["Merino", "Technico", "Uttkal", "Jain", "Jalandhar", "Merath"];
@@ -1179,16 +1173,15 @@ export default function MarketplacePage() {
   const composeShareInfo = (listing: ListingNoPhoto): ShareInfo => {
     const envBase = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined)?.replace(/\/+$/, "");
     const origin = envBase || "https://km.krashuved.com";
-    // Append a per-listing version token so WhatsApp / Facebook treat the
-    // URL as new whenever the listing's content actually changes. Their
-    // preview cache is keyed by the exact URL and held for ~7 days, so
-    // without this any prior cached preview (e.g. one fetched while prod
-    // was misconfigured) sticks forever. The token is a stable fingerprint
-    // of the listing's content + photo count, so two shares of the same
-    // unchanged listing produce the same URL (and therefore share the same
-    // upstream cache entry — no pollution).
-    const v = computeListingShareVersion(listing);
-    const url = `${origin}/marketplace?listing=${listing.id}&v=${v}`;
+    // Keep the share URL short and stable. Earlier work appended a per-listing
+    // `&v=<token>` cache-bust parameter, but in practice that only helps when
+    // the receiver already has a previous version of the link cached on their
+    // device — and in the seller→buyer flow the receiver almost always sees
+    // the link for the first time. Freshness on Meta's side is handled by the
+    // server-side sharing-debugger ping fired after every create/edit/delete
+    // (see server/share-meta.ts:pingListingShareCache). See Task #76 in
+    // replit.md.
+    const url = `${origin}/marketplace?listing=${listing.id}`;
     const cat = categoryLabel(listing.category);
     return {
       title: `${cat} | KrashuVed`,
