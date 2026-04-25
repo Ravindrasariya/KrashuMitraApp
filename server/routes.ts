@@ -24,6 +24,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import sharp from "sharp";
 import { composeListingShareImage, getListingShareImageMeta, computeShareVersion } from "./share-image";
+import { pingListingShareCache } from "./share-meta";
 
 async function compressOnionImageForStorage(
   base64Data: string,
@@ -2099,6 +2100,9 @@ Respond in this structure:
 
       const photoIds = await storage.getListingPhotoIds(listing.id);
       const shareVersion = computeShareVersion(listing, { photoIds });
+      // Best-effort: ask Meta to re-scrape the share URL so any old WhatsApp
+      // messages linking to this listing pick up the fresh preview card.
+      pingListingShareCache(listing.id, shareVersion);
       const { photoData: _, ...listingWithoutPhoto } = listing;
       res.status(201).json({ ...listingWithoutPhoto, photoCount: photoIds.length, shareVersion });
     } catch (error) {
@@ -2485,6 +2489,9 @@ Respond in this structure:
       const refreshed = await storage.getMarketplaceListing(existing.id);
       const photoIds = await storage.getListingPhotoIds(existing.id);
       const shareVersion = computeShareVersion(refreshed!, { photoIds });
+      // Best-effort: ask Meta to re-scrape the share URL so already-shared
+      // WhatsApp messages refresh to the latest preview card after this edit.
+      pingListingShareCache(existing.id, shareVersion);
       const { photoData: _, ...listingWithoutPhoto } = refreshed!;
       res.json({ ...listingWithoutPhoto, photoCount: photoIds.length, shareVersion });
     } catch (error) {
@@ -2502,7 +2509,15 @@ Respond in this structure:
       if (listing.sellerId !== userId && !requester?.isAdmin) {
         return res.status(403).json({ message: "Not authorized" });
       }
+      // Capture the share version *before* deletion so we can flush both
+      // the un-versioned URL (cached in old WhatsApp messages) and the
+      // versioned URL (used by recent shares) from Meta's preview cache.
+      const photoIdsBeforeDelete = await storage.getListingPhotoIds(listing.id);
+      const shareVersion = computeShareVersion(listing, { photoIds: photoIdsBeforeDelete });
       await storage.deleteMarketplaceListing(listing.id);
+      // Best-effort: flush Meta's cache so old WhatsApp shares stop showing
+      // a now-deactivated listing's preview and fall back to the brand card.
+      pingListingShareCache(listing.id, shareVersion);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete listing" });

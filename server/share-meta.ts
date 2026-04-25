@@ -236,6 +236,12 @@ interface MetaRequestLike {
 
 const CANONICAL_ORIGIN = "https://km.krashuved.com";
 
+function canonicalShareOrigin(): string {
+  const envBase = process.env.PUBLIC_BASE_URL?.trim();
+  if (envBase) return envBase.replace(/\/+$/, "");
+  return CANONICAL_ORIGIN;
+}
+
 function resolveOrigin(req: MetaRequestLike): string {
   const envBase = process.env.PUBLIC_BASE_URL?.trim();
   if (envBase) {
@@ -251,6 +257,51 @@ function resolveOrigin(req: MetaRequestLike): string {
     return allowedHosts.includes(host) ? `${req.protocol}://${host}` : CANONICAL_ORIGIN;
   }
   return CANONICAL_ORIGIN;
+}
+
+/**
+ * Fire-and-forget POST to Meta's Sharing-Debugger Graph endpoint to flush the
+ * preview cache for a given URL. WhatsApp / Facebook keep cached previews for
+ * ~7 days and won't re-fetch on their own; pinging this endpoint after a
+ * listing is created, edited, or deactivated forces them to re-scrape, so
+ * any *already-shared* WhatsApp message linking to that URL starts showing
+ * the up-to-date preview within seconds — no manual debugger work needed.
+ *
+ * Best-effort: failures are swallowed and logged at warn level. Never await
+ * this from a request handler; never let it block the seller's edit.
+ */
+export function pingMetaScrape(url: string): void {
+  if (process.env.NODE_ENV === "test") return;
+  const endpoint = `https://graph.facebook.com/?id=${encodeURIComponent(url)}&scrape=true`;
+  // Node 18+ has a global fetch; we don't await — fire-and-forget.
+  void fetch(endpoint, { method: "POST" })
+    .then(async (res) => {
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.warn(
+          `[share-meta] Meta scrape ping returned ${res.status} for ${url}: ${body.slice(0, 200)}`,
+        );
+      }
+    })
+    .catch((err) => {
+      console.warn(`[share-meta] Meta scrape ping failed for ${url}:`, err?.message || err);
+    });
+}
+
+/**
+ * Ping Meta's scrape endpoint for both the un-versioned and versioned share
+ * URLs of a listing. The un-versioned URL is what's actually cached in old
+ * WhatsApp messages (the only one that existed before per-listing share
+ * versions were introduced); the versioned URL is what new shares use, so
+ * pre-warming both means the next viewer of *either* link gets fresh
+ * preview data.
+ */
+export function pingListingShareCache(listingId: number, shareVersion?: string | null): void {
+  const origin = canonicalShareOrigin();
+  pingMetaScrape(`${origin}/marketplace?listing=${listingId}`);
+  if (shareVersion) {
+    pingMetaScrape(`${origin}/marketplace?listing=${listingId}&v=${shareVersion}`);
+  }
 }
 
 function buildBrandMeta(origin: string, pathPart: string): MetaPayload {

@@ -166,6 +166,7 @@ The application follows a client-server architecture:
   - `PUBLIC_BASE_URL=https://km.krashuved.com` — overrides the server-side origin used for `og:url` and `og:image`.
   - `VITE_PUBLIC_BASE_URL=https://km.krashuved.com` — overrides the client `composeShareInfo` origin at build time.
   - `SHARE_ALLOWED_HOSTS=km.krashuved.com` — when set (and `PUBLIC_BASE_URL` is unset), allows the request host to be used for OG meta if it matches; otherwise falls back to the canonical origin.
+- **Auto-refresh of WhatsApp / Facebook preview cache**: after a seller creates, edits, or deactivates a listing, the server fires a fire-and-forget `POST` to `https://graph.facebook.com/?id=<encoded URL>&scrape=true` for both the un-versioned share URL (`<canonical-origin>/marketplace?listing=<id>`) and the new versioned URL (`...&v=<shareVersion>`). This tells Meta to flush its preview cache for those URLs so any **already-shared** WhatsApp messages start showing the up-to-date preview card within seconds — no manual Facebook Sharing Debugger work needed. Implementation lives in `server/share-meta.ts` (`pingMetaScrape`, `pingListingShareCache`); failures are swallowed and logged at warn level (Meta is best-effort and never blocks the seller's edit). Skipped when `NODE_ENV=test`. Outbound traffic is tiny — at most 2 HTTP POSTs per create/edit/delete, no body, no auth header.
 
 ## AI Crop Suggestions
 - Endpoint: `GET /api/crop-cards/:id/suggestions?lat={lat}&lng={lng}&lang={hi|en}`
