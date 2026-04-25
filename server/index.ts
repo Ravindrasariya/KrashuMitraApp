@@ -7,6 +7,7 @@ import cron from "node-cron";
 import { storage } from "./storage";
 
 const app = express();
+app.set("trust proxy", true);
 const httpServer = createServer(app);
 
 declare module "http" {

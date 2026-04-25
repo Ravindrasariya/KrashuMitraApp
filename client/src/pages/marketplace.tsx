@@ -20,7 +20,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2, Package, Fan } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2, Package, Fan, Share2, Mail, Link2 } from "lucide-react";
+import { SiWhatsapp } from "react-icons/si";
 import { cn } from "@/lib/utils";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import {
@@ -194,6 +195,136 @@ function InteractiveStars({ currentRating, onRate, disabled }: { currentRating: 
   );
 }
 
+interface ShareInfo {
+  title: string;
+  text: string;
+  url: string;
+  emailSubject: string;
+}
+
+function ShareButton({
+  shareInfo,
+  variant,
+  testId,
+}: {
+  shareInfo: ShareInfo;
+  variant: "card" | "detail";
+  testId: string;
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [popoverOpen, setPopoverOpen] = useState(false);
+
+  const fullText = `${shareInfo.text}\n${shareInfo.url}`;
+
+  const tryNativeShare = async () => {
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: shareInfo.title,
+          text: shareInfo.text,
+          url: shareInfo.url,
+        });
+        return true;
+      } catch (err: any) {
+        if (err && err.name === "AbortError") return true;
+        return false;
+      }
+    }
+    return false;
+  };
+
+  const copyLink = async () => {
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareInfo.url);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = shareInfo.url;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      toast({ title: t("shareLinkCopied") });
+    } catch {
+      toast({ title: t("shareLinkCopied") });
+    }
+  };
+
+  const openWhatsapp = () => {
+    const url = `https://wa.me/?text=${encodeURIComponent(fullText)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const openEmail = () => {
+    const subject = encodeURIComponent(shareInfo.emailSubject);
+    const body = encodeURIComponent(fullText);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  const handleShareClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ok = await tryNativeShare();
+    if (!ok) setPopoverOpen(true);
+  };
+
+  const triggerClass =
+    variant === "card"
+      ? "h-7 w-7 rounded-md hover:bg-accent flex items-center justify-center"
+      : "h-9 w-9 rounded-md hover:bg-accent flex items-center justify-center border";
+
+  return (
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={t("shareListing")}
+          title={t("shareListing")}
+          className={triggerClass}
+          onClick={handleShareClick}
+          data-testid={testId}
+        >
+          <Share2 className={variant === "card" ? "w-3.5 h-3.5 text-primary" : "w-4 h-4 text-primary"} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-48 p-1"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:bg-accent"
+          onClick={() => { setPopoverOpen(false); openWhatsapp(); }}
+          data-testid={`${testId}-whatsapp`}
+        >
+          <SiWhatsapp className="w-4 h-4 text-[#25D366]" />
+          <span>{t("shareViaWhatsapp")}</span>
+        </button>
+        <button
+          type="button"
+          className="w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:bg-accent"
+          onClick={() => { setPopoverOpen(false); openEmail(); }}
+          data-testid={`${testId}-email`}
+        >
+          <Mail className="w-4 h-4 text-primary" />
+          <span>{t("shareViaEmail")}</span>
+        </button>
+        <button
+          type="button"
+          className="w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:bg-accent"
+          onClick={async () => { setPopoverOpen(false); await copyLink(); }}
+          data-testid={`${testId}-copy`}
+        >
+          <Link2 className="w-4 h-4 text-primary" />
+          <span>{t("shareCopyLink")}</span>
+        </button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function MarketplacePage() {
   const { t, language } = useTranslation();
   const { isAuthenticated, user } = useAuth();
@@ -249,6 +380,7 @@ export default function MarketplacePage() {
   const [contactInfo, setContactInfo] = useState<{ [id: number]: { name: string; phone: string; farmerCode: string; sellerAvgRating?: number; sellerRatingCount?: number } }>({});
   const [contactLoading, setContactLoading] = useState<number | null>(null);
   const [detailListing, setDetailListing] = useState<ListingNoPhoto | null>(null);
+  const [pendingListingId, setPendingListingId] = useState<number | null>(null);
   const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxListing, setLightboxListing] = useState<ListingNoPhoto | null>(null);
@@ -924,6 +1056,128 @@ export default function MarketplacePage() {
 
   const sortLabel = sortBy === "latest" ? t("sortLatest") : sortBy === "nearest" ? t("sortNearest") : t("sortOldest");
 
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const raw = params.get("listing");
+      const lid = raw ? parseInt(raw, 10) : NaN;
+      if (!lid || Number.isNaN(lid)) {
+        setDetailListing(null);
+        setPendingListingId(null);
+      } else {
+        setPendingListingId(lid);
+      }
+    };
+    syncFromUrl();
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingListingId) return;
+    if (detailListing && detailListing.id === pendingListingId) {
+      setPendingListingId(null);
+      return;
+    }
+    const found = listings.find(l => l.id === pendingListingId);
+    if (found) {
+      setDetailListing(found);
+      setDetailPhotoIndex(0);
+      setPendingListingId(null);
+    } else if (!isLoading && filterCategory !== "all") {
+      setFilterCategory("all");
+    } else if (!isLoading && filterCategory === "all") {
+      setPendingListingId(null);
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has("listing")) {
+          params.delete("listing");
+          const newUrl = params.toString()
+            ? `${window.location.pathname}?${params.toString()}`
+            : window.location.pathname;
+          window.history.replaceState(null, "", newUrl);
+        }
+      } catch {}
+    }
+  }, [pendingListingId, listings, detailListing, isLoading, filterCategory]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cur = params.get("listing");
+    const curId = cur ? parseInt(cur, 10) : null;
+    if (detailListing) {
+      if (curId !== detailListing.id) {
+        params.set("listing", String(detailListing.id));
+        const newUrl = `${window.location.pathname}?${params.toString()}`;
+        window.history.pushState({ listingId: detailListing.id }, "", newUrl);
+      }
+    } else {
+      if (cur) {
+        params.delete("listing");
+        const qs = params.toString();
+        const newUrl = window.location.pathname + (qs ? `?${qs}` : "");
+        window.history.replaceState(null, "", newUrl);
+      }
+    }
+  }, [detailListing]);
+
+  const composeShareInfo = (listing: ListingNoPhoto): ShareInfo => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/marketplace?listing=${listing.id}`;
+    const cat = categoryLabel(listing.category);
+    const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");
+    const parts: string[] = [];
+    switch (listing.category) {
+      case "onion_seedling":
+        if (listing.quantityBigha) parts.push(`${listing.quantityBigha} ${t("bigha")}`);
+        if (listing.availableAfterDays != null) parts.push(`${listing.availableAfterDays} ${t("daysAvailable")}`);
+        if (listing.onionType) parts.push(listing.onionType);
+        break;
+      case "potato":
+      case "potato_seed":
+        if (listing.quantityBags) parts.push(`${listing.quantityBags} ${t("bags")}`);
+        if (listing.potatoVariety) parts.push(hn(listing.potatoVariety) || "");
+        if (listing.potatoBrand) parts.push(hn(listing.potatoBrand) || "");
+        break;
+      case "onion_seed":
+        if (listing.onionSeedPricePerKg != null) parts.push(formatPrice(listing.onionSeedPricePerKg) || "");
+        if (listing.onionSeedType) parts.push(hn(listing.onionSeedType) || "");
+        if (listing.onionSeedVariety) parts.push(hn(listing.onionSeedVariety) || "");
+        break;
+      case "soyabean_seed":
+        if (listing.soyabeanSeedPricePerQuintal != null) parts.push(formatPricePerQuintal(listing.soyabeanSeedPricePerQuintal) || "");
+        if (listing.soyabeanSeedDuration) parts.push(soyabeanDurationLabel(listing.soyabeanSeedDuration) || "");
+        if (listing.soyabeanSeedVariety) parts.push(listing.soyabeanSeedVariety);
+        break;
+      case "bardan_bag":
+        if (listing.bagPricePerBag != null) {
+          parts.push(language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`);
+        }
+        if (listing.bagMaterialType) parts.push(bagMaterialLabel(listing.bagMaterialType) || "");
+        if (listing.bagDimension) parts.push(listing.bagDimension);
+        break;
+      case "exhaust_fan":
+        if (listing.fanPricePerPiece != null) {
+          parts.push(language === "hi" ? `₹${listing.fanPricePerPiece} / पीस` : `₹${listing.fanPricePerPiece} / piece`);
+        }
+        if (listing.fanBrand) parts.push(fanBrandText(listing.fanBrand, listing.fanBrandOther) || "");
+        if (listing.fanWattage != null) parts.push(`${listing.fanWattage} W`);
+        break;
+    }
+    const summary = parts.filter(Boolean).join(" · ");
+    const lines = [
+      t("shareBrandTagline"),
+      `${cat}${summary ? ` — ${summary}` : ""}`,
+    ];
+    if (location) lines.push(`📍 ${location}`);
+    return {
+      title: `${cat} | Krashu Mitra`,
+      text: lines.join("\n"),
+      url,
+      emailSubject: t("shareEmailSubject"),
+    };
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-3 py-4 pb-24 md:pb-6" data-testid="page-marketplace">
       <div className="flex items-center justify-between mb-3">
@@ -1248,35 +1502,41 @@ export default function MarketplacePage() {
                     {!isAuthenticated && (
                       <span className="text-[9px] text-muted-foreground">{t("loginToContact")}</span>
                     )}
-                    {canManage && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="ml-auto"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(listing);
-                          }}
-                          data-testid={`button-edit-listing-${listing.id}`}
-                        >
-                          <Pencil className="w-3 h-3 text-primary" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm(t("deleteListingConfirm"))) {
-                              deleteMutation.mutate(listing.id);
-                            }
-                          }}
-                          data-testid={`button-delete-listing-${listing.id}`}
-                        >
-                          <Trash2 className="w-3 h-3 text-destructive" />
-                        </Button>
-                      </>
-                    )}
+                    <div className="ml-auto flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                      <ShareButton
+                        shareInfo={composeShareInfo(listing)}
+                        variant="card"
+                        testId={`button-share-listing-${listing.id}`}
+                      />
+                      {canManage && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditDialog(listing);
+                            }}
+                            data-testid={`button-edit-listing-${listing.id}`}
+                          >
+                            <Pencil className="w-3 h-3 text-primary" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(t("deleteListingConfirm"))) {
+                                deleteMutation.mutate(listing.id);
+                              }
+                            }}
+                            data-testid={`button-delete-listing-${listing.id}`}
+                          >
+                            <Trash2 className="w-3 h-3 text-destructive" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div
@@ -1952,6 +2212,13 @@ export default function MarketplacePage() {
                             {t("myListing")}
                           </Badge>
                         )}
+                        <div className="ml-auto">
+                          <ShareButton
+                            shareInfo={composeShareInfo(listing)}
+                            variant="detail"
+                            testId="button-share-detail"
+                          />
+                        </div>
                       </div>
 
                       {isOnion && (
