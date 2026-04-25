@@ -932,9 +932,7 @@ export default function MarketplacePage() {
                     {isBardanBag && (
                       <>
                         <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
-                          {listing.bagPricePerBag != null
-                            ? (language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`)
-                            : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
+                          {language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`}
                         </p>
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[bagCommodityLabel(listing.bagCommodityType), bagMaterialLabel(listing.bagMaterialType)].filter(Boolean).join(" · ") || "—"}
@@ -1526,9 +1524,7 @@ export default function MarketplacePage() {
                       {isBardanBag && (
                         <div>
                           <p className="text-xl font-bold" data-testid="text-detail-price">
-                            {listing.bagPricePerBag != null
-                              ? (language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`)
-                              : <span className="text-foreground/70">{t("contactForPrice")}</span>}
+                            {language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`}
                           </p>
                           {listing.bagCommodityType && (
                             <p className="text-sm font-medium">{t("bagCommodityType")}: {bagCommodityLabel(listing.bagCommodityType)}</p>
