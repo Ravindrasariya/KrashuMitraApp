@@ -11,9 +11,12 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // index: false ensures `/` and `/<route>/` requests are NOT auto-served
+  // as the raw index.html — they fall through to our catch-all below so
+  // share-meta can inject absolute OG tags for crawlers (WhatsApp, etc.).
+  app.use(express.static(distPath, { index: false }));
 
-  // fall through to index.html if the file doesn't exist
+  // fall through to index.html for SPA routes; injects share-meta for HTML
   app.use("/{*path}", async (req, res) => {
     try {
       const indexPath = path.resolve(distPath, "index.html");
