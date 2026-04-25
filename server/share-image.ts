@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import { execSync } from "node:child_process";
 import { storage } from "./storage";
 import type { MarketplaceListing, MarketplacePhoto } from "@shared/schema";
+import { extractListingDetailFacts, type ListingDetailFact } from "./share-meta";
 
 const W = 1200;
 const H = 630;
@@ -80,46 +81,46 @@ const FAN_BRAND_LABEL: Record<string, string> = {
 };
 const CONTACT_FOR_PRICE = "मूल्य के लिए संपर्क करें";
 
-function detailParts(l: MarketplaceListing): string[] {
-  const parts: string[] = [];
-  switch (l.category) {
-    case "onion_seedling":
-      if (l.quantityBigha) parts.push(`${l.quantityBigha} बीघा`);
-      if (l.availableAfterDays != null) parts.push(`${l.availableAfterDays} दिन में`);
-      if (l.onionType) parts.push(l.onionType);
-      break;
-    case "potato_seed":
-      if (l.quantityBags) parts.push(`${l.quantityBags} बोरी`);
-      if (l.potatoVariety) parts.push(l.potatoVariety);
-      if (l.potatoBrand) parts.push(l.potatoBrand);
-      break;
-    case "onion_seed":
-      parts.push(l.onionSeedPricePerKg != null ? `₹${l.onionSeedPricePerKg}/किलो` : CONTACT_FOR_PRICE);
-      if (l.onionSeedVariety) parts.push(l.onionSeedVariety);
-      if (l.onionSeedBrand) parts.push(l.onionSeedBrand);
-      break;
-    case "soyabean_seed":
-      parts.push(l.soyabeanSeedPricePerQuintal != null ? `₹${l.soyabeanSeedPricePerQuintal}/क्विंटल` : CONTACT_FOR_PRICE);
-      if (l.soyabeanSeedDuration) parts.push(SOYABEAN_DURATION_LABEL[l.soyabeanSeedDuration] || l.soyabeanSeedDuration);
-      if (l.soyabeanSeedVariety) parts.push(l.soyabeanSeedVariety);
-      break;
-    case "bardan_bag":
-      parts.push(l.bagPricePerBag != null ? `₹${l.bagPricePerBag}/बोरी` : CONTACT_FOR_PRICE);
-      if (l.bagMaterialType) parts.push(BAG_MATERIAL_LABEL[l.bagMaterialType] || l.bagMaterialType);
-      if (l.bagDimension) parts.push(l.bagDimension);
-      break;
-    case "exhaust_fan":
-      parts.push(l.fanPricePerPiece != null ? `₹${l.fanPricePerPiece}/पीस` : CONTACT_FOR_PRICE);
-      if (l.fanBrand) {
-        const b = l.fanBrand === "Others"
-          ? (l.fanBrandOther || "अन्य")
-          : (FAN_BRAND_LABEL[l.fanBrand] || l.fanBrand);
-        parts.push(b);
-      }
-      if (l.fanWattage != null) parts.push(`${l.fanWattage}W`);
-      break;
+const PRICE_PER_HINDI: Record<"kg" | "quintal" | "bag" | "piece", string> = {
+  kg: "किलो",
+  quintal: "क्विंटल",
+  bag: "बोरी",
+  piece: "पीस",
+};
+
+function factToHindiLabel(f: ListingDetailFact): string {
+  switch (f.kind) {
+    case "price": return `₹${f.amount}/${PRICE_PER_HINDI[f.per]}`;
+    case "qtyBigha": return `${f.bigha} बीघा`;
+    case "qtyBags": return `${f.bags} बोरी`;
+    case "availableInDays": return `${f.days} दिन में`;
+    case "onionType":
+    case "potatoVariety":
+    case "potatoBrand":
+    case "onionSeedType":
+    case "onionSeedVariety":
+    case "onionSeedBrand":
+    case "soyabeanVariety":
+    case "bagDimension":
+      return f.value;
+    case "soyabeanDuration": return SOYABEAN_DURATION_LABEL[f.value] || f.value;
+    case "bagMaterial": return BAG_MATERIAL_LABEL[f.value] || f.value;
+    case "fanBrand":
+      return f.value === "Others" ? (f.other || "अन्य") : (FAN_BRAND_LABEL[f.value] || f.value);
+    case "fanWattage": return `${f.watts}W`;
   }
-  return parts;
+}
+
+function detailParts(l: MarketplaceListing): string[] {
+  const facts = extractListingDetailFacts(l);
+  const labels = facts.map(factToHindiLabel).filter(Boolean);
+  // Pricing categories should always show a price line — fall back to "contact for price" when missing.
+  const pricedCats = new Set(["onion_seed", "soyabean_seed", "bardan_bag", "exhaust_fan"]);
+  const hasPrice = facts.some((f) => f.kind === "price");
+  if (pricedCats.has(l.category) && !hasPrice) {
+    labels.unshift(CONTACT_FOR_PRICE);
+  }
+  return labels;
 }
 
 function escapeXml(s: string): string {
@@ -134,6 +135,12 @@ function truncate(s: string, max: number): string {
 function buildEtag(listing: MarketplaceListing, photos: MarketplacePhoto[]): string {
   const createdAtMs = listing.createdAt ? new Date(listing.createdAt as unknown as string).getTime() : 0;
   const photoSig = photos.map((p) => p.id).join(",");
+  // Legacy listings store the cover image inline as base64 in `photoData` (no
+  // photo row). When the modern photos table is empty, fold a hash of that
+  // legacy blob into the ETag so replacing the inline cover busts caches.
+  const legacyPhotoSig = photos.length === 0 && listing.photoData
+    ? crypto.createHash("sha1").update(listing.photoData).digest("hex").slice(0, 12)
+    : "";
   const summarySig = JSON.stringify({
     c: listing.category,
     v: listing.sellerVillage,
@@ -159,9 +166,33 @@ function buildEtag(listing: MarketplaceListing, photos: MarketplacePhoto[]): str
     fw: listing.fanWattage,
     a: listing.isActive,
     ph: photoSig,
+    lph: legacyPhotoSig,
   });
   const sigHash = crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
   return `W/"l${listing.id}-${createdAtMs}-${sigHash}"`;
+}
+
+// Tiny in-memory LRU cache for composed image buffers. Keyed by the strong
+// part of the ETag (which already encodes listing id + content signature),
+// so a cache hit is byte-identical to a fresh render.
+const IMAGE_CACHE_CAPACITY = 32;
+const imageCache = new Map<string, Buffer>();
+function cacheGet(key: string): Buffer | undefined {
+  const v = imageCache.get(key);
+  if (v) {
+    imageCache.delete(key);
+    imageCache.set(key, v);
+  }
+  return v;
+}
+function cacheSet(key: string, value: Buffer): void {
+  if (imageCache.has(key)) imageCache.delete(key);
+  imageCache.set(key, value);
+  while (imageCache.size > IMAGE_CACHE_CAPACITY) {
+    const oldest = imageCache.keys().next().value;
+    if (oldest === undefined) break;
+    imageCache.delete(oldest);
+  }
 }
 
 export interface ShareImageMeta {
@@ -223,8 +254,12 @@ async function buildTopLayer(
 }
 
 export async function composeListingShareImage(meta: ShareImageMeta): Promise<ShareImageResult> {
-  await ensureDevanagariFont();
   const { listing, photos, etag } = meta;
+  const cached = cacheGet(etag);
+  if (cached) {
+    return { buffer: cached, etag, contentType: "image/jpeg" };
+  }
+  await ensureDevanagariFont();
 
   const topLayer = await buildTopLayer(listing, photos);
 
@@ -267,5 +302,6 @@ export async function composeListingShareImage(meta: ShareImageMeta): Promise<Sh
     .jpeg({ quality: 86, progressive: true, mozjpeg: false })
     .toBuffer();
 
+  cacheSet(etag, buffer);
   return { buffer, etag, contentType: "image/jpeg" };
 }

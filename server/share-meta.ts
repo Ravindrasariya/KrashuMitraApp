@@ -57,47 +57,97 @@ const SHARE_COVER_PATH = "/share-cover.png";
 const SHARE_COVER_WIDTH = 1200;
 const SHARE_COVER_HEIGHT = 630;
 
+/**
+ * Per-category extraction of the raw "interesting" facts from a listing,
+ * shared between the OG description (English-mixed) and the per-listing
+ * share-image card (Hindi). Centralizing this here so adding a new
+ * category field only needs to be done in one place.
+ */
+export type ListingDetailFact =
+  | { kind: "price"; amount: number; per: "kg" | "quintal" | "bag" | "piece" }
+  | { kind: "qtyBigha"; bigha: string }
+  | { kind: "qtyBags"; bags: string }
+  | { kind: "availableInDays"; days: number }
+  | { kind: "onionType"; value: string }
+  | { kind: "potatoVariety"; value: string }
+  | { kind: "potatoBrand"; value: string }
+  | { kind: "onionSeedType"; value: string }
+  | { kind: "onionSeedVariety"; value: string }
+  | { kind: "onionSeedBrand"; value: string }
+  | { kind: "soyabeanDuration"; value: string }
+  | { kind: "soyabeanVariety"; value: string }
+  | { kind: "bagMaterial"; value: string }
+  | { kind: "bagDimension"; value: string }
+  | { kind: "fanBrand"; value: string; other: string | null }
+  | { kind: "fanWattage"; watts: number };
+
+export function extractListingDetailFacts(l: MarketplaceListing): ListingDetailFact[] {
+  const facts: ListingDetailFact[] = [];
+  switch (l.category) {
+    case "onion_seedling":
+      if (l.quantityBigha) facts.push({ kind: "qtyBigha", bigha: l.quantityBigha });
+      if (l.availableAfterDays != null) facts.push({ kind: "availableInDays", days: l.availableAfterDays });
+      if (l.onionType) facts.push({ kind: "onionType", value: l.onionType });
+      break;
+    case "potato_seed":
+      if (l.quantityBags) facts.push({ kind: "qtyBags", bags: l.quantityBags });
+      if (l.potatoVariety) facts.push({ kind: "potatoVariety", value: l.potatoVariety });
+      if (l.potatoBrand) facts.push({ kind: "potatoBrand", value: l.potatoBrand });
+      break;
+    case "onion_seed":
+      if (l.onionSeedPricePerKg != null) facts.push({ kind: "price", amount: l.onionSeedPricePerKg, per: "kg" });
+      if (l.onionSeedType) facts.push({ kind: "onionSeedType", value: l.onionSeedType });
+      if (l.onionSeedVariety) facts.push({ kind: "onionSeedVariety", value: l.onionSeedVariety });
+      if (l.onionSeedBrand) facts.push({ kind: "onionSeedBrand", value: l.onionSeedBrand });
+      break;
+    case "soyabean_seed":
+      if (l.soyabeanSeedPricePerQuintal != null) facts.push({ kind: "price", amount: l.soyabeanSeedPricePerQuintal, per: "quintal" });
+      if (l.soyabeanSeedDuration) facts.push({ kind: "soyabeanDuration", value: l.soyabeanSeedDuration });
+      if (l.soyabeanSeedVariety) facts.push({ kind: "soyabeanVariety", value: l.soyabeanSeedVariety });
+      break;
+    case "bardan_bag":
+      if (l.bagPricePerBag != null) facts.push({ kind: "price", amount: l.bagPricePerBag, per: "bag" });
+      if (l.bagMaterialType) facts.push({ kind: "bagMaterial", value: l.bagMaterialType });
+      if (l.bagDimension) facts.push({ kind: "bagDimension", value: l.bagDimension });
+      break;
+    case "exhaust_fan":
+      if (l.fanPricePerPiece != null) facts.push({ kind: "price", amount: l.fanPricePerPiece, per: "piece" });
+      if (l.fanBrand) facts.push({ kind: "fanBrand", value: l.fanBrand, other: l.fanBrandOther ?? null });
+      if (l.fanWattage != null) facts.push({ kind: "fanWattage", watts: l.fanWattage });
+      break;
+  }
+  return facts;
+}
+
+function factToEnglishLabel(f: ListingDetailFact): string {
+  switch (f.kind) {
+    case "price": {
+      const per = f.per === "kg" ? "kg" : f.per === "quintal" ? "quintal" : f.per === "bag" ? "bag" : "piece";
+      return `₹${f.amount}/${per}`;
+    }
+    case "qtyBigha": return `${f.bigha} bigha`;
+    case "qtyBags": return `${f.bags} bags`;
+    case "availableInDays": return `available in ${f.days} days`;
+    case "onionType":
+    case "potatoVariety":
+    case "potatoBrand":
+    case "onionSeedType":
+    case "onionSeedVariety":
+    case "onionSeedBrand":
+    case "soyabeanVariety":
+    case "bagMaterial":
+    case "bagDimension":
+      return f.value;
+    case "soyabeanDuration": return `${f.value} duration`;
+    case "fanBrand": return f.value === "Other" ? (f.other || "Other") : f.value;
+    case "fanWattage": return `${f.watts}W`;
+  }
+}
+
 function summarizeListing(listing: MarketplaceListing): { title: string; description: string } {
   const cat = categoryLabel(listing.category);
   const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");
-  const parts: string[] = [];
-
-  switch (listing.category) {
-    case "onion_seedling":
-      if (listing.quantityBigha) parts.push(`${listing.quantityBigha} bigha`);
-      if (listing.availableAfterDays != null) parts.push(`available in ${listing.availableAfterDays} days`);
-      if (listing.onionType) parts.push(listing.onionType);
-      break;
-    case "potato_seed":
-      if (listing.quantityBags) parts.push(`${listing.quantityBags} bags`);
-      if (listing.potatoVariety) parts.push(listing.potatoVariety);
-      if (listing.potatoBrand) parts.push(listing.potatoBrand);
-      break;
-    case "onion_seed":
-      if (listing.onionSeedPricePerKg != null) parts.push(`₹${listing.onionSeedPricePerKg}/kg`);
-      if (listing.onionSeedType) parts.push(listing.onionSeedType);
-      if (listing.onionSeedVariety) parts.push(listing.onionSeedVariety);
-      if (listing.onionSeedBrand) parts.push(listing.onionSeedBrand);
-      break;
-    case "soyabean_seed":
-      if (listing.soyabeanSeedPricePerQuintal != null) parts.push(`₹${listing.soyabeanSeedPricePerQuintal}/quintal`);
-      if (listing.soyabeanSeedDuration) parts.push(`${listing.soyabeanSeedDuration} duration`);
-      if (listing.soyabeanSeedVariety) parts.push(listing.soyabeanSeedVariety);
-      break;
-    case "bardan_bag":
-      if (listing.bagPricePerBag != null) parts.push(`₹${listing.bagPricePerBag}/bag`);
-      if (listing.bagMaterialType) parts.push(listing.bagMaterialType);
-      if (listing.bagDimension) parts.push(listing.bagDimension);
-      break;
-    case "exhaust_fan":
-      if (listing.fanPricePerPiece != null) parts.push(`₹${listing.fanPricePerPiece}/piece`);
-      if (listing.fanBrand) {
-        parts.push(listing.fanBrand === "Other" ? listing.fanBrandOther || "Other" : listing.fanBrand);
-      }
-      if (listing.fanWattage != null) parts.push(`${listing.fanWattage}W`);
-      break;
-  }
-
+  const parts = extractListingDetailFacts(listing).map(factToEnglishLabel).filter(Boolean);
   const detail = parts.join(" · ");
   const summary = [cat, detail, location ? `📍 ${location}` : ""].filter(Boolean).join(" — ");
   const description = summary || BRAND_DESCRIPTION;
