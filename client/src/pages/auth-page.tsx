@@ -76,6 +76,19 @@ function PinInput({
   );
 }
 
+function getSafeNextPath(): string {
+  if (typeof window === "undefined") return "/";
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("next");
+    if (!raw) return "/";
+    if (!raw.startsWith("/") || raw.startsWith("//")) return "/";
+    return raw;
+  } catch {
+    return "/";
+  }
+}
+
 export default function AuthPage() {
   const { t } = useTranslation();
   const { isAuthenticated } = useAuth();
@@ -91,12 +104,13 @@ export default function AuthPage() {
   const [oldPin, setOldPin] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<ReCAPTCHA>(null);
+  const nextPath = getSafeNextPath();
 
   useEffect(() => {
     if (isAuthenticated && mode !== "changePin") {
-      setLocation("/");
+      setLocation(nextPath);
     }
-  }, [isAuthenticated, mode, setLocation]);
+  }, [isAuthenticated, mode, setLocation, nextPath]);
 
   if (isAuthenticated && mode !== "changePin") {
     return null;
@@ -141,7 +155,7 @@ export default function AuthPage() {
         }
 
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-        setLocation("/");
+        setLocation(nextPath);
       } else if (mode === "login") {
         if (RECAPTCHA_SITE_KEY && !captchaToken) {
           toast({ title: t("captchaRequired"), variant: "destructive" });
@@ -174,7 +188,7 @@ export default function AuthPage() {
         }
 
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-        setLocation("/");
+        setLocation(nextPath);
       } else if (mode === "changePin") {
         if (pin !== confirmPin) {
           toast({ title: t("pinMismatch"), variant: "destructive" });
@@ -198,7 +212,7 @@ export default function AuthPage() {
 
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         toast({ title: t("pinChanged") });
-        setLocation("/");
+        setLocation(nextPath);
       } else if (mode === "forgot") {
         if (pin !== confirmPin) {
           toast({ title: t("pinMismatch"), variant: "destructive" });

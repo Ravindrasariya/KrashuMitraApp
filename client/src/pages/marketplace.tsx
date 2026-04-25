@@ -226,8 +226,8 @@ function ShareButton({
           url: shareInfo.url,
         });
         return true;
-      } catch (err: any) {
-        if (err && err.name === "AbortError") return true;
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return true;
         return false;
       }
     }
@@ -1122,8 +1122,10 @@ export default function MarketplacePage() {
   }, [detailListing]);
 
   const composeShareInfo = (listing: ListingNoPhoto): ShareInfo => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const url = `${origin}/marketplace?listing=${listing.id}`;
+    const envBase = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined)?.replace(/\/+$/, "");
+    const origin = envBase || (typeof window !== "undefined" ? window.location.origin : "");
+    const homepage = origin || "https://km.krashuved.com";
+    const url = `${origin || "https://km.krashuved.com"}/marketplace?listing=${listing.id}`;
     const cat = categoryLabel(listing.category);
     const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");
     const parts: string[] = [];
@@ -1166,7 +1168,7 @@ export default function MarketplacePage() {
     }
     const summary = parts.filter(Boolean).join(" · ");
     const lines = [
-      t("shareBrandTagline"),
+      `${t("shareBrandTagline")} — ${homepage}`,
       `${cat}${summary ? ` — ${summary}` : ""}`,
     ];
     if (location) lines.push(`📍 ${location}`);
@@ -1500,7 +1502,14 @@ export default function MarketplacePage() {
                       </div>
                     )}
                     {!isAuthenticated && (
-                      <span className="text-[9px] text-muted-foreground">{t("loginToContact")}</span>
+                      <Link
+                        href={`/auth?next=${encodeURIComponent(`/marketplace?listing=${listing.id}`)}`}
+                        className="text-[9px] text-muted-foreground hover:text-primary underline-offset-2 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                        data-testid={`link-login-card-${listing.id}`}
+                      >
+                        {t("loginToContact")}
+                      </Link>
                     )}
                     <div className="ml-auto flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                       <ShareButton
@@ -2398,7 +2407,13 @@ export default function MarketplacePage() {
                             </Button>
                           )
                         ) : (
-                          <p className="text-sm text-muted-foreground">{t("loginToContact")}</p>
+                          <Link
+                            href={`/auth?next=${encodeURIComponent(`/marketplace?listing=${listing.id}`)}`}
+                            className="text-sm text-primary hover:underline"
+                            data-testid={`link-login-detail-${listing.id}`}
+                          >
+                            {t("loginToContact")}
+                          </Link>
                         )}
                         {canManage && (
                           <div className="flex gap-2">

@@ -41,7 +41,7 @@ function escapeHtml(s: string): string {
 function categoryLabel(category: string): string {
   const map: Record<string, string> = {
     onion_seedling: "Onion Seedlings (प्याज पौध)",
-    potato: "Potato (आलू)",
+    potato_seed: "Potato Seed (आलू बीज)",
     onion_seed: "Onion Seeds (प्याज बीज)",
     soyabean_seed: "Soyabean Seeds (सोयाबीन बीज)",
     bardan_bag: "Bardan Bag (बारदान)",
@@ -61,7 +61,7 @@ function summarizeListing(listing: MarketplaceListing): { title: string; descrip
       if (listing.availableAfterDays != null) parts.push(`available in ${listing.availableAfterDays} days`);
       if (listing.onionType) parts.push(listing.onionType);
       break;
-    case "potato":
+    case "potato_seed":
       if (listing.quantityBags) parts.push(`${listing.quantityBags} bags`);
       if (listing.potatoVariety) parts.push(listing.potatoVariety);
       if (listing.potatoBrand) parts.push(listing.potatoBrand);
