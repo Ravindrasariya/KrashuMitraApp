@@ -266,6 +266,12 @@ export const MARKETPLACE_ONION_SEED_BRANDS = [
   "Others",
 ] as const;
 
+// Bardan/Bags allow-lists shared between client form dropdowns and
+// server-side validation so the two never drift.
+export const MARKETPLACE_BAG_COMMODITY_TYPES = ["Onion", "Potato", "Garlic", "Others"] as const;
+export const MARKETPLACE_BAG_MATERIAL_TYPES = ["Jute/Hessian", "LENO Mesh", "PP", "Others"] as const;
+export const MARKETPLACE_BAG_COLORS = ["Red", "Orange", "Blue", "Violet", "Yellow", "Pink"] as const;
+
 export const marketplaceListings = pgTable("marketplace_listings", {
   id: serial("id").primaryKey(),
   sellerId: varchar("seller_id").notNull().references(() => users.id),
@@ -285,6 +291,13 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   soyabeanSeedDuration: text("soyabean_seed_duration"),
   soyabeanSeedVariety: text("soyabean_seed_variety"),
   soyabeanSeedPricePerQuintal: integer("soyabean_seed_price_per_quintal"),
+  bagCommodityType: text("bag_commodity_type"),
+  bagMaterialType: text("bag_material_type"),
+  bagDimension: text("bag_dimension"),
+  bagGsm: integer("bag_gsm"),
+  bagColor: text("bag_color"),
+  bagMinQuantity: integer("bag_min_quantity"),
+  bagPricePerBag: integer("bag_price_per_bag"),
   sellerVillage: text("seller_village"),
   sellerTehsil: text("seller_tehsil"),
   sellerDistrict: text("seller_district"),

@@ -13,6 +13,9 @@ import {
   MARKETPLACE_ONION_SEED_TYPES,
   MARKETPLACE_ONION_SEED_VARIETIES,
   MARKETPLACE_ONION_SEED_BRANDS,
+  MARKETPLACE_BAG_COMMODITY_TYPES,
+  MARKETPLACE_BAG_MATERIAL_TYPES,
+  MARKETPLACE_BAG_COLORS,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -1727,8 +1730,8 @@ Respond in this structure:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal } = req.body || {};
-      if (!category || !["onion_seedling", "potato_seed", "onion_seed", "soyabean_seed"].includes(category)) {
+      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag } = req.body || {};
+      if (!category || !["onion_seedling", "potato_seed", "onion_seed", "soyabean_seed", "bardan_bag"].includes(category)) {
         return res.status(400).json({ message: "Invalid category" });
       }
       if (category === "onion_seedling" && !quantityBigha) {
@@ -1742,6 +1745,20 @@ Respond in this structure:
       }
       if (category === "soyabean_seed" && (!soyabeanSeedVariety || !String(soyabeanSeedVariety).trim())) {
         return res.status(400).json({ message: "soyabeanSeedVariety required for soyabean_seed" });
+      }
+      if (category === "bardan_bag") {
+        if (!bagCommodityType) {
+          return res.status(400).json({ message: "bagCommodityType required for bardan_bag" });
+        }
+        if (!bagMaterialType) {
+          return res.status(400).json({ message: "bagMaterialType required for bardan_bag" });
+        }
+        if (bagGsm === undefined || bagGsm === null || String(bagGsm).trim() === "") {
+          return res.status(400).json({ message: "bagGsm required for bardan_bag" });
+        }
+        if (bagPricePerBag === undefined || bagPricePerBag === null || String(bagPricePerBag).trim() === "") {
+          return res.status(400).json({ message: "bagPricePerBag required for bardan_bag" });
+        }
       }
 
       // Allow-lists are imported from shared/schema.ts so the seller form
@@ -1763,6 +1780,54 @@ Respond in this structure:
       if (category === "soyabean_seed") {
         if (soyabeanSeedDuration && !SOYABEAN_DURATIONS_ALLOWED.includes(String(soyabeanSeedDuration))) {
           return res.status(400).json({ message: "Invalid soyabeanSeedDuration" });
+        }
+      }
+
+      let parsedBagGsm: number | null = null;
+      let parsedBagPricePerBag: number | null = null;
+      let parsedBagMinQuantity: number | null = null;
+      if (category === "bardan_bag") {
+        if (!MARKETPLACE_BAG_COMMODITY_TYPES.includes(String(bagCommodityType) as typeof MARKETPLACE_BAG_COMMODITY_TYPES[number])) {
+          return res.status(400).json({ message: "Invalid bagCommodityType" });
+        }
+        if (!MARKETPLACE_BAG_MATERIAL_TYPES.includes(String(bagMaterialType) as typeof MARKETPLACE_BAG_MATERIAL_TYPES[number])) {
+          return res.status(400).json({ message: "Invalid bagMaterialType" });
+        }
+        if (bagColor !== undefined && bagColor !== null && String(bagColor).trim() !== "" && String(bagColor) !== "none") {
+          if (!MARKETPLACE_BAG_COLORS.includes(String(bagColor) as typeof MARKETPLACE_BAG_COLORS[number])) {
+            return res.status(400).json({ message: "Invalid bagColor" });
+          }
+        }
+        const gsmRaw = String(bagGsm).trim();
+        if (!/^\d+$/.test(gsmRaw)) {
+          return res.status(400).json({ message: "Invalid bagGsm" });
+        }
+        const gsmN = parseInt(gsmRaw, 10);
+        if (Number.isNaN(gsmN) || gsmN < 1 || gsmN > 2000) {
+          return res.status(400).json({ message: "Invalid bagGsm" });
+        }
+        parsedBagGsm = gsmN;
+
+        const priceRaw = String(bagPricePerBag).trim();
+        if (!/^\d+$/.test(priceRaw)) {
+          return res.status(400).json({ message: "Invalid bagPricePerBag" });
+        }
+        const priceN = parseInt(priceRaw, 10);
+        if (Number.isNaN(priceN) || priceN < 1 || priceN > 999999) {
+          return res.status(400).json({ message: "Invalid bagPricePerBag" });
+        }
+        parsedBagPricePerBag = priceN;
+
+        if (bagMinQuantity !== undefined && bagMinQuantity !== null && String(bagMinQuantity).trim() !== "") {
+          const minRaw = String(bagMinQuantity).trim();
+          if (!/^\d+$/.test(minRaw)) {
+            return res.status(400).json({ message: "Invalid bagMinQuantity" });
+          }
+          const minN = parseInt(minRaw, 10);
+          if (Number.isNaN(minN) || minN < 0 || minN > 999999) {
+            return res.status(400).json({ message: "Invalid bagMinQuantity" });
+          }
+          parsedBagMinQuantity = minN;
         }
       }
 
@@ -1806,6 +1871,13 @@ Respond in this structure:
         soyabeanSeedDuration: category === "soyabean_seed" && soyabeanSeedDuration ? String(soyabeanSeedDuration).slice(0, 20) : null,
         soyabeanSeedVariety: category === "soyabean_seed" && soyabeanSeedVariety ? String(soyabeanSeedVariety).trim().slice(0, 100) : null,
         soyabeanSeedPricePerQuintal: parsedPricePerQuintal,
+        bagCommodityType: category === "bardan_bag" && bagCommodityType ? String(bagCommodityType).slice(0, 20) : null,
+        bagMaterialType: category === "bardan_bag" && bagMaterialType ? String(bagMaterialType).slice(0, 30) : null,
+        bagDimension: category === "bardan_bag" && bagDimension ? String(bagDimension).trim().slice(0, 40) : null,
+        bagGsm: category === "bardan_bag" ? parsedBagGsm : null,
+        bagColor: category === "bardan_bag" && bagColor && String(bagColor) !== "none" && String(bagColor).trim() !== "" ? String(bagColor).slice(0, 20) : null,
+        bagMinQuantity: category === "bardan_bag" ? parsedBagMinQuantity : null,
+        bagPricePerBag: category === "bardan_bag" ? parsedBagPricePerBag : null,
         sellerVillage: user.village || null,
         sellerTehsil: user.tehsil || null,
         sellerDistrict: user.district || null,
@@ -1846,7 +1918,7 @@ Respond in this structure:
       if (existing.sellerId !== userId) return res.status(403).json({ message: "Not authorized" });
 
       const category = existing.category;
-      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal } = req.body || {};
+      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag } = req.body || {};
 
       if (category === "onion_seedling" && quantityBigha !== undefined && !quantityBigha) {
         return res.status(400).json({ message: "quantityBigha required for onion_seedling" });
@@ -1859,6 +1931,20 @@ Respond in this structure:
       }
       if (category === "soyabean_seed" && soyabeanSeedVariety !== undefined && (typeof soyabeanSeedVariety !== "string" || !soyabeanSeedVariety.trim())) {
         return res.status(400).json({ message: "soyabeanSeedVariety required for soyabean_seed" });
+      }
+      if (category === "bardan_bag") {
+        if (bagCommodityType !== undefined && !bagCommodityType) {
+          return res.status(400).json({ message: "bagCommodityType required for bardan_bag" });
+        }
+        if (bagMaterialType !== undefined && !bagMaterialType) {
+          return res.status(400).json({ message: "bagMaterialType required for bardan_bag" });
+        }
+        if (bagGsm !== undefined && (bagGsm === null || String(bagGsm).trim() === "")) {
+          return res.status(400).json({ message: "bagGsm required for bardan_bag" });
+        }
+        if (bagPricePerBag !== undefined && (bagPricePerBag === null || String(bagPricePerBag).trim() === "")) {
+          return res.status(400).json({ message: "bagPricePerBag required for bardan_bag" });
+        }
       }
 
       // Onion-seed allow-lists are imported from shared/schema.ts so the
@@ -1881,6 +1967,60 @@ Respond in this structure:
       if (category === "soyabean_seed" && soyabeanSeedDuration !== undefined && soyabeanSeedDuration !== null && soyabeanSeedDuration !== "") {
         if (!SOYABEAN_DURATIONS_ALLOWED_PATCH.includes(String(soyabeanSeedDuration))) {
           return res.status(400).json({ message: "Invalid soyabeanSeedDuration" });
+        }
+      }
+
+      let parsedBagGsmPatch: number | null | undefined = undefined;
+      let parsedBagPricePerBagPatch: number | null | undefined = undefined;
+      let parsedBagMinQuantityPatch: number | null | undefined = undefined;
+      if (category === "bardan_bag") {
+        if (bagCommodityType !== undefined && bagCommodityType && !MARKETPLACE_BAG_COMMODITY_TYPES.includes(String(bagCommodityType) as typeof MARKETPLACE_BAG_COMMODITY_TYPES[number])) {
+          return res.status(400).json({ message: "Invalid bagCommodityType" });
+        }
+        if (bagMaterialType !== undefined && bagMaterialType && !MARKETPLACE_BAG_MATERIAL_TYPES.includes(String(bagMaterialType) as typeof MARKETPLACE_BAG_MATERIAL_TYPES[number])) {
+          return res.status(400).json({ message: "Invalid bagMaterialType" });
+        }
+        if (bagColor !== undefined && bagColor !== null && String(bagColor).trim() !== "" && String(bagColor) !== "none") {
+          if (!MARKETPLACE_BAG_COLORS.includes(String(bagColor) as typeof MARKETPLACE_BAG_COLORS[number])) {
+            return res.status(400).json({ message: "Invalid bagColor" });
+          }
+        }
+        if (bagGsm !== undefined && bagGsm !== null && String(bagGsm).trim() !== "") {
+          const raw = String(bagGsm).trim();
+          if (!/^\d+$/.test(raw)) {
+            return res.status(400).json({ message: "Invalid bagGsm" });
+          }
+          const n = parseInt(raw, 10);
+          if (Number.isNaN(n) || n < 1 || n > 2000) {
+            return res.status(400).json({ message: "Invalid bagGsm" });
+          }
+          parsedBagGsmPatch = n;
+        }
+        if (bagPricePerBag !== undefined && bagPricePerBag !== null && String(bagPricePerBag).trim() !== "") {
+          const raw = String(bagPricePerBag).trim();
+          if (!/^\d+$/.test(raw)) {
+            return res.status(400).json({ message: "Invalid bagPricePerBag" });
+          }
+          const n = parseInt(raw, 10);
+          if (Number.isNaN(n) || n < 1 || n > 999999) {
+            return res.status(400).json({ message: "Invalid bagPricePerBag" });
+          }
+          parsedBagPricePerBagPatch = n;
+        }
+        if (bagMinQuantity !== undefined) {
+          if (bagMinQuantity === null || String(bagMinQuantity).trim() === "") {
+            parsedBagMinQuantityPatch = null;
+          } else {
+            const raw = String(bagMinQuantity).trim();
+            if (!/^\d+$/.test(raw)) {
+              return res.status(400).json({ message: "Invalid bagMinQuantity" });
+            }
+            const n = parseInt(raw, 10);
+            if (Number.isNaN(n) || n < 0 || n > 999999) {
+              return res.status(400).json({ message: "Invalid bagMinQuantity" });
+            }
+            parsedBagMinQuantityPatch = n;
+          }
         }
       }
 
@@ -1934,6 +2074,18 @@ Respond in this structure:
           updates.soyabeanSeedVariety = soyabeanSeedVariety.trim().slice(0, 100);
         }
         if (parsedPricePerQuintal !== undefined) updates.soyabeanSeedPricePerQuintal = parsedPricePerQuintal;
+      } else if (category === "bardan_bag") {
+        if (bagCommodityType !== undefined) updates.bagCommodityType = bagCommodityType ? String(bagCommodityType).slice(0, 20) : null;
+        if (bagMaterialType !== undefined) updates.bagMaterialType = bagMaterialType ? String(bagMaterialType).slice(0, 30) : null;
+        if (bagDimension !== undefined) updates.bagDimension = bagDimension ? String(bagDimension).trim().slice(0, 40) : null;
+        if (parsedBagGsmPatch !== undefined) updates.bagGsm = parsedBagGsmPatch;
+        if (bagColor !== undefined) {
+          updates.bagColor = bagColor && String(bagColor) !== "none" && String(bagColor).trim() !== ""
+            ? String(bagColor).slice(0, 20)
+            : null;
+        }
+        if (parsedBagMinQuantityPatch !== undefined) updates.bagMinQuantity = parsedBagMinQuantityPatch;
+        if (parsedBagPricePerBagPatch !== undefined) updates.bagPricePerBag = parsedBagPricePerBagPatch;
       }
 
       if (Object.keys(updates).length > 0) {

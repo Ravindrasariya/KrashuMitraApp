@@ -19,13 +19,16 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2 } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import {
   MARKETPLACE_ONION_SEED_TYPES,
   MARKETPLACE_ONION_SEED_VARIETIES,
   MARKETPLACE_ONION_SEED_BRANDS,
+  MARKETPLACE_BAG_COMMODITY_TYPES,
+  MARKETPLACE_BAG_MATERIAL_TYPES,
+  MARKETPLACE_BAG_COLORS,
   type MarketplaceListing,
 } from "@shared/schema";
 
@@ -42,6 +45,10 @@ const ONION_SEED_VARIETIES: string[] = [...MARKETPLACE_ONION_SEED_VARIETIES];
 const ONION_SEED_BRANDS: string[] = [...MARKETPLACE_ONION_SEED_BRANDS];
 
 const SOYABEAN_DURATIONS = ["Long", "Short"] as const;
+
+const BAG_COMMODITY_TYPES: string[] = [...MARKETPLACE_BAG_COMMODITY_TYPES];
+const BAG_MATERIAL_TYPES: string[] = [...MARKETPLACE_BAG_MATERIAL_TYPES];
+const BAG_COLORS: string[] = [...MARKETPLACE_BAG_COLORS];
 
 const HINDI_NAMES: Record<string, string> = {
   CS3: "सीएस3", CS1: "सीएस1", Torus: "टोरस", Pukhraj: "पुखराज",
@@ -205,6 +212,13 @@ export default function MarketplacePage() {
   const [soyabeanDuration, setSoyabeanDuration] = useState("");
   const [soyabeanVariety, setSoyabeanVariety] = useState("");
   const [soyabeanPricePerQuintal, setSoyabeanPricePerQuintal] = useState("");
+  const [bagCommodityType, setBagCommodityType] = useState("");
+  const [bagMaterialType, setBagMaterialType] = useState("");
+  const [bagDimension, setBagDimension] = useState("");
+  const [bagGsm, setBagGsm] = useState("");
+  const [bagColor, setBagColor] = useState("none");
+  const [bagMinQuantity, setBagMinQuantity] = useState("");
+  const [bagPricePerBag, setBagPricePerBag] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"latest" | "nearest" | "oldest">("latest");
   const [sortOpen, setSortOpen] = useState(false);
@@ -327,6 +341,13 @@ export default function MarketplacePage() {
     setSoyabeanDuration("");
     setSoyabeanVariety("");
     setSoyabeanPricePerQuintal("");
+    setBagCommodityType("");
+    setBagMaterialType("");
+    setBagDimension("");
+    setBagGsm("");
+    setBagColor("none");
+    setBagMinQuantity("");
+    setBagPricePerBag("");
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -390,6 +411,55 @@ export default function MarketplacePage() {
       data.soyabeanSeedDuration = soyabeanDuration || null;
       data.soyabeanSeedVariety = soyabeanVariety.trim();
       data.soyabeanSeedPricePerQuintal = soyabeanPricePerQuintal ? parseInt(soyabeanPricePerQuintal, 10) : null;
+    } else if (category === "bardan_bag") {
+      if (!bagCommodityType) {
+        toast({ title: t("bagCommodityType"), variant: "destructive" });
+        return;
+      }
+      if (!bagMaterialType) {
+        toast({ title: t("bagMaterialType"), variant: "destructive" });
+        return;
+      }
+      const gsmStr = bagGsm.trim();
+      if (!/^\d+$/.test(gsmStr)) {
+        toast({ title: t("bagGsm"), variant: "destructive" });
+        return;
+      }
+      const gsmNum = parseInt(gsmStr, 10);
+      if (gsmNum < 1 || gsmNum > 2000) {
+        toast({ title: t("bagGsm"), variant: "destructive" });
+        return;
+      }
+      const priceStr = bagPricePerBag.trim();
+      if (!/^\d+$/.test(priceStr)) {
+        toast({ title: t("pricePerBag"), variant: "destructive" });
+        return;
+      }
+      const priceNum = parseInt(priceStr, 10);
+      if (priceNum < 1 || priceNum > 999999) {
+        toast({ title: t("pricePerBag"), variant: "destructive" });
+        return;
+      }
+      let minQtyNum: number | null = null;
+      const minQtyStr = bagMinQuantity.trim();
+      if (minQtyStr) {
+        if (!/^\d+$/.test(minQtyStr)) {
+          toast({ title: t("bagMinQuantity"), variant: "destructive" });
+          return;
+        }
+        minQtyNum = parseInt(minQtyStr, 10);
+        if (minQtyNum < 0 || minQtyNum > 999999) {
+          toast({ title: t("bagMinQuantity"), variant: "destructive" });
+          return;
+        }
+      }
+      data.bagCommodityType = bagCommodityType;
+      data.bagMaterialType = bagMaterialType;
+      data.bagDimension = bagDimension.trim() || null;
+      data.bagGsm = gsmNum;
+      data.bagColor = bagColor && bagColor !== "none" ? bagColor : null;
+      data.bagMinQuantity = minQtyNum;
+      data.bagPricePerBag = priceNum;
     }
     if (editingListingId != null) {
       updateMutation.mutate({ id: editingListingId, data });
@@ -418,6 +488,14 @@ export default function MarketplacePage() {
       setSoyabeanDuration(listing.soyabeanSeedDuration || "");
       setSoyabeanVariety(listing.soyabeanSeedVariety || "");
       setSoyabeanPricePerQuintal(listing.soyabeanSeedPricePerQuintal != null ? String(listing.soyabeanSeedPricePerQuintal) : "");
+    } else if (listing.category === "bardan_bag") {
+      setBagCommodityType(listing.bagCommodityType || "");
+      setBagMaterialType(listing.bagMaterialType || "");
+      setBagDimension(listing.bagDimension || "");
+      setBagGsm(listing.bagGsm != null ? String(listing.bagGsm) : "");
+      setBagColor(listing.bagColor || "none");
+      setBagMinQuantity(listing.bagMinQuantity != null ? String(listing.bagMinQuantity) : "");
+      setBagPricePerBag(listing.bagPricePerBag != null ? String(listing.bagPricePerBag) : "");
     }
     setEditingListingId(listing.id);
     setPhotosDirty(false);
@@ -539,6 +617,7 @@ export default function MarketplacePage() {
       : cat === "potato_seed" ? t("potatoSeed")
       : cat === "onion_seed" ? t("onionSeed")
       : cat === "soyabean_seed" ? t("soyabeanSeed")
+      : cat === "bardan_bag" ? t("bardanBag")
       : cat;
 
   const categoryBadgeColor = (cat: string) =>
@@ -548,7 +627,9 @@ export default function MarketplacePage() {
       ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
       : cat === "onion_seed"
       ? "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
-      : "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300";
+      : cat === "soyabean_seed"
+      ? "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300"
+      : "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300";
 
   const categoryPlaceholderBg = (cat: string) =>
     cat === "onion_seedling"
@@ -557,7 +638,9 @@ export default function MarketplacePage() {
       ? "bg-amber-50 dark:bg-amber-950/30"
       : cat === "onion_seed"
       ? "bg-rose-50 dark:bg-rose-950/30"
-      : "bg-violet-50 dark:bg-violet-950/30";
+      : cat === "soyabean_seed"
+      ? "bg-violet-50 dark:bg-violet-950/30"
+      : "bg-sky-50 dark:bg-sky-950/30";
 
   const renderPlaceholderIcon = (cat: string, size: "sm" | "lg") => {
     const cls = size === "sm" ? "w-10 h-10" : "w-16 h-16";
@@ -569,6 +652,9 @@ export default function MarketplacePage() {
     }
     if (cat === "onion_seed") {
       return <Sprout className={`${cls} text-rose-300 dark:text-rose-700`} />;
+    }
+    if (cat === "bardan_bag") {
+      return <Package className={`${cls} text-sky-300 dark:text-sky-700`} />;
     }
     return <Sprout className={`${cls} text-violet-300 dark:text-violet-700`} />;
   };
@@ -586,6 +672,32 @@ export default function MarketplacePage() {
   const soyabeanDurationLabel = (val: string | null | undefined) => {
     if (val === "Long") return t("soyabeanDurationLong");
     if (val === "Short") return t("soyabeanDurationShort");
+    return val || "";
+  };
+
+  const bagCommodityLabel = (val: string | null | undefined) => {
+    if (val === "Onion") return t("bagCommodityOnion");
+    if (val === "Potato") return t("bagCommodityPotato");
+    if (val === "Garlic") return t("bagCommodityGarlic");
+    if (val === "Others") return t("bagCommodityOthers");
+    return val || "";
+  };
+
+  const bagMaterialLabel = (val: string | null | undefined) => {
+    if (val === "Jute/Hessian") return t("bagMaterialJute");
+    if (val === "LENO Mesh") return t("bagMaterialLeno");
+    if (val === "PP") return t("bagMaterialPP");
+    if (val === "Others") return t("bagMaterialOthers");
+    return val || "";
+  };
+
+  const bagColorLabel = (val: string | null | undefined) => {
+    if (val === "Red") return t("bagColorRed");
+    if (val === "Orange") return t("bagColorOrange");
+    if (val === "Blue") return t("bagColorBlue");
+    if (val === "Violet") return t("bagColorViolet");
+    if (val === "Yellow") return t("bagColorYellow");
+    if (val === "Pink") return t("bagColorPink");
     return val || "";
   };
 
@@ -625,6 +737,7 @@ export default function MarketplacePage() {
             <SelectItem value="potato_seed" data-testid="filter-potato_seed">{t("potatoSeed")}</SelectItem>
             <SelectItem value="onion_seed" data-testid="filter-onion_seed">{t("onionSeed")}</SelectItem>
             <SelectItem value="soyabean_seed" data-testid="filter-soyabean_seed">{t("soyabeanSeed")}</SelectItem>
+            <SelectItem value="bardan_bag" data-testid="filter-bardan_bag">{t("bardanBag")}</SelectItem>
           </SelectContent>
         </Select>
         <div className="ml-auto relative">
@@ -678,6 +791,7 @@ export default function MarketplacePage() {
             const isOnion = listing.category === "onion_seedling";
             const isOnionSeed = listing.category === "onion_seed";
             const isSoyabeanSeed = listing.category === "soyabean_seed";
+            const isBardanBag = listing.category === "bardan_bag";
             const hasPhoto = listing.photoCount > 0 || listing.photoMime;
             const cardTotalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
             const cardIdxRaw = cardPhotoIndex[listing.id] ?? 0;
@@ -803,7 +917,7 @@ export default function MarketplacePage() {
                         </p>
                       </>
                     )}
-                    {!isOnion && !isOnionSeed && !isSoyabeanSeed && (
+                    {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && (
                       <>
                         {listing.quantityBags && (
                           <p className="text-sm font-bold leading-snug" data-testid={`text-qty-${listing.id}`}>
@@ -813,6 +927,23 @@ export default function MarketplacePage() {
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[hn(listing.potatoVariety), hn(listing.potatoBrand)].filter(Boolean).join(" · ") || "—"}
                         </p>
+                      </>
+                    )}
+                    {isBardanBag && (
+                      <>
+                        <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {listing.bagPricePerBag != null
+                            ? (language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`)
+                            : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
+                        </p>
+                        <p className="text-xs font-medium text-foreground leading-snug truncate">
+                          {[bagCommodityLabel(listing.bagCommodityType), bagMaterialLabel(listing.bagMaterialType)].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                        {(listing.bagColor || listing.bagDimension) && (
+                          <p className="text-[11px] font-medium text-foreground/70 leading-snug truncate">
+                            {[bagColorLabel(listing.bagColor), listing.bagDimension].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
                       </>
                     )}
                     {isOnionSeed && (
@@ -959,6 +1090,7 @@ export default function MarketplacePage() {
                   <SelectItem value="potato_seed">{t("potatoSeed")}</SelectItem>
                   <SelectItem value="onion_seed">{t("onionSeed")}</SelectItem>
                   <SelectItem value="soyabean_seed">{t("soyabeanSeed")}</SelectItem>
+                  <SelectItem value="bardan_bag">{t("bardanBag")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1179,6 +1311,106 @@ export default function MarketplacePage() {
                 </div>
               </>
             )}
+
+            {category === "bardan_bag" && (
+              <>
+                <div>
+                  <Label className="text-sm">{t("bagCommodityType")}</Label>
+                  <Select value={bagCommodityType} onValueChange={setBagCommodityType}>
+                    <SelectTrigger data-testid="select-bag-commodity">
+                      <SelectValue placeholder={t("selectOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BAG_COMMODITY_TYPES.map(v => (
+                        <SelectItem key={v} value={v} data-testid={`option-bag-commodity-${v}`}>
+                          {bagCommodityLabel(v)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm">{t("bagMaterialType")}</Label>
+                  <Select value={bagMaterialType} onValueChange={setBagMaterialType}>
+                    <SelectTrigger data-testid="select-bag-material">
+                      <SelectValue placeholder={t("selectOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BAG_MATERIAL_TYPES.map(v => (
+                        <SelectItem key={v} value={v} data-testid={`option-bag-material-${v}`}>
+                          {bagMaterialLabel(v)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm">{t("bagDimension")}</Label>
+                  <Input
+                    value={bagDimension}
+                    onChange={(e) => setBagDimension(e.target.value.slice(0, 40))}
+                    placeholder={t("bagDimensionPlaceholder")}
+                    data-testid="input-bag-dimension"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{t("bagDimensionHelper")}</p>
+                </div>
+                <div>
+                  <Label className="text-sm">{t("bagGsm")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={2000}
+                    value={bagGsm}
+                    onChange={(e) => setBagGsm(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-bag-gsm"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("bagColor")}</Label>
+                  <Select value={bagColor} onValueChange={setBagColor}>
+                    <SelectTrigger data-testid="select-bag-color">
+                      <SelectValue placeholder={t("bagColorNone")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" data-testid="option-bag-color-none">{t("bagColorNone")}</SelectItem>
+                      {BAG_COLORS.map(v => (
+                        <SelectItem key={v} value={v} data-testid={`option-bag-color-${v}`}>
+                          {bagColorLabel(v)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm">{t("bagMinQuantity")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={999999}
+                    value={bagMinQuantity}
+                    onChange={(e) => setBagMinQuantity(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-bag-min-quantity"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("pricePerBag")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={999999}
+                    value={bagPricePerBag}
+                    onChange={(e) => setBagPricePerBag(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-bag-price"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <DialogFooter>
@@ -1204,6 +1436,7 @@ export default function MarketplacePage() {
                 const isOnion = listing.category === "onion_seedling";
                 const isOnionSeed = listing.category === "onion_seed";
                 const isSoyabeanSeed = listing.category === "soyabean_seed";
+                const isBardanBag = listing.category === "bardan_bag";
                 const totalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
                 const hasPhotos = totalPhotos > 0;
                 const dist = getDistanceKm(listing);
@@ -1277,7 +1510,7 @@ export default function MarketplacePage() {
                           )}
                         </div>
                       )}
-                      {!isOnion && !isOnionSeed && !isSoyabeanSeed && (
+                      {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && (
                         <div>
                           {listing.quantityBags && (
                             <p className="text-xl font-bold">{listing.quantityBags} {t("bags")}</p>
@@ -1287,6 +1520,33 @@ export default function MarketplacePage() {
                           )}
                           {listing.potatoBrand && (
                             <p className="text-sm font-medium">{t("potatoBrand")}: {hn(listing.potatoBrand)}</p>
+                          )}
+                        </div>
+                      )}
+                      {isBardanBag && (
+                        <div>
+                          <p className="text-xl font-bold" data-testid="text-detail-price">
+                            {listing.bagPricePerBag != null
+                              ? (language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`)
+                              : <span className="text-foreground/70">{t("contactForPrice")}</span>}
+                          </p>
+                          {listing.bagCommodityType && (
+                            <p className="text-sm font-medium">{t("bagCommodityType")}: {bagCommodityLabel(listing.bagCommodityType)}</p>
+                          )}
+                          {listing.bagMaterialType && (
+                            <p className="text-sm font-medium">{t("bagMaterialType")}: {bagMaterialLabel(listing.bagMaterialType)}</p>
+                          )}
+                          {listing.bagDimension && (
+                            <p className="text-sm font-medium">{t("bagDimension")}: {listing.bagDimension}</p>
+                          )}
+                          {listing.bagGsm != null && (
+                            <p className="text-sm font-medium">{t("bagGsm")}: {listing.bagGsm}</p>
+                          )}
+                          {listing.bagColor && (
+                            <p className="text-sm font-medium">{t("bagColor")}: {bagColorLabel(listing.bagColor)}</p>
+                          )}
+                          {listing.bagMinQuantity != null && (
+                            <p className="text-sm font-medium">{t("bagMinQuantity")}: {listing.bagMinQuantity}</p>
                           )}
                         </div>
                       )}
