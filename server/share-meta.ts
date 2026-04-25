@@ -50,7 +50,12 @@ function categoryLabel(category: string): string {
   return map[category] || "Listing";
 }
 
-const BRAND_TITLE = "Krashu Mitra — कृषु मित्र — किसानों का स्मार्ट साथी";
+const BRAND_TITLE = "KrashuVed | कृषुवेद — किसानों का साथी";
+const BRAND_DESCRIPTION =
+  "KrashuVed — कृषुवेद · किसानों का साथी. Marketplace, crop cards & digital clinic for Indian farmers.";
+const SHARE_COVER_PATH = "/share-cover.png";
+const SHARE_COVER_WIDTH = 1200;
+const SHARE_COVER_HEIGHT = 630;
 
 function summarizeListing(listing: MarketplaceListing): { title: string; description: string } {
   const cat = categoryLabel(listing.category);
@@ -95,27 +100,26 @@ function summarizeListing(listing: MarketplaceListing): { title: string; descrip
 
   const detail = parts.join(" · ");
   const summary = [cat, detail, location ? `📍 ${location}` : ""].filter(Boolean).join(" — ");
-  const title = BRAND_TITLE;
-  const description = summary || "Listed on Krashu Mitra — the smart companion for Indian farmers";
-  return { title, description };
+  const description = summary || BRAND_DESCRIPTION;
+  return { title: BRAND_TITLE, description };
 }
 
-function injectListingMeta(
-  html: string,
-  listing: MarketplaceListing,
-  hasPhoto: boolean,
-  origin: string,
-): string {
-  const { title, description } = summarizeListing(listing);
-  const url = `${origin}/marketplace?listing=${listing.id}`;
-  const imageUrl = hasPhoto
-    ? `${origin}/api/marketplace/${listing.id}/image?index=0`
-    : `${origin}/logo.png`;
+interface MetaPayload {
+  title: string;
+  description: string;
+  url: string;
+  imageUrl: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  type: "website" | "product";
+  cardType: "summary" | "summary_large_image";
+}
 
-  const safeTitle = escapeHtml(title);
-  const safeDesc = escapeHtml(description);
-  const safeUrl = escapeHtml(url);
-  const safeImage = escapeHtml(imageUrl);
+function injectMeta(html: string, meta: MetaPayload): string {
+  const safeTitle = escapeHtml(meta.title);
+  const safeDesc = escapeHtml(meta.description);
+  const safeUrl = escapeHtml(meta.url);
+  const safeImage = escapeHtml(meta.imageUrl);
 
   let out = html;
   out = out.replace(
@@ -140,24 +144,33 @@ function injectListingMeta(
   );
   out = out.replace(
     /<meta\s+name="twitter:card"[^>]*>/i,
-    `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:card" content="${meta.cardType}" />`,
   );
 
-  const additions = [
+  const additions: string[] = [
     `<meta property="og:url" content="${safeUrl}" />`,
-    `<meta property="og:type" content="product" />`,
-    `<meta property="og:site_name" content="Krashu Mitra" />`,
+    `<meta property="og:type" content="${meta.type}" />`,
+    `<meta property="og:site_name" content="KrashuVed" />`,
+    `<meta property="og:image:secure_url" content="${safeImage}" />`,
     `<meta name="twitter:title" content="${safeTitle}" />`,
     `<meta name="twitter:description" content="${safeDesc}" />`,
-  ].join("\n    ");
+  ];
+  if (meta.imageWidth && meta.imageHeight) {
+    additions.push(
+      `<meta property="og:image:width" content="${meta.imageWidth}" />`,
+      `<meta property="og:image:height" content="${meta.imageHeight}" />`,
+      `<meta property="og:image:type" content="image/png" />`,
+    );
+  }
+  const additionsHtml = additions.join("\n    ");
 
   if (out.match(/<meta\s+name="twitter:image"[^>]*>/i)) {
     out = out.replace(
       /<meta\s+name="twitter:image"[^>]*>/i,
-      (m) => `${additions}\n    ${m}`,
+      (m) => `${additionsHtml}\n    ${m}`,
     );
   } else {
-    out = out.replace(/<\/head>/i, `    ${additions}\n  </head>`);
+    out = out.replace(/<\/head>/i, `    ${additionsHtml}\n  </head>`);
   }
 
   return out;
@@ -188,25 +201,74 @@ function resolveOrigin(req: MetaRequestLike): string {
   return `${req.protocol}://${host}`;
 }
 
+function buildBrandMeta(origin: string, pathPart: string): MetaPayload {
+  return {
+    title: BRAND_TITLE,
+    description: BRAND_DESCRIPTION,
+    url: `${origin}${pathPart || "/"}`,
+    imageUrl: `${origin}${SHARE_COVER_PATH}`,
+    imageWidth: SHARE_COVER_WIDTH,
+    imageHeight: SHARE_COVER_HEIGHT,
+    type: "website",
+    cardType: "summary_large_image",
+  };
+}
+
+function buildListingMeta(
+  origin: string,
+  listing: MarketplaceListing,
+  hasPhoto: boolean,
+): MetaPayload {
+  const { title, description } = summarizeListing(listing);
+  const url = `${origin}/marketplace?listing=${listing.id}`;
+  if (hasPhoto) {
+    return {
+      title,
+      description,
+      url,
+      imageUrl: `${origin}/api/marketplace/${listing.id}/image?index=0`,
+      type: "product",
+      cardType: "summary_large_image",
+    };
+  }
+  return {
+    title,
+    description,
+    url,
+    imageUrl: `${origin}${SHARE_COVER_PATH}`,
+    imageWidth: SHARE_COVER_WIDTH,
+    imageHeight: SHARE_COVER_HEIGHT,
+    type: "product",
+    cardType: "summary_large_image",
+  };
+}
+
 export async function maybeInjectListingMeta(req: MetaRequestLike, html: string): Promise<string> {
   if (req.method !== "GET") return html;
   const original = req.originalUrl || "";
   const qIdx = original.indexOf("?");
   const pathPart = qIdx >= 0 ? original.slice(0, qIdx) : original;
   const queryPart = qIdx >= 0 ? original.slice(qIdx + 1) : "";
-  if (pathPart !== "/marketplace" && pathPart !== "/marketplace/") return html;
-  const params = new URLSearchParams(queryPart);
-  const raw = params.get("listing");
-  const listingId = parseInt(String(raw ?? ""), 10);
-  if (!listingId || Number.isNaN(listingId)) return html;
-  try {
-    const { listing, photoCount } = await getListingCached(listingId);
-    if (!listing || !listing.isActive) return html;
-    const hasPhoto = photoCount > 0 || !!listing.photoMime;
-    const origin = resolveOrigin(req);
-    return injectListingMeta(html, listing, hasPhoto, origin);
-  } catch (err) {
-    console.error("[share-meta] failed to inject listing meta:", err);
-    return html;
+  const origin = resolveOrigin(req);
+
+  // Listing-specific preview
+  if (pathPart === "/marketplace" || pathPart === "/marketplace/") {
+    const params = new URLSearchParams(queryPart);
+    const raw = params.get("listing");
+    const listingId = parseInt(String(raw ?? ""), 10);
+    if (listingId && !Number.isNaN(listingId)) {
+      try {
+        const { listing, photoCount } = await getListingCached(listingId);
+        if (listing && listing.isActive) {
+          const hasPhoto = photoCount > 0 || !!listing.photoMime;
+          return injectMeta(html, buildListingMeta(origin, listing, hasPhoto));
+        }
+      } catch (err) {
+        console.error("[share-meta] failed to inject listing meta:", err);
+      }
+    }
   }
+
+  // Generic brand-led preview for homepage and any other route that crawlers hit
+  return injectMeta(html, buildBrandMeta(origin, pathPart));
 }

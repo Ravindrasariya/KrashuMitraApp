@@ -1200,7 +1200,7 @@ export default function MarketplacePage() {
       summaryLine,
     ];
     return {
-      title: `${cat} | Krashu Mitra`,
+      title: `${cat} | KrashuVed`,
       text: lines.join("\n"),
       url,
       emailSubject: t("shareEmailSubject"),
