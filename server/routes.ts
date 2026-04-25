@@ -1730,7 +1730,7 @@ Respond in this structure:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag } = req.body || {};
+      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag } = req.body || {};
       if (!category || !["onion_seedling", "potato_seed", "onion_seed", "soyabean_seed", "bardan_bag"].includes(category)) {
         return res.status(400).json({ message: "Invalid category" });
       }
@@ -1747,7 +1747,7 @@ Respond in this structure:
         return res.status(400).json({ message: "soyabeanSeedVariety required for soyabean_seed" });
       }
       if (category === "bardan_bag") {
-        if (!bagCommodityType) {
+        if (!Array.isArray(bagCommodityType) || bagCommodityType.length === 0) {
           return res.status(400).json({ message: "bagCommodityType required for bardan_bag" });
         }
         if (!bagMaterialType) {
@@ -1786,9 +1786,27 @@ Respond in this structure:
       let parsedBagGsm: number | null = null;
       let parsedBagPricePerBag: number | null = null;
       let parsedBagMinQuantity: number | null = null;
+      let parsedBagCommodityTypes: string[] = [];
+      let parsedBagCommodityOther: string | null = null;
       if (category === "bardan_bag") {
-        if (!MARKETPLACE_BAG_COMMODITY_TYPES.includes(String(bagCommodityType) as typeof MARKETPLACE_BAG_COMMODITY_TYPES[number])) {
+        const seen = new Set<string>();
+        for (const v of bagCommodityType as unknown[]) {
+          const s = String(v);
+          if (!MARKETPLACE_BAG_COMMODITY_TYPES.includes(s as typeof MARKETPLACE_BAG_COMMODITY_TYPES[number])) {
+            return res.status(400).json({ message: "Invalid bagCommodityType" });
+          }
+          seen.add(s);
+        }
+        if (seen.size === 0 || seen.size > MARKETPLACE_BAG_COMMODITY_TYPES.length) {
           return res.status(400).json({ message: "Invalid bagCommodityType" });
+        }
+        parsedBagCommodityTypes = Array.from(seen);
+        if (parsedBagCommodityTypes.includes("Others")) {
+          const otherStr = typeof bagCommodityOther === "string" ? bagCommodityOther.trim() : "";
+          if (!otherStr) {
+            return res.status(400).json({ message: "bagCommodityOther required when Others is selected" });
+          }
+          parsedBagCommodityOther = otherStr.slice(0, 40);
         }
         if (!MARKETPLACE_BAG_MATERIAL_TYPES.includes(String(bagMaterialType) as typeof MARKETPLACE_BAG_MATERIAL_TYPES[number])) {
           return res.status(400).json({ message: "Invalid bagMaterialType" });
@@ -1871,7 +1889,8 @@ Respond in this structure:
         soyabeanSeedDuration: category === "soyabean_seed" && soyabeanSeedDuration ? String(soyabeanSeedDuration).slice(0, 20) : null,
         soyabeanSeedVariety: category === "soyabean_seed" && soyabeanSeedVariety ? String(soyabeanSeedVariety).trim().slice(0, 100) : null,
         soyabeanSeedPricePerQuintal: parsedPricePerQuintal,
-        bagCommodityType: category === "bardan_bag" && bagCommodityType ? String(bagCommodityType).slice(0, 20) : null,
+        bagCommodityType: category === "bardan_bag" ? parsedBagCommodityTypes : null,
+        bagCommodityOther: category === "bardan_bag" ? parsedBagCommodityOther : null,
         bagMaterialType: category === "bardan_bag" && bagMaterialType ? String(bagMaterialType).slice(0, 30) : null,
         bagDimension: category === "bardan_bag" && bagDimension ? String(bagDimension).trim().slice(0, 40) : null,
         bagGsm: category === "bardan_bag" ? parsedBagGsm : null,
@@ -1918,7 +1937,7 @@ Respond in this structure:
       if (existing.sellerId !== userId) return res.status(403).json({ message: "Not authorized" });
 
       const category = existing.category;
-      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag } = req.body || {};
+      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag } = req.body || {};
 
       if (category === "onion_seedling" && quantityBigha !== undefined && !quantityBigha) {
         return res.status(400).json({ message: "quantityBigha required for onion_seedling" });
@@ -1933,7 +1952,7 @@ Respond in this structure:
         return res.status(400).json({ message: "soyabeanSeedVariety required for soyabean_seed" });
       }
       if (category === "bardan_bag") {
-        if (bagCommodityType !== undefined && !bagCommodityType) {
+        if (bagCommodityType !== undefined && (!Array.isArray(bagCommodityType) || bagCommodityType.length === 0)) {
           return res.status(400).json({ message: "bagCommodityType required for bardan_bag" });
         }
         if (bagMaterialType !== undefined && !bagMaterialType) {
@@ -1973,9 +1992,53 @@ Respond in this structure:
       let parsedBagGsmPatch: number | null | undefined = undefined;
       let parsedBagPricePerBagPatch: number | null | undefined = undefined;
       let parsedBagMinQuantityPatch: number | null | undefined = undefined;
+      let parsedBagCommodityTypesPatch: string[] | undefined = undefined;
+      let parsedBagCommodityOtherPatch: string | null | undefined = undefined;
       if (category === "bardan_bag") {
-        if (bagCommodityType !== undefined && bagCommodityType && !MARKETPLACE_BAG_COMMODITY_TYPES.includes(String(bagCommodityType) as typeof MARKETPLACE_BAG_COMMODITY_TYPES[number])) {
-          return res.status(400).json({ message: "Invalid bagCommodityType" });
+        if (bagCommodityType !== undefined && Array.isArray(bagCommodityType)) {
+          const seen = new Set<string>();
+          for (const v of bagCommodityType) {
+            const s = String(v);
+            if (!MARKETPLACE_BAG_COMMODITY_TYPES.includes(s as typeof MARKETPLACE_BAG_COMMODITY_TYPES[number])) {
+              return res.status(400).json({ message: "Invalid bagCommodityType" });
+            }
+            seen.add(s);
+          }
+          if (seen.size === 0 || seen.size > MARKETPLACE_BAG_COMMODITY_TYPES.length) {
+            return res.status(400).json({ message: "Invalid bagCommodityType" });
+          }
+          parsedBagCommodityTypesPatch = Array.from(seen);
+        }
+        // Determine the effective commodity type set for "Others" presence:
+        // either the new array (if provided) or the existing stored array.
+        const effectiveTypes: string[] = parsedBagCommodityTypesPatch
+          ?? (Array.isArray((existing as any).bagCommodityType) ? (existing as any).bagCommodityType as string[] : []);
+        const effectiveHasOthers = effectiveTypes.includes("Others");
+        if (bagCommodityOther !== undefined) {
+          // Caller explicitly sent the other-text field. Validate based on
+          // whether Others is in the (effective) selection.
+          if (effectiveHasOthers) {
+            const otherStr = typeof bagCommodityOther === "string" ? bagCommodityOther.trim() : "";
+            if (!otherStr) {
+              return res.status(400).json({ message: "bagCommodityOther required when Others is selected" });
+            }
+            parsedBagCommodityOtherPatch = otherStr.slice(0, 40);
+          } else {
+            parsedBagCommodityOtherPatch = null;
+          }
+        } else if (parsedBagCommodityTypesPatch !== undefined) {
+          // Caller sent a new commodity selection but no other-text.
+          // If the new selection includes Others, require the existing
+          // other-text to still be present; otherwise clear it.
+          if (effectiveHasOthers) {
+            const existingOther = (existing as any).bagCommodityOther;
+            if (typeof existingOther !== "string" || !existingOther.trim()) {
+              return res.status(400).json({ message: "bagCommodityOther required when Others is selected" });
+            }
+            // No update needed — keep existing value.
+          } else {
+            parsedBagCommodityOtherPatch = null;
+          }
         }
         if (bagMaterialType !== undefined && bagMaterialType && !MARKETPLACE_BAG_MATERIAL_TYPES.includes(String(bagMaterialType) as typeof MARKETPLACE_BAG_MATERIAL_TYPES[number])) {
           return res.status(400).json({ message: "Invalid bagMaterialType" });
@@ -2075,7 +2138,8 @@ Respond in this structure:
         }
         if (parsedPricePerQuintal !== undefined) updates.soyabeanSeedPricePerQuintal = parsedPricePerQuintal;
       } else if (category === "bardan_bag") {
-        if (bagCommodityType !== undefined) updates.bagCommodityType = bagCommodityType ? String(bagCommodityType).slice(0, 20) : null;
+        if (parsedBagCommodityTypesPatch !== undefined) updates.bagCommodityType = parsedBagCommodityTypesPatch;
+        if (parsedBagCommodityOtherPatch !== undefined) updates.bagCommodityOther = parsedBagCommodityOtherPatch;
         if (bagMaterialType !== undefined) updates.bagMaterialType = bagMaterialType ? String(bagMaterialType).slice(0, 30) : null;
         if (bagDimension !== undefined) updates.bagDimension = bagDimension ? String(bagDimension).trim().slice(0, 40) : null;
         if (parsedBagGsmPatch !== undefined) updates.bagGsm = parsedBagGsmPatch;

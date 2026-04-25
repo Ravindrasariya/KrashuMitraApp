@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,
   DialogContent,
@@ -212,7 +213,8 @@ export default function MarketplacePage() {
   const [soyabeanDuration, setSoyabeanDuration] = useState("");
   const [soyabeanVariety, setSoyabeanVariety] = useState("");
   const [soyabeanPricePerQuintal, setSoyabeanPricePerQuintal] = useState("");
-  const [bagCommodityType, setBagCommodityType] = useState("");
+  const [bagCommodityType, setBagCommodityType] = useState<string[]>([]);
+  const [bagCommodityOther, setBagCommodityOther] = useState("");
   const [bagMaterialType, setBagMaterialType] = useState("");
   const [bagDimension, setBagDimension] = useState("");
   const [bagGsm, setBagGsm] = useState("");
@@ -341,7 +343,8 @@ export default function MarketplacePage() {
     setSoyabeanDuration("");
     setSoyabeanVariety("");
     setSoyabeanPricePerQuintal("");
-    setBagCommodityType("");
+    setBagCommodityType([]);
+    setBagCommodityOther("");
     setBagMaterialType("");
     setBagDimension("");
     setBagGsm("");
@@ -412,8 +415,13 @@ export default function MarketplacePage() {
       data.soyabeanSeedVariety = soyabeanVariety.trim();
       data.soyabeanSeedPricePerQuintal = soyabeanPricePerQuintal ? parseInt(soyabeanPricePerQuintal, 10) : null;
     } else if (category === "bardan_bag") {
-      if (!bagCommodityType) {
+      if (!Array.isArray(bagCommodityType) || bagCommodityType.length === 0) {
         toast({ title: t("bagCommodityType"), variant: "destructive" });
+        return;
+      }
+      const otherTrim = bagCommodityOther.trim();
+      if (bagCommodityType.includes("Others") && !otherTrim) {
+        toast({ title: t("bagCommodityOtherLabel"), variant: "destructive" });
         return;
       }
       if (!bagMaterialType) {
@@ -454,6 +462,7 @@ export default function MarketplacePage() {
         }
       }
       data.bagCommodityType = bagCommodityType;
+      data.bagCommodityOther = bagCommodityType.includes("Others") ? otherTrim.slice(0, 40) : null;
       data.bagMaterialType = bagMaterialType;
       data.bagDimension = bagDimension.trim() || null;
       data.bagGsm = gsmNum;
@@ -489,7 +498,8 @@ export default function MarketplacePage() {
       setSoyabeanVariety(listing.soyabeanSeedVariety || "");
       setSoyabeanPricePerQuintal(listing.soyabeanSeedPricePerQuintal != null ? String(listing.soyabeanSeedPricePerQuintal) : "");
     } else if (listing.category === "bardan_bag") {
-      setBagCommodityType(listing.bagCommodityType || "");
+      setBagCommodityType(Array.isArray(listing.bagCommodityType) ? listing.bagCommodityType : []);
+      setBagCommodityOther(listing.bagCommodityOther || "");
       setBagMaterialType(listing.bagMaterialType || "");
       setBagDimension(listing.bagDimension || "");
       setBagGsm(listing.bagGsm != null ? String(listing.bagGsm) : "");
@@ -681,6 +691,23 @@ export default function MarketplacePage() {
     if (val === "Garlic") return t("bagCommodityGarlic");
     if (val === "Others") return t("bagCommodityOthers");
     return val || "";
+  };
+
+  const bagCommodityListLabel = (
+    arr: string[] | null | undefined,
+    custom: string | null | undefined,
+  ) => {
+    if (!Array.isArray(arr) || arr.length === 0) return "";
+    const customTrim = (custom || "").trim();
+    const parts: string[] = [];
+    for (const v of arr) {
+      if (v === "Others") {
+        if (customTrim) parts.push(customTrim);
+      } else {
+        parts.push(bagCommodityLabel(v));
+      }
+    }
+    return parts.filter(Boolean).join(", ");
   };
 
   const bagMaterialLabel = (val: string | null | undefined) => {
@@ -935,7 +962,7 @@ export default function MarketplacePage() {
                           {language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`}
                         </p>
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
-                          {[bagCommodityLabel(listing.bagCommodityType), bagMaterialLabel(listing.bagMaterialType)].filter(Boolean).join(" · ") || "—"}
+                          {[bagCommodityListLabel(listing.bagCommodityType, listing.bagCommodityOther), bagMaterialLabel(listing.bagMaterialType)].filter(Boolean).join(" · ") || "—"}
                         </p>
                         {(listing.bagColor || listing.bagDimension) && (
                           <p className="text-[11px] font-medium text-foreground/70 leading-snug truncate">
@@ -1314,18 +1341,43 @@ export default function MarketplacePage() {
               <>
                 <div>
                   <Label className="text-sm">{t("bagCommodityType")}</Label>
-                  <Select value={bagCommodityType} onValueChange={setBagCommodityType}>
-                    <SelectTrigger data-testid="select-bag-commodity">
-                      <SelectValue placeholder={t("selectOption")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BAG_COMMODITY_TYPES.map(v => (
-                        <SelectItem key={v} value={v} data-testid={`option-bag-commodity-${v}`}>
-                          {bagCommodityLabel(v)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ToggleGroup
+                    type="multiple"
+                    value={bagCommodityType}
+                    onValueChange={(v) => {
+                      const next = Array.isArray(v) ? v : [];
+                      setBagCommodityType(next);
+                      if (!next.includes("Others")) setBagCommodityOther("");
+                    }}
+                    className="flex flex-wrap justify-start gap-2 mt-1"
+                    data-testid="toggle-bag-commodity"
+                  >
+                    {BAG_COMMODITY_TYPES.map(v => (
+                      <ToggleGroupItem
+                        key={v}
+                        value={v}
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                        data-testid={`chip-bag-commodity-${v}`}
+                      >
+                        {bagCommodityLabel(v)}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                  <p className="text-xs text-muted-foreground mt-1">{t("bagCommodityHint")}</p>
+                  {bagCommodityType.includes("Others") && (
+                    <div className="mt-2">
+                      <Label className="text-sm">{t("bagCommodityOtherLabel")}</Label>
+                      <Input
+                        value={bagCommodityOther}
+                        onChange={(e) => setBagCommodityOther(e.target.value.slice(0, 40))}
+                        placeholder={t("bagCommodityOtherPlaceholder")}
+                        maxLength={40}
+                        data-testid="input-bag-commodity-other"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label className="text-sm">{t("bagMaterialType")}</Label>
@@ -1527,7 +1579,7 @@ export default function MarketplacePage() {
                             {language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`}
                           </p>
                           {listing.bagCommodityType && (
-                            <p className="text-sm font-medium">{t("bagCommodityType")}: {bagCommodityLabel(listing.bagCommodityType)}</p>
+                            <p className="text-sm font-medium">{t("bagCommodityType")}: {bagCommodityListLabel(listing.bagCommodityType, listing.bagCommodityOther) || "—"}</p>
                           )}
                           {listing.bagMaterialType && (
                             <p className="text-sm font-medium">{t("bagMaterialType")}: {bagMaterialLabel(listing.bagMaterialType)}</p>
