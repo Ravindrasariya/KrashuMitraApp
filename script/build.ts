@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, cp, stat } from "fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -59,6 +59,18 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  // Copy runtime assets bundled with the server (e.g. the Devanagari TTF used
+  // by the share-image composer). The bundled CJS resolves these via
+  // path.resolve(__dirname, "assets/...") at runtime, so they need to sit
+  // alongside dist/index.cjs.
+  try {
+    await stat("server/assets");
+    await cp("server/assets", "dist/assets", { recursive: true });
+    console.log("copied server/assets → dist/assets");
+  } catch {
+    // no server assets to copy — fine
+  }
 }
 
 buildAll().catch((err) => {

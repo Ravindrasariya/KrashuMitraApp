@@ -13,8 +13,31 @@ const H = 630;
 const PHOTO_H = 441;
 const BAND_H = H - PHOTO_H;
 
-const FONT_SRC = path.resolve(import.meta.dirname, "assets/fonts/NotoSansDevanagari-Regular.ttf");
-const SHARE_COVER_PATH = path.resolve(import.meta.dirname, "../client/public/share-cover.png");
+// Resolve the directory this module lives in for both runtime modes:
+// - tsx (dev): file is at server/share-image.ts; import.meta.dirname works.
+// - esbuild CJS bundle (prod): bundled into dist/index.cjs; __dirname is dist/.
+// We must prefer __dirname when available — import.meta.dirname is undefined
+// in the CJS bundle, and reading it at module top-level crashes the process.
+declare const __dirname: string | undefined;
+function moduleDir(): string {
+  if (typeof __dirname !== "undefined") return __dirname;
+  return import.meta.dirname;
+}
+
+// In dev: <repo>/server/assets/fonts/...
+// In prod: <install>/dist/assets/fonts/... (build script copies server/assets → dist/assets)
+function resolveFontPath(): string {
+  return path.resolve(moduleDir(), "assets/fonts/NotoSansDevanagari-Regular.ttf");
+}
+
+// In dev: <repo>/client/public/share-cover.png
+// In prod: <install>/dist/public/share-cover.png (Vite emits it there)
+function resolveShareCoverPath(): string {
+  if (typeof __dirname !== "undefined") {
+    return path.resolve(moduleDir(), "public/share-cover.png");
+  }
+  return path.resolve(moduleDir(), "../client/public/share-cover.png");
+}
 
 let fontReady = false;
 let fontInFlight: Promise<void> | null = null;
@@ -23,16 +46,17 @@ async function ensureDevanagariFont(): Promise<void> {
   if (fontInFlight) return fontInFlight;
   fontInFlight = (async () => {
     try {
-      if (!fs.existsSync(FONT_SRC)) {
-        console.warn("[share-image] bundled Devanagari font missing at", FONT_SRC);
+      const fontSrc = resolveFontPath();
+      if (!fs.existsSync(fontSrc)) {
+        console.warn("[share-image] bundled Devanagari font missing at", fontSrc);
         return;
       }
       const homeFontDir = path.join(os.homedir(), ".fonts");
       fs.mkdirSync(homeFontDir, { recursive: true });
       const dest = path.join(homeFontDir, "NotoSansDevanagari-Regular.ttf");
-      const srcSize = fs.statSync(FONT_SRC).size;
+      const srcSize = fs.statSync(fontSrc).size;
       if (!fs.existsSync(dest) || fs.statSync(dest).size !== srcSize) {
-        fs.copyFileSync(FONT_SRC, dest);
+        fs.copyFileSync(fontSrc, dest);
       }
       try {
         execSync("fc-cache -f", { stdio: "ignore" });
@@ -239,9 +263,10 @@ async function buildTopLayer(
       console.warn("[share-image] failed to decode listing photo, falling back to cover:", err);
     }
   }
-  if (fs.existsSync(SHARE_COVER_PATH)) {
+  const coverPath = resolveShareCoverPath();
+  if (fs.existsSync(coverPath)) {
     try {
-      return await sharp(SHARE_COVER_PATH)
+      return await sharp(coverPath)
         .resize(W, PHOTO_H, { fit: "cover", position: "center" })
         .toBuffer();
     } catch (err) {
