@@ -1,0 +1,26 @@
+root@srv1277141:/var/www/krashumitra# pm2 logs krashumitra --lines 10
+[TAILING] Tailing last 10 lines for [krashumitra] process (change the value with --lines option)
+/root/.pm2/logs/krashumitra-out.log last 10 lines:
+5|krashumi | 8:39:53 PM [express] GET /api/service-requests/13/image 304 in 541ms
+5|krashumi | 8:39:53 PM [express] GET /api/service-requests/12/image 304 in 549ms
+5|krashumi | 8:39:53 PM [express] GET /api/service-requests/18/image 304 in 573ms
+5|krashumi | 8:39:53 PM [express] GET /api/service-requests/5/image 304 in 18ms
+5|krashumi | 8:39:53 PM [express] GET /api/service-requests/2/image 304 in 17ms
+5|krashumi | 8:39:53 PM [express] GET /api/service-requests/1/image 304 in 19ms
+5|krashumi | 10:13:23 PM [express] GET /api/auth/user 304 in 35ms :: {"id":"4edcd382-3ed9-4ea5-83d2-cdce13831ccf","phoneNumber":"8882589392","email":null,"firstName":"Admin","lastName":null,"profileImageUrl":null,"farmerCode":"ADMIN001","village":"Kachnariya","tehsil":"Makdone","district":"Ujjain","state":"Madhya Pradesh","postalCode":"453555","latitude":"23.4147739","longitude":"75.9654993","isAdmin":true,"mustChangePin":false,"createdAt":"2026-03-06T06:44:58.576Z","updatedAt":"2026-04-25T10:03:56.462Z"}
+5|krashumi | 10:17:37 PM [express] HEAD /api/marketplace/6/image 200 in 29ms
+5|krashumi | 10:17:39 PM [express] GET /api/marketplace/6/image 200 in 6ms
+5|krashumi | 10:17:42 PM [express] GET /api/marketplace/6/image 200 in 8ms
+
+/root/.pm2/logs/krashumitra-error.log last 10 lines:
+5|krashumi |     at Module._compile (node:internal/modules/cjs/loader:1521:14)
+5|krashumi |     at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+5|krashumi |     at Module.load (node:internal/modules/cjs/loader:1266:32)
+5|krashumi |     at Module._load (node:internal/modules/cjs/loader:1091:12)
+5|krashumi |     at cjsLoader (node:internal/modules/esm/translators:298:15)
+5|krashumi |     at ModuleWrap.<anonymous> (node:internal/modules/esm/translators:240:7)
+5|krashumi |     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+5|krashumi |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+5|krashumi |   code: 'ERR_INVALID_ARG_TYPE'
+5|krashumi | }
+
