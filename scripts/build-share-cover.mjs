@@ -1,3 +1,16 @@
+/**
+ * Builds the 1200x630 social share cover (og:image / twitter:image) at
+ * client/public/share-cover.png.
+ *
+ * NOTE on language: the brand name is bilingual ("KrashuVed | कृषुवेद").
+ * However the build container only has DejaVu Sans available, which does NOT
+ * include Devanagari glyphs — rendering "कृषुवेद" with sharp+SVG here would
+ * produce empty boxes. So this script intentionally renders an English-only
+ * illustrative cover ("KrashuVed — Companion for Indian Farmers"). A proper
+ * bilingual cover (with Noto Sans Devanagari) is tracked as a follow-up task
+ * and can replace this PNG without any code changes — the file path stays
+ * the same.
+ */
 import sharp from "sharp";
 import fs from "node:fs/promises";
 import path from "node:path";

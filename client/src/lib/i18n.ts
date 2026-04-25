@@ -577,7 +577,7 @@ const translations = {
   shareViaEmail: { hi: "ईमेल से भेजें", en: "Email" },
   shareCopyLink: { hi: "लिंक कॉपी करें", en: "Copy link" },
   shareLinkCopied: { hi: "लिंक कॉपी हो गया", en: "Link copied" },
-  shareEmailSubject: { hi: "कृषु मित्र पर एक सूची देखें", en: "Take a look at this listing on Krashu Mitra" },
+  shareEmailSubject: { hi: "KrashuVed | कृषुवेद पर एक सूची देखें", en: "Take a look at this listing on KrashuVed | कृषुवेद" },
   shareCopyFailed: { hi: "लिंक कॉपी नहीं हो सका", en: "Could not copy link" },
   shareListingNotFound: { hi: "यह सूची अब उपलब्ध नहीं है", en: "This listing is no longer available" },
   shareListingDeleted: { hi: "यह सूची विक्रेता द्वारा हटा दी गई है", en: "This listing was removed by the seller" },
