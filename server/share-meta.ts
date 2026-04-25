@@ -50,7 +50,7 @@ function categoryLabel(category: string): string {
   return map[category] || "Listing";
 }
 
-const BRAND_TITLE = "कृषु मित्र — किसानों का स्मार्ट साथी";
+const BRAND_TITLE = "Krashu Mitra — कृषु मित्र — किसानों का स्मार्ट साथी";
 
 function summarizeListing(listing: MarketplaceListing): { title: string; description: string } {
   const cat = categoryLabel(listing.category);

@@ -1173,7 +1173,6 @@ export default function MarketplacePage() {
       summary,
       location ? `📍 ${location}` : "",
     ].filter(Boolean).join(" — ");
-    void homepage;
     const lines = [
       t("shareBrandTagline"),
       summaryLine,
