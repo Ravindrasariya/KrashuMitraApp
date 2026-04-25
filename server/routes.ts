@@ -16,6 +16,7 @@ import {
   MARKETPLACE_BAG_COMMODITY_TYPES,
   MARKETPLACE_BAG_MATERIAL_TYPES,
   MARKETPLACE_BAG_COLORS,
+  MARKETPLACE_BAG_GSM_OPTIONS,
   MARKETPLACE_FAN_BRANDS,
   MARKETPLACE_FAN_COLORS,
 } from "@shared/schema";
@@ -1755,7 +1756,7 @@ Respond in this structure:
         if (!bagMaterialType) {
           return res.status(400).json({ message: "bagMaterialType required for bardan_bag" });
         }
-        if (bagGsm === undefined || bagGsm === null || String(bagGsm).trim() === "") {
+        if (!Array.isArray(bagGsm) || bagGsm.length === 0) {
           return res.status(400).json({ message: "bagGsm required for bardan_bag" });
         }
         if (bagPricePerBag === undefined || bagPricePerBag === null || String(bagPricePerBag).trim() === "") {
@@ -1790,7 +1791,7 @@ Respond in this structure:
         }
       }
 
-      let parsedBagGsm: number | null = null;
+      let parsedBagGsm: number[] | null = null;
       let parsedBagPricePerBag: number | null = null;
       let parsedBagMinQuantity: number | null = null;
       let parsedBagCommodityTypes: string[] = [];
@@ -1826,15 +1827,22 @@ Respond in this structure:
             return res.status(400).json({ message: "Invalid bagColor" });
           }
         }
-        const gsmRaw = String(bagGsm).trim();
-        if (!/^\d+$/.test(gsmRaw)) {
+        const gsmSeen = new Set<number>();
+        for (const v of bagGsm as unknown[]) {
+          const raw = String(v).trim();
+          if (!/^\d+$/.test(raw)) {
+            return res.status(400).json({ message: "Invalid bagGsm" });
+          }
+          const n = parseInt(raw, 10);
+          if (Number.isNaN(n) || !MARKETPLACE_BAG_GSM_OPTIONS.includes(n as typeof MARKETPLACE_BAG_GSM_OPTIONS[number])) {
+            return res.status(400).json({ message: "Invalid bagGsm" });
+          }
+          gsmSeen.add(n);
+        }
+        if (gsmSeen.size === 0 || gsmSeen.size > MARKETPLACE_BAG_GSM_OPTIONS.length) {
           return res.status(400).json({ message: "Invalid bagGsm" });
         }
-        const gsmN = parseInt(gsmRaw, 10);
-        if (Number.isNaN(gsmN) || gsmN < 1 || gsmN > 2000) {
-          return res.status(400).json({ message: "Invalid bagGsm" });
-        }
-        parsedBagGsm = gsmN;
+        parsedBagGsm = Array.from(gsmSeen).sort((a, b) => a - b);
 
         const priceRaw = String(bagPricePerBag).trim();
         if (!/^\d+$/.test(priceRaw)) {
@@ -2063,7 +2071,7 @@ Respond in this structure:
         if (bagMaterialType !== undefined && !bagMaterialType) {
           return res.status(400).json({ message: "bagMaterialType required for bardan_bag" });
         }
-        if (bagGsm !== undefined && (bagGsm === null || String(bagGsm).trim() === "")) {
+        if (bagGsm !== undefined && (!Array.isArray(bagGsm) || bagGsm.length === 0)) {
           return res.status(400).json({ message: "bagGsm required for bardan_bag" });
         }
         if (bagPricePerBag !== undefined && (bagPricePerBag === null || String(bagPricePerBag).trim() === "")) {
@@ -2094,7 +2102,7 @@ Respond in this structure:
         }
       }
 
-      let parsedBagGsmPatch: number | null | undefined = undefined;
+      let parsedBagGsmPatch: number[] | null | undefined = undefined;
       let parsedBagPricePerBagPatch: number | null | undefined = undefined;
       let parsedBagMinQuantityPatch: number | null | undefined = undefined;
       let parsedBagCommodityTypesPatch: string[] | undefined = undefined;
@@ -2157,16 +2165,23 @@ Respond in this structure:
             return res.status(400).json({ message: "Invalid bagColor" });
           }
         }
-        if (bagGsm !== undefined && bagGsm !== null && String(bagGsm).trim() !== "") {
-          const raw = String(bagGsm).trim();
-          if (!/^\d+$/.test(raw)) {
+        if (bagGsm !== undefined && Array.isArray(bagGsm)) {
+          const seen = new Set<number>();
+          for (const v of bagGsm as unknown[]) {
+            const raw = String(v).trim();
+            if (!/^\d+$/.test(raw)) {
+              return res.status(400).json({ message: "Invalid bagGsm" });
+            }
+            const n = parseInt(raw, 10);
+            if (Number.isNaN(n) || !MARKETPLACE_BAG_GSM_OPTIONS.includes(n as typeof MARKETPLACE_BAG_GSM_OPTIONS[number])) {
+              return res.status(400).json({ message: "Invalid bagGsm" });
+            }
+            seen.add(n);
+          }
+          if (seen.size === 0 || seen.size > MARKETPLACE_BAG_GSM_OPTIONS.length) {
             return res.status(400).json({ message: "Invalid bagGsm" });
           }
-          const n = parseInt(raw, 10);
-          if (Number.isNaN(n) || n < 1 || n > 2000) {
-            return res.status(400).json({ message: "Invalid bagGsm" });
-          }
-          parsedBagGsmPatch = n;
+          parsedBagGsmPatch = Array.from(seen).sort((a, b) => a - b);
         }
         if (bagPricePerBag !== undefined && bagPricePerBag !== null && String(bagPricePerBag).trim() !== "") {
           const raw = String(bagPricePerBag).trim();

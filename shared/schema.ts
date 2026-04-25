@@ -271,6 +271,7 @@ export const MARKETPLACE_ONION_SEED_BRANDS = [
 export const MARKETPLACE_BAG_COMMODITY_TYPES = ["Onion", "Potato", "Garlic", "Others"] as const;
 export const MARKETPLACE_BAG_MATERIAL_TYPES = ["Jute/Hessian", "LENO Mesh", "PP", "Others"] as const;
 export const MARKETPLACE_BAG_COLORS = ["Red", "Orange", "Blue", "Violet", "Yellow", "Pink"] as const;
+export const MARKETPLACE_BAG_GSM_OPTIONS = [40, 50, 60, 70, 80, 90, 100, 120, 150] as const;
 
 // Exhaust Fan allow-lists shared between client form dropdowns and
 // server-side validation so the two never drift.
@@ -300,7 +301,7 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   bagCommodityOther: text("bag_commodity_other"),
   bagMaterialType: text("bag_material_type"),
   bagDimension: text("bag_dimension"),
-  bagGsm: integer("bag_gsm"),
+  bagGsm: integer("bag_gsm").array(),
   bagColor: text("bag_color"),
   bagMinQuantity: integer("bag_min_quantity"),
   bagPricePerBag: integer("bag_price_per_bag"),

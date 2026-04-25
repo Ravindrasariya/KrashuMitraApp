@@ -30,6 +30,7 @@ import {
   MARKETPLACE_BAG_COMMODITY_TYPES,
   MARKETPLACE_BAG_MATERIAL_TYPES,
   MARKETPLACE_BAG_COLORS,
+  MARKETPLACE_BAG_GSM_OPTIONS,
   MARKETPLACE_FAN_BRANDS,
   MARKETPLACE_FAN_COLORS,
   type MarketplaceListing,
@@ -52,6 +53,7 @@ const SOYABEAN_DURATIONS = ["Long", "Short"] as const;
 const BAG_COMMODITY_TYPES: string[] = [...MARKETPLACE_BAG_COMMODITY_TYPES];
 const BAG_MATERIAL_TYPES: string[] = [...MARKETPLACE_BAG_MATERIAL_TYPES];
 const BAG_COLORS: string[] = [...MARKETPLACE_BAG_COLORS];
+const BAG_GSM_OPTIONS = MARKETPLACE_BAG_GSM_OPTIONS;
 const FAN_BRANDS: string[] = [...MARKETPLACE_FAN_BRANDS];
 const FAN_COLORS: string[] = [...MARKETPLACE_FAN_COLORS];
 
@@ -221,7 +223,7 @@ export default function MarketplacePage() {
   const [bagCommodityOther, setBagCommodityOther] = useState("");
   const [bagMaterialType, setBagMaterialType] = useState("");
   const [bagDimension, setBagDimension] = useState("");
-  const [bagGsm, setBagGsm] = useState("");
+  const [bagGsm, setBagGsm] = useState<string[]>([]);
   const [bagColor, setBagColor] = useState("none");
   const [bagMinQuantity, setBagMinQuantity] = useState("");
   const [bagPricePerBag, setBagPricePerBag] = useState("");
@@ -366,7 +368,7 @@ export default function MarketplacePage() {
     setBagCommodityOther("");
     setBagMaterialType("");
     setBagDimension("");
-    setBagGsm("");
+    setBagGsm([]);
     setBagColor("none");
     setBagMinQuantity("");
     setBagPricePerBag("");
@@ -462,16 +464,25 @@ export default function MarketplacePage() {
         toast({ title: t("bagMaterialType"), variant: "destructive" });
         return;
       }
-      const gsmStr = bagGsm.trim();
-      if (!/^\d+$/.test(gsmStr)) {
+      if (!Array.isArray(bagGsm) || bagGsm.length === 0) {
         toast({ title: t("bagGsm"), variant: "destructive" });
         return;
       }
-      const gsmNum = parseInt(gsmStr, 10);
-      if (gsmNum < 1 || gsmNum > 2000) {
-        toast({ title: t("bagGsm"), variant: "destructive" });
-        return;
+      const gsmSet = new Set<number>();
+      for (const v of bagGsm) {
+        const s = String(v).trim();
+        if (!/^\d+$/.test(s)) {
+          toast({ title: t("bagGsm"), variant: "destructive" });
+          return;
+        }
+        const n = parseInt(s, 10);
+        if (!BAG_GSM_OPTIONS.includes(n as typeof BAG_GSM_OPTIONS[number])) {
+          toast({ title: t("bagGsm"), variant: "destructive" });
+          return;
+        }
+        gsmSet.add(n);
       }
+      const gsmArr = Array.from(gsmSet).sort((a, b) => a - b);
       const priceStr = bagPricePerBag.trim();
       if (!/^\d+$/.test(priceStr)) {
         toast({ title: t("pricePerBag"), variant: "destructive" });
@@ -499,7 +510,7 @@ export default function MarketplacePage() {
       data.bagCommodityOther = bagCommodityType.includes("Others") ? otherTrim.slice(0, 40) : null;
       data.bagMaterialType = bagMaterialType;
       data.bagDimension = bagDimension.trim() || null;
-      data.bagGsm = gsmNum;
+      data.bagGsm = gsmArr;
       data.bagColor = bagColor && bagColor !== "none" ? bagColor : null;
       data.bagMinQuantity = minQtyNum;
       data.bagPricePerBag = priceNum;
@@ -608,7 +619,7 @@ export default function MarketplacePage() {
       setBagCommodityOther(listing.bagCommodityOther || "");
       setBagMaterialType(listing.bagMaterialType || "");
       setBagDimension(listing.bagDimension || "");
-      setBagGsm(listing.bagGsm != null ? String(listing.bagGsm) : "");
+      setBagGsm(Array.isArray(listing.bagGsm) ? listing.bagGsm.map(String) : []);
       setBagColor(listing.bagColor || "none");
       setBagMinQuantity(listing.bagMinQuantity != null ? String(listing.bagMinQuantity) : "");
       setBagPricePerBag(listing.bagPricePerBag != null ? String(listing.bagPricePerBag) : "");
@@ -1598,16 +1609,26 @@ export default function MarketplacePage() {
                 </div>
                 <div>
                   <Label className="text-sm">{t("bagGsm")}</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={2000}
+                  <ToggleGroup
+                    type="multiple"
                     value={bagGsm}
-                    onChange={(e) => setBagGsm(e.target.value)}
-                    placeholder="0"
-                    data-testid="input-bag-gsm"
-                  />
+                    onValueChange={(v) => setBagGsm(Array.isArray(v) ? v : [])}
+                    className="flex flex-wrap justify-start gap-2 mt-1"
+                    data-testid="toggle-bag-gsm"
+                  >
+                    {BAG_GSM_OPTIONS.map(v => (
+                      <ToggleGroupItem
+                        key={v}
+                        value={String(v)}
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                        data-testid={`chip-bag-gsm-${v}`}
+                      >
+                        {v}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
                 </div>
                 <div>
                   <Label className="text-sm">{t("bagColor")}</Label>
@@ -1974,8 +1995,8 @@ export default function MarketplacePage() {
                           {listing.bagDimension && (
                             <p className="text-sm font-medium">{t("bagDimension")}: {listing.bagDimension}</p>
                           )}
-                          {listing.bagGsm != null && (
-                            <p className="text-sm font-medium">{t("bagGsm")}: {listing.bagGsm}</p>
+                          {Array.isArray(listing.bagGsm) && listing.bagGsm.length > 0 && (
+                            <p className="text-sm font-medium">{t("bagGsm")}: {[...listing.bagGsm].sort((a, b) => a - b).join(", ")}</p>
                           )}
                           {listing.bagColor && (
                             <p className="text-sm font-medium">{t("bagColor")}: {bagColorLabel(listing.bagColor)}</p>
