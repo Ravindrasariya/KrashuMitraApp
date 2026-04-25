@@ -1806,7 +1806,10 @@ Respond in this structure:
           if (!otherStr) {
             return res.status(400).json({ message: "bagCommodityOther required when Others is selected" });
           }
-          parsedBagCommodityOther = otherStr.slice(0, 40);
+          if (otherStr.length > 40) {
+            return res.status(400).json({ message: "bagCommodityOther must be 40 characters or fewer" });
+          }
+          parsedBagCommodityOther = otherStr;
         }
         if (!MARKETPLACE_BAG_MATERIAL_TYPES.includes(String(bagMaterialType) as typeof MARKETPLACE_BAG_MATERIAL_TYPES[number])) {
           return res.status(400).json({ message: "Invalid bagMaterialType" });
@@ -2023,7 +2026,10 @@ Respond in this structure:
             if (!otherStr) {
               return res.status(400).json({ message: "bagCommodityOther required when Others is selected" });
             }
-            parsedBagCommodityOtherPatch = otherStr.slice(0, 40);
+            if (otherStr.length > 40) {
+              return res.status(400).json({ message: "bagCommodityOther must be 40 characters or fewer" });
+            }
+            parsedBagCommodityOtherPatch = otherStr;
           } else {
             parsedBagCommodityOtherPatch = null;
           }
