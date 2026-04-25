@@ -1159,7 +1159,7 @@ export default function MarketplacePage() {
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[
                             fanBrandText(listing.fanBrand, listing.fanBrandOther),
-                            listing.fanWattage != null ? `${listing.fanWattage}W` : null,
+                            listing.fanWattage != null ? `${listing.fanWattage} W` : null,
                             listing.fanSpeedRpm != null ? `${listing.fanSpeedRpm} RPM` : null,
                           ].filter(Boolean).join(" · ") || "—"}
                         </p>
@@ -2037,8 +2037,8 @@ export default function MarketplacePage() {
                             <p className="text-sm font-medium">{t("fanBladeMaterial")}: {listing.fanBladeMaterial || "—"}</p>
                             <p className="text-sm font-medium">{t("fanCountryOfOrigin")}: {listing.fanCountryOfOrigin || "—"}</p>
                             <p className="text-sm font-medium col-span-2">{t("fanWarrantyYears")}: {listing.fanWarrantyYears != null ? listing.fanWarrantyYears : "—"}</p>
-                            <p className="text-sm font-medium col-span-2">{t("fanDimensions")}: {listing.fanDimensions || "—"}</p>
                           </div>
+                          <p className="text-sm font-medium mt-1.5">{t("fanDimensions")}: {listing.fanDimensions || "—"}</p>
                         </div>
                       )}
 
