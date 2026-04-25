@@ -994,6 +994,7 @@ export default function MarketplacePage() {
           {sortedListings.map(listing => {
             const dist = getDistanceKm(listing);
             const isOwner = user?.id === listing.sellerId;
+            const canManage = isOwner || !!user?.isAdmin;
             const isOnion = listing.category === "onion_seedling";
             const isOnionSeed = listing.category === "onion_seed";
             const isSoyabeanSeed = listing.category === "soyabean_seed";
@@ -1240,7 +1241,7 @@ export default function MarketplacePage() {
                     {!isAuthenticated && (
                       <span className="text-[9px] text-muted-foreground">{t("loginToContact")}</span>
                     )}
-                    {isOwner && (
+                    {canManage && (
                       <>
                         <Button
                           variant="ghost"
@@ -1880,6 +1881,7 @@ export default function MarketplacePage() {
                 const hasPhotos = totalPhotos > 0;
                 const dist = getDistanceKm(listing);
                 const isOwner = user?.id === listing.sellerId;
+                const canManage = isOwner || !!user?.isAdmin;
 
                 return (
                   <>
@@ -2115,7 +2117,7 @@ export default function MarketplacePage() {
                         ) : (
                           <p className="text-sm text-muted-foreground">{t("loginToContact")}</p>
                         )}
-                        {isOwner && (
+                        {canManage && (
                           <div className="flex gap-2">
                             <Button
                               variant="outline"

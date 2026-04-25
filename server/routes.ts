@@ -2036,7 +2036,10 @@ Respond in this structure:
       const userId = req.session.userId;
       const existing = await storage.getMarketplaceListing(parseInt(req.params.id));
       if (!existing) return res.status(404).json({ message: "Not found" });
-      if (existing.sellerId !== userId) return res.status(403).json({ message: "Not authorized" });
+      const requester = await storage.getUserById(userId);
+      if (existing.sellerId !== userId && !requester?.isAdmin) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
 
       const category = existing.category;
       const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece } = req.body || {};
@@ -2411,7 +2414,10 @@ Respond in this structure:
       const userId = req.session.userId;
       const listing = await storage.getMarketplaceListing(parseInt(req.params.id));
       if (!listing) return res.status(404).json({ message: "Not found" });
-      if (listing.sellerId !== userId) return res.status(403).json({ message: "Not authorized" });
+      const requester = await storage.getUserById(userId);
+      if (listing.sellerId !== userId && !requester?.isAdmin) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
       await storage.deleteMarketplaceListing(listing.id);
       res.json({ success: true });
     } catch (error) {
