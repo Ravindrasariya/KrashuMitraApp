@@ -66,11 +66,15 @@ async function buildAll() {
   // alongside dist/index.cjs.
   try {
     await stat("server/assets");
-    await cp("server/assets", "dist/assets", { recursive: true });
-    console.log("copied server/assets → dist/assets");
-  } catch {
-    // no server assets to copy — fine
+  } catch (err: any) {
+    if (err && err.code === "ENOENT") {
+      // No server assets in this build — that's fine, skip silently.
+      return;
+    }
+    throw err;
   }
+  await cp("server/assets", "dist/assets", { recursive: true });
+  console.log("copied server/assets → dist/assets");
 }
 
 buildAll().catch((err) => {
