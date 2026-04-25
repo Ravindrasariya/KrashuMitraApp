@@ -7,7 +7,11 @@ import cron from "node-cron";
 import { storage } from "./storage";
 
 const app = express();
-app.set("trust proxy", true);
+// Trust exactly one upstream hop (Replit's edge proxy). Using `true` would
+// trust the entire X-Forwarded-For chain, which lets a client spoof their
+// apparent IP by injecting their own XFF header — that would defeat the
+// per-IP rate limit on the public share-image endpoints in routes.ts.
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 declare module "http" {

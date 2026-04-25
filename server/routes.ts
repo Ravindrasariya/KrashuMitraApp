@@ -27,6 +27,42 @@ import { composeListingShareImage, getListingShareImageMeta, computeShareVersion
 import { createReadStream } from "fs";
 import { stat as fsStat } from "fs/promises";
 import { pingListingShareCache } from "./share-meta";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+
+// Pick the IP that our immediate upstream proxy (Replit's edge) appended to
+// X-Forwarded-For — that's the rightmost entry, and it's the only XFF value a
+// remote client cannot control. Earlier entries are whatever the client put
+// there themselves, so trusting them would let an attacker rotate fake
+// addresses to bypass per-IP throttling. Falls back to req.ip (which respects
+// the configured `trust proxy` hops) for direct/no-proxy traffic, then to the
+// raw socket address as a last resort. ipKeyGenerator collapses IPv6 traffic
+// into /64 buckets so an attacker can't trivially rotate within their prefix.
+function shareImageRateLimitKey(req: any): string {
+  const xffRaw = req.headers["x-forwarded-for"];
+  const xff = Array.isArray(xffRaw) ? xffRaw.join(",") : xffRaw;
+  let ip: string | undefined;
+  if (typeof xff === "string" && xff.length > 0) {
+    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    ip = parts[parts.length - 1];
+  }
+  if (!ip) ip = req.ip;
+  if (!ip) ip = req.socket?.remoteAddress;
+  return ipKeyGenerator(ip ?? "unknown");
+}
+
+// Per-IP rate limit for the public share-image endpoints. WhatsApp / Facebook /
+// LinkedIn crawlers and real seller-share clicks come nowhere near 60 requests
+// per minute from a single IP, but this caps the damage a determined attacker
+// can do by hammering many listing IDs from one host. The limiter rejects
+// excess requests with 429 *before* any compose / disk / DB work runs.
+const shareImageLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: shareImageRateLimitKey,
+  message: { message: "Too many share-image requests, please try again later." },
+});
 
 async function compressOnionImageForStorage(
   base64Data: string,
@@ -1741,7 +1777,7 @@ Respond in this structure:
     }
   });
 
-  app.get("/api/marketplace/:id/share-image", async (req: any, res) => {
+  app.get("/api/marketplace/:id/share-image", shareImageLimiter, async (req: any, res) => {
     try {
       const raw = String(req.params.id ?? "");
       if (!/^\d+$/.test(raw)) {
@@ -1808,7 +1844,7 @@ Respond in this structure:
   // a static byte stream. Public on purpose: the underlying GET endpoint is
   // public too (it's hit by social-media bots), and this endpoint does the
   // exact same work — no new attack surface, no auth needed.
-  app.post("/api/marketplace/:id/prewarm-share-image", async (req: any, res) => {
+  app.post("/api/marketplace/:id/prewarm-share-image", shareImageLimiter, async (req: any, res) => {
     try {
       const raw = String(req.params.id ?? "");
       if (!/^\d+$/.test(raw)) {
