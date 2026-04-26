@@ -2,24 +2,23 @@ import sharp from "sharp";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import crypto from "node:crypto";
-import { execSync } from "node:child_process";
 import { storage } from "./storage";
 import type { MarketplaceListing, MarketplacePhoto } from "@shared/schema";
-// (Task #77) The summary line was removed from the composed image, so this
-// module no longer needs to know about per-listing detail facts. The
-// equivalent English summary still drives og:description via summarizeListing
-// in server/share-meta.ts.
+// (Task #78) The composed share-image is now full-bleed: it's just the
+// listing's first photo (or the brand cover as a fallback) cropped to
+// 1200×630 with no overlay band, no badge, no location pill, no domain
+// footer. Those facts are already shown by WhatsApp / Facebook below the
+// picture as the link's title (og:title), description (og:description, via
+// summarizeListing in server/share-meta.ts), and URL.
 
 const W = 1200;
 const H = 630;
-// Task #77: photo grew from 441 → 490 px (band shrunk from 189 → 140 px) so
-// the listing photo gets more visual weight in the WhatsApp / Facebook
-// preview card. The summary line that used to live in the band moved out
-// (it's still in og:description, which Meta renders below the picture).
-const PHOTO_H = 490;
-const BAND_H = H - PHOTO_H;
+// Task #78: full-bleed photo. The white card band that used to sit at the
+// bottom (carrying the category badge, village/district pin, and domain
+// footer) was removed entirely — Meta already renders the brand title,
+// listing description, and URL directly below the picture in the link card.
+const PHOTO_H = H;
 
 // Resolve the directory this module lives in for both runtime modes:
 // - tsx (dev): file is at server/share-image.ts; import.meta.dirname works.
@@ -32,12 +31,6 @@ function moduleDir(): string {
   return import.meta.dirname;
 }
 
-// In dev: <repo>/server/assets/fonts/...
-// In prod: <install>/dist/assets/fonts/... (build script copies server/assets → dist/assets)
-function resolveFontPath(): string {
-  return path.resolve(moduleDir(), "assets/fonts/NotoSansDevanagari-Regular.ttf");
-}
-
 // In dev: <repo>/client/public/share-cover.png
 // In prod: <install>/dist/public/share-cover.png (Vite emits it there)
 function resolveShareCoverPath(): string {
@@ -45,66 +38,6 @@ function resolveShareCoverPath(): string {
     return path.resolve(moduleDir(), "public/share-cover.png");
   }
   return path.resolve(moduleDir(), "../client/public/share-cover.png");
-}
-
-let fontReady = false;
-let fontInFlight: Promise<void> | null = null;
-async function ensureDevanagariFont(): Promise<void> {
-  if (fontReady) return;
-  if (fontInFlight) return fontInFlight;
-  fontInFlight = (async () => {
-    try {
-      const fontSrc = resolveFontPath();
-      if (!fs.existsSync(fontSrc)) {
-        console.warn("[share-image] bundled Devanagari font missing at", fontSrc);
-        return;
-      }
-      const homeFontDir = path.join(os.homedir(), ".fonts");
-      fs.mkdirSync(homeFontDir, { recursive: true });
-      const dest = path.join(homeFontDir, "NotoSansDevanagari-Regular.ttf");
-      const srcSize = fs.statSync(fontSrc).size;
-      if (!fs.existsSync(dest) || fs.statSync(dest).size !== srcSize) {
-        fs.copyFileSync(fontSrc, dest);
-      }
-      try {
-        execSync("fc-cache -f", { stdio: "ignore" });
-      } catch {
-      }
-      fontReady = true;
-    } catch (err) {
-      console.error("[share-image] font setup failed:", err);
-    } finally {
-      fontInFlight = null;
-    }
-  })();
-  return fontInFlight;
-}
-
-const CATEGORY_BADGE: Record<string, string> = {
-  onion_seedling: "प्याज रोप",
-  potato_seed: "आलू बीज",
-  onion_seed: "प्याज बीज",
-  soyabean_seed: "सोयाबीन बीज",
-  bardan_bag: "बारदान/बैग",
-  exhaust_fan: "एग्जॉस्ट पंखा",
-};
-
-const CATEGORY_BADGE_COLOR: Record<string, { fill: string; text: string }> = {
-  onion_seedling: { fill: "#dcfce7", text: "#166534" },
-  potato_seed: { fill: "#fef3c7", text: "#92400e" },
-  onion_seed: { fill: "#ffe4e6", text: "#9f1239" },
-  soyabean_seed: { fill: "#ede9fe", text: "#5b21b6" },
-  bardan_bag: { fill: "#e0f2fe", text: "#075985" },
-  exhaust_fan: { fill: "#e2e8f0", text: "#1e293b" },
-};
-
-function escapeXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
-
-function truncate(s: string, max: number): string {
-  if (s.length <= max) return s;
-  return s.slice(0, Math.max(1, max - 1)) + "…";
 }
 
 // Photo signature inputs the share version needs. Splitting this out so the
@@ -146,11 +79,10 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     a: listing.isActive,
     ph: photoSig.photoIds.join(","),
     lph: photoSig.legacyPhotoSig ?? "",
-    // Layout version — bump whenever the SVG composition / band geometry
-    // changes so old persistent cache files (and any Meta-side cached
-    // previews) are invalidated. v2 = Task #77 (no summary line, taller
-    // photo, slimmer band).
-    lay: 2,
+    // Layout version — bump whenever the composition changes so old
+    // persistent cache files (and any Meta-side cached previews) are
+    // invalidated. v3 = Task #78 (full-bleed photo, no white band).
+    lay: 3,
   });
   return crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
 }
@@ -493,49 +425,16 @@ export async function composeListingShareImage(meta: ShareImageMeta): Promise<Sh
 }
 
 async function composeListingShareImageInner(meta: ShareImageMeta): Promise<ShareImageResult> {
-  const { listing, photos, etag } = meta;
-  await ensureDevanagariFont();
+  const { listing, etag } = meta;
 
-  const topLayer = await buildTopLayer(listing, photos);
-
-  const badge = CATEGORY_BADGE[listing.category] || "Listing";
-  const badgeColor = CATEGORY_BADGE_COLOR[listing.category] || { fill: "#e0f2fe", text: "#075985" };
-  const badgeWidth = Math.max(220, badge.length * 32 + 56);
-  const badgeHeight = 56;
-
-  const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");
-  const locationText = location ? truncate(location, 52) : "";
-
-  // Task #77: the per-listing summary line (price · variety/duration · qty)
-  // used to render here between the badge and the location row. It was
-  // dropped because WhatsApp / Facebook already render the same content
-  // below the picture as the link's description (og:description, computed
-  // by summarizeListing in server/share-meta.ts). The band now holds just
-  // badge + location + footer, and the photo on top is taller as a result.
-
-  const FONT = "Noto Sans Devanagari, DejaVu Sans, sans-serif";
-  const bandY = PHOTO_H;
-  const padX = 56;
-  const badgeY = bandY + 16;
-  const locationY = H - 28;
-  const pinX = padX;
-  const pinTopY = locationY - 28;
-  const pinTextX = padX + 36;
-
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <rect x="0" y="${bandY}" width="${W}" height="${BAND_H}" fill="#ffffff"/>
-  <rect x="0" y="${bandY}" width="${W}" height="3" fill="#1f3d0a" opacity="0.18"/>
-  <rect x="${padX}" y="${badgeY}" width="${badgeWidth}" height="${badgeHeight}" rx="28" ry="28" fill="${badgeColor.fill}"/>
-  <text x="${padX + badgeWidth / 2}" y="${badgeY + 38}" font-family="${FONT}" font-size="30" font-weight="700" fill="${badgeColor.text}" text-anchor="middle">${escapeXml(badge)}</text>
-  ${locationText ? `<g transform="translate(${pinX}, ${pinTopY})" fill="#1f3d0a"><path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 24 14 24s14-13.5 14-24C28 6.27 21.73 0 14 0zm0 19a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></g>
-  <text x="${pinTextX}" y="${locationY}" font-family="${FONT}" font-size="28" font-weight="500" fill="#3a5a16">${escapeXml(locationText)}</text>` : ""}
-  <text x="${W - padX}" y="${H - 28}" font-family="${FONT}" font-size="22" font-weight="600" fill="#5a7a26" text-anchor="end">km.krashuved.com</text>
-</svg>`;
+  // Task #78: the composed image is now just the top layer (1200×630 photo
+  // or brand-cover fallback) re-encoded to a tuned JPEG. No SVG overlay,
+  // no white band, no Devanagari text — Meta renders the brand title and
+  // listing description directly below the picture from og:title and
+  // og:description, so duplicating them inside the picture is wasted space.
+  const topLayer = await buildTopLayer(listing, meta.photos);
 
   const buffer = await sharp(topLayer)
-    .extend({ top: 0, bottom: BAND_H, left: 0, right: 0, background: { r: 255, g: 255, b: 255, alpha: 1 } })
-    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
     // mozjpeg + lower quality together cut the composed preview from
     // ~145 KB at q=86 down to ~60–80 KB with no visible degradation at
     // WhatsApp / Facebook preview thumbnail size. This only affects the
