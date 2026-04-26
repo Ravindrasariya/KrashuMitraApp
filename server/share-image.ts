@@ -7,11 +7,18 @@ import crypto from "node:crypto";
 import { execSync } from "node:child_process";
 import { storage } from "./storage";
 import type { MarketplaceListing, MarketplacePhoto } from "@shared/schema";
-import { extractListingDetailFacts, type ListingDetailFact } from "./share-meta";
+// (Task #77) The summary line was removed from the composed image, so this
+// module no longer needs to know about per-listing detail facts. The
+// equivalent English summary still drives og:description via summarizeListing
+// in server/share-meta.ts.
 
 const W = 1200;
 const H = 630;
-const PHOTO_H = 441;
+// Task #77: photo grew from 441 → 490 px (band shrunk from 189 → 140 px) so
+// the listing photo gets more visual weight in the WhatsApp / Facebook
+// preview card. The summary line that used to live in the band moved out
+// (it's still in og:description, which Meta renders below the picture).
+const PHOTO_H = 490;
 const BAND_H = H - PHOTO_H;
 
 // Resolve the directory this module lives in for both runtime modes:
@@ -91,63 +98,6 @@ const CATEGORY_BADGE_COLOR: Record<string, { fill: string; text: string }> = {
   exhaust_fan: { fill: "#e2e8f0", text: "#1e293b" },
 };
 
-const SOYABEAN_DURATION_LABEL: Record<string, string> = { Long: "लंबी अवधि", Short: "छोटी अवधि" };
-const BAG_MATERIAL_LABEL: Record<string, string> = {
-  "Jute/Hessian": "जूट / हेसियन",
-  "LENO Mesh": "लीनो जाली",
-  PP: "पीपी",
-  Others: "अन्य",
-};
-const FAN_BRAND_LABEL: Record<string, string> = {
-  Crompton: "क्रॉम्पटन",
-  Havells: "हैवेल्स",
-  Usha: "उषा",
-  Others: "अन्य",
-};
-const CONTACT_FOR_PRICE = "मूल्य के लिए संपर्क करें";
-
-const PRICE_PER_HINDI: Record<"kg" | "quintal" | "bag" | "piece", string> = {
-  kg: "किलो",
-  quintal: "क्विंटल",
-  bag: "बोरी",
-  piece: "पीस",
-};
-
-function factToHindiLabel(f: ListingDetailFact): string {
-  switch (f.kind) {
-    case "price": return `₹${f.amount}/${PRICE_PER_HINDI[f.per]}`;
-    case "qtyBigha": return `${f.bigha} बीघा`;
-    case "qtyBags": return `${f.bags} बोरी`;
-    case "availableInDays": return `${f.days} दिन में`;
-    case "onionType":
-    case "potatoVariety":
-    case "potatoBrand":
-    case "onionSeedType":
-    case "onionSeedVariety":
-    case "onionSeedBrand":
-    case "soyabeanVariety":
-    case "bagDimension":
-      return f.value;
-    case "soyabeanDuration": return SOYABEAN_DURATION_LABEL[f.value] || f.value;
-    case "bagMaterial": return BAG_MATERIAL_LABEL[f.value] || f.value;
-    case "fanBrand":
-      return f.value === "Others" ? (f.other || "अन्य") : (FAN_BRAND_LABEL[f.value] || f.value);
-    case "fanWattage": return `${f.watts}W`;
-  }
-}
-
-function detailParts(l: MarketplaceListing): string[] {
-  const facts = extractListingDetailFacts(l);
-  const labels = facts.map(factToHindiLabel).filter(Boolean);
-  // Pricing categories should always show a price line — fall back to "contact for price" when missing.
-  const pricedCats = new Set(["onion_seed", "soyabean_seed", "bardan_bag", "exhaust_fan"]);
-  const hasPrice = facts.some((f) => f.kind === "price");
-  if (pricedCats.has(l.category) && !hasPrice) {
-    labels.unshift(CONTACT_FOR_PRICE);
-  }
-  return labels;
-}
-
 function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -196,6 +146,11 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     a: listing.isActive,
     ph: photoSig.photoIds.join(","),
     lph: photoSig.legacyPhotoSig ?? "",
+    // Layout version — bump whenever the SVG composition / band geometry
+    // changes so old persistent cache files (and any Meta-side cached
+    // previews) are invalidated. v2 = Task #77 (no summary line, taller
+    // photo, slimmer band).
+    lay: 2,
   });
   return crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
 }
@@ -548,18 +503,21 @@ async function composeListingShareImageInner(meta: ShareImageMeta): Promise<Shar
   const badgeWidth = Math.max(220, badge.length * 32 + 56);
   const badgeHeight = 56;
 
-  const detailLine = detailParts(listing).join(" · ") || CONTACT_FOR_PRICE;
-  const detail = truncate(detailLine, 60);
-
   const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");
   const locationText = location ? truncate(location, 52) : "";
+
+  // Task #77: the per-listing summary line (price · variety/duration · qty)
+  // used to render here between the badge and the location row. It was
+  // dropped because WhatsApp / Facebook already render the same content
+  // below the picture as the link's description (og:description, computed
+  // by summarizeListing in server/share-meta.ts). The band now holds just
+  // badge + location + footer, and the photo on top is taller as a result.
 
   const FONT = "Noto Sans Devanagari, DejaVu Sans, sans-serif";
   const bandY = PHOTO_H;
   const padX = 56;
-  const badgeY = bandY + 24;
-  const detailY = bandY + 116;
-  const locationY = bandY + 162;
+  const badgeY = bandY + 16;
+  const locationY = H - 28;
   const pinX = padX;
   const pinTopY = locationY - 28;
   const pinTextX = padX + 36;
@@ -570,7 +528,6 @@ async function composeListingShareImageInner(meta: ShareImageMeta): Promise<Shar
   <rect x="0" y="${bandY}" width="${W}" height="3" fill="#1f3d0a" opacity="0.18"/>
   <rect x="${padX}" y="${badgeY}" width="${badgeWidth}" height="${badgeHeight}" rx="28" ry="28" fill="${badgeColor.fill}"/>
   <text x="${padX + badgeWidth / 2}" y="${badgeY + 38}" font-family="${FONT}" font-size="30" font-weight="700" fill="${badgeColor.text}" text-anchor="middle">${escapeXml(badge)}</text>
-  <text x="${padX}" y="${detailY}" font-family="${FONT}" font-size="32" font-weight="600" fill="#1f3d0a">${escapeXml(detail)}</text>
   ${locationText ? `<g transform="translate(${pinX}, ${pinTopY})" fill="#1f3d0a"><path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 24 14 24s14-13.5 14-24C28 6.27 21.73 0 14 0zm0 19a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></g>
   <text x="${pinTextX}" y="${locationY}" font-family="${FONT}" font-size="28" font-weight="500" fill="#3a5a16">${escapeXml(locationText)}</text>` : ""}
   <text x="${W - padX}" y="${H - 28}" font-family="${FONT}" font-size="22" font-weight="600" fill="#5a7a26" text-anchor="end">km.krashuved.com</text>

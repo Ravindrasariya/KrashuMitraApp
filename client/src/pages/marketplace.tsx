@@ -1185,7 +1185,15 @@ export default function MarketplacePage() {
     const cat = categoryLabel(listing.category);
     return {
       title: `${cat} | KrashuVed`,
-      text: t("shareBrandTagline"),
+      // Task #77: deliberately blank. The Web Share API on Android puts
+      // `text` directly into the WhatsApp message bubble above the URL —
+      // and the URL's rich preview card already shows the brand title
+      // (og:title) and the listing description (og:description) right
+      // there, so emitting "🌾 KrashuVed — किसानों का साथी" again only
+      // duplicates the brand line. WhatsApp / Facebook still get all the
+      // brand + listing context they need from the OG meta the server
+      // injects on the canonical URL. Email keeps its own subject below.
+      text: "",
       url,
       emailSubject: t("shareEmailSubject"),
     };
