@@ -2164,14 +2164,19 @@ Respond in this structure:
           if (Number.isNaN(n) || n < 0 || n > 50) return res.status(400).json({ message: "Invalid othersWarrantyYears" });
           parsedOthersWarrantyYears = n;
         }
-        if (othersCondition !== undefined && othersCondition !== null && String(othersCondition).trim() !== "" && String(othersCondition) !== "none") {
+        // Note: do NOT treat the literal string "none" as empty here —
+        // `"none"` IS itself a valid `others_return_policy` enum value
+        // ("No return policy"). The client uses a separate `"unset"`
+        // sentinel for the empty-selection case (which the trim/empty
+        // check already covers via the empty-string branch).
+        if (othersCondition !== undefined && othersCondition !== null && String(othersCondition).trim() !== "" && String(othersCondition) !== "unset") {
           const v = String(othersCondition);
           if (!MARKETPLACE_OTHERS_CONDITIONS.includes(v as typeof MARKETPLACE_OTHERS_CONDITIONS[number])) {
             return res.status(400).json({ message: "Invalid othersCondition" });
           }
           parsedOthersCondition = v;
         }
-        if (othersReturnPolicy !== undefined && othersReturnPolicy !== null && String(othersReturnPolicy).trim() !== "" && String(othersReturnPolicy) !== "none") {
+        if (othersReturnPolicy !== undefined && othersReturnPolicy !== null && String(othersReturnPolicy).trim() !== "" && String(othersReturnPolicy) !== "unset") {
           const v = String(othersReturnPolicy);
           if (!MARKETPLACE_OTHERS_RETURN_POLICIES.includes(v as typeof MARKETPLACE_OTHERS_RETURN_POLICIES[number])) {
             return res.status(400).json({ message: "Invalid othersReturnPolicy" });
@@ -2649,8 +2654,12 @@ Respond in this structure:
             parsedOthersWarrantyYearsPatch = n;
           }
         }
+        // Same caveat as POST: `"none"` is a valid stored return-policy
+        // value, so the unset sentinel is `"unset"`. Empty string / null /
+        // `"unset"` -> clear the field; anything else must match the enum
+        // allow-list.
         if (othersCondition !== undefined) {
-          if (othersCondition === null || String(othersCondition).trim() === "" || String(othersCondition) === "none") {
+          if (othersCondition === null || String(othersCondition).trim() === "" || String(othersCondition) === "unset") {
             parsedOthersConditionPatch = null;
           } else {
             const v = String(othersCondition);
@@ -2661,7 +2670,7 @@ Respond in this structure:
           }
         }
         if (othersReturnPolicy !== undefined) {
-          if (othersReturnPolicy === null || String(othersReturnPolicy).trim() === "" || String(othersReturnPolicy) === "none") {
+          if (othersReturnPolicy === null || String(othersReturnPolicy).trim() === "" || String(othersReturnPolicy) === "unset") {
             parsedOthersReturnPolicyPatch = null;
           } else {
             const v = String(othersReturnPolicy);

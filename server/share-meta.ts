@@ -155,6 +155,18 @@ function factToEnglishLabel(f: ListingDetailFact): string {
     case "soyabeanDuration": return `${f.value} duration`;
     case "fanBrand": return f.value === "Other" ? (f.other || "Other") : f.value;
     case "fanWattage": return `${f.watts}W`;
+    // Task #84: generic Others category. Render product name and brand as
+    // bare strings; map the canonical condition enum to a human label so
+    // OG descriptions read "New" / "Used" / "Refurbished" instead of the
+    // raw stored key.
+    case "othersProductName": return f.value;
+    case "othersBrand": return f.value;
+    case "othersCondition": {
+      if (f.value === "new") return "New";
+      if (f.value === "used") return "Used";
+      if (f.value === "refurbished") return "Refurbished";
+      return f.value;
+    }
   }
 }
 

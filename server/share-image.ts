@@ -83,6 +83,14 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     // key when notes change keeps WhatsApp/Facebook from showing a stale
     // preview text alongside a freshly re-fetched image.
     an: listing.additionalNotes ?? "",
+    // Task #84: include Others-category fields in the cache key so that
+    // editing any of them invalidates both the persistent on-disk JPEG
+    // and the Meta-side preview text. Only the fields that actually feed
+    // og:title / og:description (via summarizeListing) are tracked.
+    opn: listing.othersProductName ?? "",
+    op: listing.othersPrice,
+    ob: listing.othersBrand ?? "",
+    oc: listing.othersCondition ?? "",
     a: listing.isActive,
     ph: photoSig.photoIds.join(","),
     lph: photoSig.legacyPhotoSig ?? "",
@@ -90,7 +98,8 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     // persistent cache files (and any Meta-side cached previews) are
     // invalidated. v3 = Task #78 (full-bleed photo, no white band).
     // v4 = Task #79 (notes appended to og:description; image unchanged).
-    lay: 4,
+    // v5 = Task #84 (Others-category fields participate in og:description).
+    lay: 5,
   });
   return crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
 }

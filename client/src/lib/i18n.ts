@@ -670,7 +670,7 @@ const translations = {
   othersReturnNone: { hi: "नहीं", en: "None" },
   othersExtra: { hi: "अतिरिक्त जानकारी", en: "Extra Info" },
   othersExtraPlaceholder: { hi: "वैकल्पिक", en: "Optional" },
-  othersPhotoRequired: { hi: "कम से कम 1 फोटो आवश्यक है", en: "At least 1 photo is required" },
+  othersPhotoRequired: { hi: "कृपया कम से कम एक उत्पाद फोटो जोड़ें", en: "Please add at least one product photo" },
   myListing: { hi: "मेरी सूची", en: "My listing" },
   rateThisListing: { hi: "इस सूची को रेट करें", en: "Rate this listing" },
   sellerRating: { hi: "विक्रेता रेटिंग", en: "Seller Rating" },

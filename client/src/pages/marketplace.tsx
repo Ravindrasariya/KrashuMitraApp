@@ -410,10 +410,13 @@ export default function MarketplacePage() {
   const [othersBrand, setOthersBrand] = useState("");
   const [othersPrice, setOthersPrice] = useState("");
   const [othersMaterials, setOthersMaterials] = useState("");
-  const [othersCondition, setOthersCondition] = useState("none");
+  // Sentinel `"unset"` distinguishes "no selection" from real enum values.
+  // (Important for return policy because `"none"` IS itself a valid stored
+  // option meaning "No return policy", so we can't reuse it as the sentinel.)
+  const [othersCondition, setOthersCondition] = useState("unset");
   const [othersWarrantyYears, setOthersWarrantyYears] = useState("");
   const [othersDimensions, setOthersDimensions] = useState("");
-  const [othersReturnPolicy, setOthersReturnPolicy] = useState("none");
+  const [othersReturnPolicy, setOthersReturnPolicy] = useState("unset");
   const [othersExtra1, setOthersExtra1] = useState("");
   const [othersExtra2, setOthersExtra2] = useState("");
   const [othersExtra3, setOthersExtra3] = useState("");
@@ -571,10 +574,10 @@ export default function MarketplacePage() {
     setOthersBrand("");
     setOthersPrice("");
     setOthersMaterials("");
-    setOthersCondition("none");
+    setOthersCondition("unset");
     setOthersWarrantyYears("");
     setOthersDimensions("");
-    setOthersReturnPolicy("none");
+    setOthersReturnPolicy("unset");
     setOthersExtra1("");
     setOthersExtra2("");
     setOthersExtra3("");
@@ -830,8 +833,10 @@ export default function MarketplacePage() {
       } else {
         data.othersWarrantyYears = null;
       }
-      data.othersCondition = othersCondition && othersCondition !== "none" ? othersCondition : null;
-      data.othersReturnPolicy = othersReturnPolicy && othersReturnPolicy !== "none" ? othersReturnPolicy : null;
+      // Sentinel `"unset"` -> null. `"none"` is a real return-policy value
+      // ("No return policy") and must be persisted as "none", NOT coerced.
+      data.othersCondition = othersCondition && othersCondition !== "unset" ? othersCondition : null;
+      data.othersReturnPolicy = othersReturnPolicy && othersReturnPolicy !== "unset" ? othersReturnPolicy : null;
     }
     // Task #79: optional freehand notes apply to ALL categories. Trim and
     // coerce empty -> null so an unset field round-trips cleanly through the
@@ -900,10 +905,10 @@ export default function MarketplacePage() {
       setOthersBrand(listing.othersBrand || "");
       setOthersPrice(listing.othersPrice != null ? String(listing.othersPrice) : "");
       setOthersMaterials(listing.othersMaterials || "");
-      setOthersCondition(listing.othersCondition || "none");
+      setOthersCondition(listing.othersCondition || "unset");
       setOthersWarrantyYears(listing.othersWarrantyYears != null ? String(listing.othersWarrantyYears) : "");
       setOthersDimensions(listing.othersDimensions || "");
-      setOthersReturnPolicy(listing.othersReturnPolicy || "none");
+      setOthersReturnPolicy(listing.othersReturnPolicy || "unset");
       setOthersExtra1(listing.othersExtra1 || "");
       setOthersExtra2(listing.othersExtra2 || "");
       setOthersExtra3(listing.othersExtra3 || "");
@@ -2381,7 +2386,7 @@ export default function MarketplacePage() {
                       <SelectValue placeholder={t("selectOption")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none" data-testid="option-others-condition-none">{t("selectOption")}</SelectItem>
+                      <SelectItem value="unset" data-testid="option-others-condition-unset">{t("selectOption")}</SelectItem>
                       <SelectItem value="new" data-testid="option-others-condition-new">{t("othersConditionNew")}</SelectItem>
                       <SelectItem value="used" data-testid="option-others-condition-used">{t("othersConditionUsed")}</SelectItem>
                       <SelectItem value="refurbished" data-testid="option-others-condition-refurbished">{t("othersConditionRefurbished")}</SelectItem>
@@ -2418,6 +2423,7 @@ export default function MarketplacePage() {
                       <SelectValue placeholder={t("selectOption")} />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="unset" data-testid="option-others-return-unset">{t("selectOption")}</SelectItem>
                       <SelectItem value="none" data-testid="option-others-return-none">{t("othersReturnNone")}</SelectItem>
                       <SelectItem value="5_day_return" data-testid="option-others-return-5day">{t("othersReturn5Day")}</SelectItem>
                       <SelectItem value="5_day_replacement" data-testid="option-others-return-5day-replace">{t("othersReplacement5Day")}</SelectItem>
