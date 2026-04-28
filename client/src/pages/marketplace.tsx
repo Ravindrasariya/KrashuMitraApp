@@ -2182,9 +2182,14 @@ export default function MarketplacePage() {
                   maxLength={50}
                   data-testid="input-additional-notes"
                 />
-                <div className="text-xs text-muted-foreground mt-1 flex justify-between">
-                  <span>{t("additionalNotesHelp")}</span>
-                  <span data-testid="text-notes-counter">{additionalNotes.length} / 50</span>
+                <div className="text-xs mt-1 flex justify-between">
+                  <span className="text-muted-foreground">{t("additionalNotesHelp")}</span>
+                  <span
+                    className={additionalNotes.length >= 50 ? "text-destructive font-semibold" : "text-muted-foreground"}
+                    data-testid="text-notes-counter"
+                  >
+                    {additionalNotes.length} / 50
+                  </span>
                 </div>
               </div>
             )}

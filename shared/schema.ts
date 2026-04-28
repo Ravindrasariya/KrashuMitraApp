@@ -347,7 +347,7 @@ export const insertMarketplaceListingSchema = createInsertSchema(marketplaceList
     // and coerces empty strings to null before submit; keep .nullable() so
     // the field can be cleared on edit, and .optional() so create / partial
     // edit payloads that don't mention it are still valid.
-    additionalNotes: z.string().max(50).nullable().optional(),
+    additionalNotes: z.string().trim().max(50).nullable().optional(),
   });
 
 export type MarketplaceListing = typeof marketplaceListings.$inferSelect;
