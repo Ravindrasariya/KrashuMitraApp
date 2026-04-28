@@ -26,31 +26,47 @@ CREATE TABLE IF NOT EXISTS marketplace_stock_counters (
   last_n integer NOT NULL
 );
 
--- Backfill any rows that don't yet have a stock_id, ordered by IST day then
--- id. Idempotent — only touches NULL rows.
-WITH numbered AS (
+-- Backfill rows that don't yet have a stock_id. Safe in mixed states (some
+-- rows already assigned on the same IST day, others still NULL): the new
+-- numbers start from the existing per-day max + 1, so they never collide
+-- with already-assigned values on the unique index. Idempotent — re-running
+-- with no NULL rows is a no-op.
+WITH existing_max AS (
   SELECT
-    id,
     to_char(created_at AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD') AS ist_day,
-    ROW_NUMBER() OVER (
-      PARTITION BY (created_at AT TIME ZONE 'Asia/Kolkata')::date
-      ORDER BY id ASC
-    ) AS n
+    COALESCE(MAX(NULLIF(split_part(stock_id, '-', 2), '')::int), 0) AS max_n
   FROM marketplace_listings
-  WHERE stock_id IS NULL
+  WHERE stock_id IS NOT NULL
+  GROUP BY 1
+),
+numbered AS (
+  SELECT
+    ml.id,
+    to_char(ml.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD') AS ist_day,
+    COALESCE(em.max_n, 0) + ROW_NUMBER() OVER (
+      PARTITION BY (ml.created_at AT TIME ZONE 'Asia/Kolkata')::date
+      ORDER BY ml.id ASC
+    ) AS n
+  FROM marketplace_listings ml
+  LEFT JOIN existing_max em
+    ON em.ist_day = to_char(ml.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD')
+  WHERE ml.stock_id IS NULL
 )
 UPDATE marketplace_listings ml
 SET stock_id = numbered.ist_day || '-' || numbered.n
 FROM numbered
 WHERE ml.id = numbered.id;
 
--- Seed the counter table to the per-day max so future inserts on a
--- historical IST day continue from there.
+-- Seed the counter table to the per-day max of stock_ids actually present,
+-- so future inserts on a historical IST day continue from there. Uses the
+-- numeric suffix of stock_id rather than COUNT(*) so deleted rows or
+-- mixed-state backfills never produce a starting point that collides.
 INSERT INTO marketplace_stock_counters (ist_day, last_n)
 SELECT
   to_char(created_at AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD') AS ist_day,
-  COUNT(*)::integer AS last_n
+  MAX(NULLIF(split_part(stock_id, '-', 2), '')::int) AS last_n
 FROM marketplace_listings
+WHERE stock_id IS NOT NULL
 GROUP BY 1
 ON CONFLICT (ist_day) DO UPDATE
   SET last_n = GREATEST(marketplace_stock_counters.last_n, EXCLUDED.last_n);
