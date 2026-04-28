@@ -332,26 +332,15 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   // social link previews when non-empty. Nullable; empty input is stored as
   // null (the form trims and coerces "" -> null before submit).
   additionalNotes: text("additional_notes"),
-  // Task #81: server-generated per-day stock identifier of the form
-  // `YYYYMMDD-N` (IST calendar day + monotonically increasing counter that
-  // resets at IST midnight). Assigned atomically inside the same DB
-  // transaction as the listing insert (see `createMarketplaceListing` in
-  // server/storage.ts) using the `marketplace_stock_counters` table. This is
-  // a backend-only identifier — it is intentionally NOT shown anywhere in
-  // the UI. The column is nullable in the schema so production rows that
-  // existed before this migration ran (and any rows in environments where
-  // the backfill hasn't been applied yet) keep working without the field.
-  // Every newly-created listing always gets a non-null value.
+  // Task #81: per-IST-day stockId (`YYYYMMDD-N`). Server-generated only
+  // (see createMarketplaceListing). Nullable so pre-existing rows on
+  // environments where the backfill hasn't run yet keep working.
   stockId: text("stock_id").unique(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// Task #81: per-IST-day counter table for atomic stock-ID generation. Keyed
-// by the IST calendar day (`YYYYMMDD`); `last_n` is the highest integer
-// already issued for that day. The `INSERT … ON CONFLICT … DO UPDATE …
-// RETURNING` upsert in `createMarketplaceListing` is row-level atomic, so
-// two concurrent listing creates can never receive the same `last_n`.
+// Task #81: per-IST-day counter table for atomic stockId allocation.
 export const marketplaceStockCounters = pgTable("marketplace_stock_counters", {
   istDay: text("ist_day").primaryKey(),
   lastN: integer("last_n").notNull(),
