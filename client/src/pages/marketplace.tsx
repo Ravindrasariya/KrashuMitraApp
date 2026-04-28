@@ -2435,9 +2435,9 @@ export default function MarketplacePage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unset" data-testid="option-others-return-unset">{t("selectOption")}</SelectItem>
-                      <SelectItem value="none" data-testid="option-others-return-none">{t("othersReturnNone")}</SelectItem>
                       <SelectItem value="5_day_return" data-testid="option-others-return-5day">{t("othersReturn5Day")}</SelectItem>
                       <SelectItem value="5_day_replacement" data-testid="option-others-return-5day-replace">{t("othersReplacement5Day")}</SelectItem>
+                      <SelectItem value="none" data-testid="option-others-return-none">{t("othersReturnNone")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
