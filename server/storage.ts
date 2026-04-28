@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, marketplaceStockCounters, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 export interface IStorage {
@@ -595,8 +595,31 @@ class DatabaseStorage implements IStorage {
   }
 
   async createMarketplaceListing(data: InsertMarketplaceListing): Promise<MarketplaceListing> {
-    const [created] = await db.insert(marketplaceListings).values(data).returning();
-    return created;
+    // Task #81: generate the per-IST-day `stockId` (`YYYYMMDD-N`) inside the
+    // same transaction as the listing insert so a roll-back of the listing
+    // also rolls back the counter increment. The `INSERT … ON CONFLICT …
+    // DO UPDATE … RETURNING` upsert is row-level atomic, so two concurrent
+    // creates can never receive the same `last_n` for the same IST day.
+    return db.transaction(async (tx) => {
+      const [counterRow] = await tx.execute<{ ist_day: string; last_n: number }>(sql`
+        INSERT INTO marketplace_stock_counters (ist_day, last_n)
+        VALUES (to_char(now() AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD'), 1)
+        ON CONFLICT (ist_day) DO UPDATE SET last_n = marketplace_stock_counters.last_n + 1
+        RETURNING ist_day, last_n
+      `).then((r: any) => r.rows ?? r);
+      // Defensive guard: the upsert above always returns exactly one row in
+      // PostgreSQL, but if `marketplace_stock_counters` doesn't exist yet
+      // (e.g., DDL not applied on a fresh environment) the call would throw
+      // a SQL error rather than silently returning nothing. This extra check
+      // turns any unexpected empty result into a clear diagnostic instead of
+      // a downstream `Cannot read properties of undefined`.
+      if (!counterRow || typeof counterRow.ist_day !== "string" || typeof counterRow.last_n !== "number") {
+        throw new Error("Failed to allocate marketplace stockId: counter upsert returned no row");
+      }
+      const stockId = `${counterRow.ist_day}-${counterRow.last_n}`;
+      const [created] = await tx.insert(marketplaceListings).values({ ...data, stockId }).returning();
+      return created;
+    });
   }
 
   async getMarketplaceListings(filters?: { category?: string }): Promise<MarketplaceListing[]> {
@@ -613,7 +636,12 @@ class DatabaseStorage implements IStorage {
   }
 
   async updateMarketplaceListing(id: number, data: Partial<InsertMarketplaceListing>): Promise<MarketplaceListing | undefined> {
-    const [updated] = await db.update(marketplaceListings).set(data).where(eq(marketplaceListings.id, id)).returning();
+    // Task #81: `stockId` is immutable after creation — defensively strip it
+    // from any update payload so an accidental call site can never overwrite
+    // a row's stock identifier (the type already excludes it via the insert
+    // schema's .omit, but this guards against `as any` callers).
+    const { stockId: _ignored, ...rest } = data as Partial<InsertMarketplaceListing> & { stockId?: unknown };
+    const [updated] = await db.update(marketplaceListings).set(rest).where(eq(marketplaceListings.id, id)).returning();
     return updated;
   }
 
