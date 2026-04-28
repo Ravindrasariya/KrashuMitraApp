@@ -400,6 +400,25 @@ export default function MarketplacePage() {
   const [fanWarrantyYears, setFanWarrantyYears] = useState("");
   const [fanDimensions, setFanDimensions] = useState("");
   const [fanPricePerPiece, setFanPricePerPiece] = useState("");
+  // Task #84: Others-category form state. Mirrors the 13 nullable columns
+  // on `marketplace_listings` for the generic "Others" category. Only
+  // othersProductName + ≥1 photo are mandatory; everything else is empty
+  // string by default and serialised as null when blank on submit. The two
+  // enums use "none" sentinel like other selects so SelectItem never gets
+  // an empty value (which throws).
+  const [othersProductName, setOthersProductName] = useState("");
+  const [othersBrand, setOthersBrand] = useState("");
+  const [othersPrice, setOthersPrice] = useState("");
+  const [othersMaterials, setOthersMaterials] = useState("");
+  const [othersCondition, setOthersCondition] = useState("none");
+  const [othersWarrantyYears, setOthersWarrantyYears] = useState("");
+  const [othersDimensions, setOthersDimensions] = useState("");
+  const [othersReturnPolicy, setOthersReturnPolicy] = useState("none");
+  const [othersExtra1, setOthersExtra1] = useState("");
+  const [othersExtra2, setOthersExtra2] = useState("");
+  const [othersExtra3, setOthersExtra3] = useState("");
+  const [othersExtra4, setOthersExtra4] = useState("");
+  const [othersExtra5, setOthersExtra5] = useState("");
   const [additionalNotes, setAdditionalNotes] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"latest" | "nearest" | "oldest">("latest");
@@ -548,6 +567,19 @@ export default function MarketplacePage() {
     setFanWarrantyYears("");
     setFanDimensions("");
     setFanPricePerPiece("");
+    setOthersProductName("");
+    setOthersBrand("");
+    setOthersPrice("");
+    setOthersMaterials("");
+    setOthersCondition("none");
+    setOthersWarrantyYears("");
+    setOthersDimensions("");
+    setOthersReturnPolicy("none");
+    setOthersExtra1("");
+    setOthersExtra2("");
+    setOthersExtra3("");
+    setOthersExtra4("");
+    setOthersExtra5("");
     setAdditionalNotes("");
   }
 
@@ -748,6 +780,58 @@ export default function MarketplacePage() {
       const dim = fanDimensions.trim();
       if (!dim) { toast({ title: t("fanDimensions"), variant: "destructive" }); return; }
       data.fanDimensions = dim.slice(0, 80);
+    } else if (category === "others") {
+      // Task #84: Others. Only product name + ≥1 photo are required.
+      // Every other field is optional and serialised as null when blank.
+      const name = othersProductName.trim();
+      if (!name) {
+        toast({ title: t("othersProductName"), variant: "destructive" });
+        return;
+      }
+      // Photo guard: at least 1 required when creating, OR when editing
+      // and the user has touched the photos and now has zero. When editing
+      // without touching, server preserves photos and skips the check.
+      if (editingListingId == null && uploadedPhotos.length === 0) {
+        toast({ title: t("othersPhotoRequired"), variant: "destructive" });
+        return;
+      }
+      if (editingListingId != null && photosDirty && uploadedPhotos.length === 0) {
+        toast({ title: t("othersPhotoRequired"), variant: "destructive" });
+        return;
+      }
+      data.othersProductName = name.slice(0, 80);
+      const trimOpt = (raw: string, max: number): string | null => {
+        const s = raw.trim();
+        return s ? s.slice(0, max) : null;
+      };
+      data.othersBrand = trimOpt(othersBrand, 40);
+      data.othersMaterials = trimOpt(othersMaterials, 60);
+      data.othersDimensions = trimOpt(othersDimensions, 60);
+      data.othersExtra1 = trimOpt(othersExtra1, 60);
+      data.othersExtra2 = trimOpt(othersExtra2, 60);
+      data.othersExtra3 = trimOpt(othersExtra3, 60);
+      data.othersExtra4 = trimOpt(othersExtra4, 60);
+      data.othersExtra5 = trimOpt(othersExtra5, 60);
+      const priceStr = othersPrice.trim();
+      if (priceStr) {
+        if (!/^\d+$/.test(priceStr)) { toast({ title: t("othersPrice"), variant: "destructive" }); return; }
+        const n = parseInt(priceStr, 10);
+        if (n < 1 || n > 999999) { toast({ title: t("othersPrice"), variant: "destructive" }); return; }
+        data.othersPrice = n;
+      } else {
+        data.othersPrice = null;
+      }
+      const warStr = othersWarrantyYears.trim();
+      if (warStr) {
+        if (!/^\d+$/.test(warStr)) { toast({ title: t("othersWarrantyYears"), variant: "destructive" }); return; }
+        const n = parseInt(warStr, 10);
+        if (n < 0 || n > 50) { toast({ title: t("othersWarrantyYears"), variant: "destructive" }); return; }
+        data.othersWarrantyYears = n;
+      } else {
+        data.othersWarrantyYears = null;
+      }
+      data.othersCondition = othersCondition && othersCondition !== "none" ? othersCondition : null;
+      data.othersReturnPolicy = othersReturnPolicy && othersReturnPolicy !== "none" ? othersReturnPolicy : null;
     }
     // Task #79: optional freehand notes apply to ALL categories. Trim and
     // coerce empty -> null so an unset field round-trips cleanly through the
@@ -811,6 +895,20 @@ export default function MarketplacePage() {
       setFanWarrantyYears(listing.fanWarrantyYears != null ? String(listing.fanWarrantyYears) : "");
       setFanDimensions(listing.fanDimensions || "");
       setFanPricePerPiece(listing.fanPricePerPiece != null ? String(listing.fanPricePerPiece) : "");
+    } else if (listing.category === "others") {
+      setOthersProductName(listing.othersProductName || "");
+      setOthersBrand(listing.othersBrand || "");
+      setOthersPrice(listing.othersPrice != null ? String(listing.othersPrice) : "");
+      setOthersMaterials(listing.othersMaterials || "");
+      setOthersCondition(listing.othersCondition || "none");
+      setOthersWarrantyYears(listing.othersWarrantyYears != null ? String(listing.othersWarrantyYears) : "");
+      setOthersDimensions(listing.othersDimensions || "");
+      setOthersReturnPolicy(listing.othersReturnPolicy || "none");
+      setOthersExtra1(listing.othersExtra1 || "");
+      setOthersExtra2(listing.othersExtra2 || "");
+      setOthersExtra3(listing.othersExtra3 || "");
+      setOthersExtra4(listing.othersExtra4 || "");
+      setOthersExtra5(listing.othersExtra5 || "");
     }
     setEditingListingId(listing.id);
     setPhotosDirty(false);
@@ -934,6 +1032,7 @@ export default function MarketplacePage() {
       : cat === "soyabean_seed" ? t("soyabeanSeed")
       : cat === "bardan_bag" ? t("bardanBag")
       : cat === "exhaust_fan" ? t("exhaustFan")
+      : cat === "others" ? t("marketplaceOthers")
       : cat;
 
   const categoryBadgeColor = (cat: string) =>
@@ -947,6 +1046,10 @@ export default function MarketplacePage() {
       ? "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300"
       : cat === "exhaust_fan"
       ? "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-200"
+      : cat === "bardan_bag"
+      ? "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
+      : cat === "others"
+      ? "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300"
       : "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300";
 
   const categoryBorderGradient = (cat: string) => {
@@ -966,6 +1069,9 @@ export default function MarketplacePage() {
     if (cat === "exhaust_fan") {
       return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#e2e8f0,#64748b,#1e293b)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#cbd5e1,#475569,#0f172a)]`;
     }
+    if (cat === "others") {
+      return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#ccfbf1,#14b8a6,#115e59)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#99f6e4,#0d9488,#134e4a)]`;
+    }
     return `${base} [background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#bae6fd,#0ea5e9,#075985)] dark:[background-image:linear-gradient(hsl(var(--card)),hsl(var(--card))),linear-gradient(135deg,#7dd3fc,#0284c7,#0c4a6e)]`;
   };
 
@@ -980,6 +1086,8 @@ export default function MarketplacePage() {
       ? "bg-violet-50 dark:bg-violet-950/30"
       : cat === "exhaust_fan"
       ? "bg-slate-50 dark:bg-slate-900/40"
+      : cat === "others"
+      ? "bg-teal-50 dark:bg-teal-950/30"
       : "bg-sky-50 dark:bg-sky-950/30";
 
   const renderPlaceholderIcon = (cat: string, size: "sm" | "lg") => {
@@ -999,7 +1107,25 @@ export default function MarketplacePage() {
     if (cat === "exhaust_fan") {
       return <Fan className={`${cls} text-slate-300 dark:text-slate-600`} />;
     }
+    if (cat === "others") {
+      return <ShoppingBag className={`${cls} text-teal-300 dark:text-teal-700`} />;
+    }
     return <Sprout className={`${cls} text-violet-300 dark:text-violet-700`} />;
+  };
+
+  // Task #84: Others-category enum label helpers (Hindi/English).
+  const othersConditionLabel = (val: string | null | undefined) => {
+    if (val === "new") return t("othersConditionNew");
+    if (val === "used") return t("othersConditionUsed");
+    if (val === "refurbished") return t("othersConditionRefurbished");
+    return val || "";
+  };
+
+  const othersReturnPolicyLabel = (val: string | null | undefined) => {
+    if (val === "5_day_return") return t("othersReturn5Day");
+    if (val === "5_day_replacement") return t("othersReplacement5Day");
+    if (val === "none") return t("othersReturnNone");
+    return val || "";
   };
 
   const fanBrandLabel = (val: string | null | undefined) => {
@@ -1242,6 +1368,7 @@ export default function MarketplacePage() {
             <SelectItem value="soyabean_seed" data-testid="filter-soyabean_seed">{t("soyabeanSeed")}</SelectItem>
             <SelectItem value="bardan_bag" data-testid="filter-bardan_bag">{t("bardanBag")}</SelectItem>
             <SelectItem value="exhaust_fan" data-testid="filter-exhaust_fan">{t("exhaustFan")}</SelectItem>
+            <SelectItem value="others" data-testid="filter-others">{t("marketplaceOthers")}</SelectItem>
           </SelectContent>
         </Select>
         <div className="ml-auto relative">
@@ -1298,6 +1425,7 @@ export default function MarketplacePage() {
             const isSoyabeanSeed = listing.category === "soyabean_seed";
             const isBardanBag = listing.category === "bardan_bag";
             const isFan = listing.category === "exhaust_fan";
+            const isOthers = listing.category === "others";
             const hasPhoto = listing.photoCount > 0 || listing.photoMime;
             const cardTotalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
             const cardIdxRaw = cardPhotoIndex[listing.id] ?? 0;
@@ -1423,7 +1551,7 @@ export default function MarketplacePage() {
                         </p>
                       </>
                     )}
-                    {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && !isFan && (
+                    {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && !isFan && !isOthers && (
                       <>
                         {listing.quantityBags && (
                           <p className="text-sm font-bold leading-snug" data-testid={`text-qty-${listing.id}`}>
@@ -1460,6 +1588,35 @@ export default function MarketplacePage() {
                             fanBrandText(listing.fanBrand, listing.fanBrandOther),
                             listing.fanWattage != null ? `${listing.fanWattage} W` : null,
                             listing.fanSpeedRpm != null ? `${listing.fanSpeedRpm} RPM` : null,
+                          ].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                      </>
+                    )}
+                    {isOthers && (
+                      <>
+                        <p className="text-sm font-bold leading-snug truncate" data-testid={`text-others-name-${listing.id}`}>
+                          {listing.othersProductName || "—"}
+                        </p>
+                        <p className="text-xs font-medium text-foreground leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {listing.othersPrice != null
+                            ? `₹${listing.othersPrice}`
+                            : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
+                        </p>
+                        <p className="text-[11px] font-medium text-foreground/70 leading-snug truncate">
+                          {[
+                            listing.othersBrand,
+                            othersConditionLabel(listing.othersCondition),
+                            listing.othersWarrantyYears != null
+                              ? `${listing.othersWarrantyYears} yr`
+                              : null,
+                            listing.othersDimensions,
+                            listing.othersMaterials,
+                            othersReturnPolicyLabel(listing.othersReturnPolicy),
+                            listing.othersExtra1,
+                            listing.othersExtra2,
+                            listing.othersExtra3,
+                            listing.othersExtra4,
+                            listing.othersExtra5,
                           ].filter(Boolean).join(" · ") || "—"}
                         </p>
                       </>
@@ -1619,6 +1776,7 @@ export default function MarketplacePage() {
                   <SelectItem value="soyabean_seed">{t("soyabeanSeed")}</SelectItem>
                   <SelectItem value="bardan_bag">{t("bardanBag")}</SelectItem>
                   <SelectItem value="exhaust_fan">{t("exhaustFan")}</SelectItem>
+                  <SelectItem value="others">{t("marketplaceOthers")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2168,6 +2326,126 @@ export default function MarketplacePage() {
               </>
             )}
 
+            {/* Task #84: Others-category form. ONLY othersProductName + ≥1
+                photo are required. The five extra-info slots are bare freehand
+                inputs (no labels in the card body — only in the dialog/popup
+                with the generic "Extra Info" heading). */}
+            {category === "others" && (
+              <>
+                <div>
+                  <Label className="text-sm">{t("othersProductName")} <span className="text-destructive">*</span></Label>
+                  <Input
+                    value={othersProductName}
+                    onChange={(e) => setOthersProductName(e.target.value.slice(0, 80))}
+                    placeholder={t("othersProductNamePlaceholder")}
+                    maxLength={80}
+                    data-testid="input-others-product-name"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("othersBrand")}</Label>
+                  <Input
+                    value={othersBrand}
+                    onChange={(e) => setOthersBrand(e.target.value.slice(0, 40))}
+                    maxLength={40}
+                    data-testid="input-others-brand"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("othersPrice")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={999999}
+                    value={othersPrice}
+                    onChange={(e) => setOthersPrice(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-others-price"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("othersMaterials")}</Label>
+                  <Input
+                    value={othersMaterials}
+                    onChange={(e) => setOthersMaterials(e.target.value.slice(0, 60))}
+                    placeholder={t("othersMaterialsPlaceholder")}
+                    maxLength={60}
+                    data-testid="input-others-materials"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("othersCondition")}</Label>
+                  <Select value={othersCondition} onValueChange={setOthersCondition}>
+                    <SelectTrigger data-testid="select-others-condition">
+                      <SelectValue placeholder={t("selectOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" data-testid="option-others-condition-none">{t("selectOption")}</SelectItem>
+                      <SelectItem value="new" data-testid="option-others-condition-new">{t("othersConditionNew")}</SelectItem>
+                      <SelectItem value="used" data-testid="option-others-condition-used">{t("othersConditionUsed")}</SelectItem>
+                      <SelectItem value="refurbished" data-testid="option-others-condition-refurbished">{t("othersConditionRefurbished")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm">{t("othersWarrantyYears")}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={50}
+                    value={othersWarrantyYears}
+                    onChange={(e) => setOthersWarrantyYears(e.target.value)}
+                    placeholder="0"
+                    data-testid="input-others-warranty"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("othersDimensions")}</Label>
+                  <Input
+                    value={othersDimensions}
+                    onChange={(e) => setOthersDimensions(e.target.value.slice(0, 60))}
+                    placeholder={t("othersDimensionsPlaceholder")}
+                    maxLength={60}
+                    data-testid="input-others-dimensions"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">{t("othersReturnPolicy")}</Label>
+                  <Select value={othersReturnPolicy} onValueChange={setOthersReturnPolicy}>
+                    <SelectTrigger data-testid="select-others-return-policy">
+                      <SelectValue placeholder={t("selectOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none" data-testid="option-others-return-none">{t("othersReturnNone")}</SelectItem>
+                      <SelectItem value="5_day_return" data-testid="option-others-return-5day">{t("othersReturn5Day")}</SelectItem>
+                      <SelectItem value="5_day_replacement" data-testid="option-others-return-5day-replace">{t("othersReplacement5Day")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  <Label className="text-sm">{t("othersExtra")}</Label>
+                  {[
+                    { val: othersExtra1, set: setOthersExtra1, idx: 1 },
+                    { val: othersExtra2, set: setOthersExtra2, idx: 2 },
+                    { val: othersExtra3, set: setOthersExtra3, idx: 3 },
+                    { val: othersExtra4, set: setOthersExtra4, idx: 4 },
+                    { val: othersExtra5, set: setOthersExtra5, idx: 5 },
+                  ].map(slot => (
+                    <Input
+                      key={slot.idx}
+                      value={slot.val}
+                      onChange={(e) => slot.set(e.target.value.slice(0, 60))}
+                      placeholder={t("othersExtraPlaceholder")}
+                      maxLength={60}
+                      data-testid={`input-others-extra-${slot.idx}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
             {/* Task #79: optional 50-char freehand notes — rendered for ALL
                 categories (only when one is picked, to keep the empty form
                 quiet). Trimmed and coerced to null on submit; shown only in
@@ -2198,7 +2476,20 @@ export default function MarketplacePage() {
           <DialogFooter>
             <Button
               onClick={handleSubmit}
-              disabled={!category || createMutation.isPending || updateMutation.isPending || editPhotosLoading}
+              disabled={
+                !category ||
+                createMutation.isPending ||
+                updateMutation.isPending ||
+                editPhotosLoading ||
+                // Task #84: Others requires ≥1 photo. Disable Save when:
+                // - Creating an Others listing with no photos picked, OR
+                // - Editing an Others listing where the photo set was touched
+                //   (`photosDirty`) and the user has cleared it to empty.
+                (category === "others" && (
+                  (editingListingId == null && uploadedPhotos.length === 0) ||
+                  (editingListingId != null && photosDirty && uploadedPhotos.length === 0)
+                ))
+              }
               className="w-full"
               data-testid="button-submit-listing"
             >
@@ -2220,6 +2511,7 @@ export default function MarketplacePage() {
                 const isSoyabeanSeed = listing.category === "soyabean_seed";
                 const isBardanBag = listing.category === "bardan_bag";
                 const isFan = listing.category === "exhaust_fan";
+                const isOthers = listing.category === "others";
                 const totalPhotos = listing.photoCount || (listing.photoMime ? 1 : 0);
                 const hasPhotos = totalPhotos > 0;
                 const dist = getDistanceKm(listing);
@@ -2302,7 +2594,7 @@ export default function MarketplacePage() {
                           )}
                         </div>
                       )}
-                      {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && !isFan && (
+                      {!isOnion && !isOnionSeed && !isSoyabeanSeed && !isBardanBag && !isFan && !isOthers && (
                         <div>
                           {listing.quantityBags && (
                             <p className="text-xl font-bold">{listing.quantityBags} {t("bags")}</p>
@@ -2392,6 +2684,50 @@ export default function MarketplacePage() {
                             <p className="text-sm font-medium col-span-2">{t("fanWarrantyYears")}: {listing.fanWarrantyYears != null ? listing.fanWarrantyYears : "—"}</p>
                           </div>
                           <p className="text-sm font-medium mt-1.5">{t("fanDimensions")}: {listing.fanDimensions || "—"}</p>
+                        </div>
+                      )}
+                      {isOthers && (
+                        <div>
+                          <p className="text-xl font-bold" data-testid="text-detail-others-name">
+                            {listing.othersProductName || "—"}
+                          </p>
+                          <p className="text-lg font-semibold mt-0.5" data-testid="text-detail-price">
+                            {listing.othersPrice != null
+                              ? `₹${listing.othersPrice}`
+                              : <span className="text-foreground/70">{t("contactForPrice")}</span>}
+                          </p>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
+                            {listing.othersBrand && (
+                              <p className="text-sm font-medium" data-testid="text-detail-others-brand">{t("othersBrand")}: {listing.othersBrand}</p>
+                            )}
+                            {listing.othersCondition && (
+                              <p className="text-sm font-medium" data-testid="text-detail-others-condition">{t("othersCondition")}: {othersConditionLabel(listing.othersCondition)}</p>
+                            )}
+                            {listing.othersWarrantyYears != null && (
+                              <p className="text-sm font-medium" data-testid="text-detail-others-warranty">{t("othersWarrantyYears")}: {listing.othersWarrantyYears}</p>
+                            )}
+                            {listing.othersReturnPolicy && (
+                              <p className="text-sm font-medium" data-testid="text-detail-others-return">{t("othersReturnPolicy")}: {othersReturnPolicyLabel(listing.othersReturnPolicy)}</p>
+                            )}
+                          </div>
+                          {listing.othersMaterials && (
+                            <p className="text-sm font-medium mt-1.5" data-testid="text-detail-others-materials">{t("othersMaterials")}: {listing.othersMaterials}</p>
+                          )}
+                          {listing.othersDimensions && (
+                            <p className="text-sm font-medium" data-testid="text-detail-others-dimensions">{t("othersDimensions")}: {listing.othersDimensions}</p>
+                          )}
+                          {(listing.othersExtra1 || listing.othersExtra2 || listing.othersExtra3 || listing.othersExtra4 || listing.othersExtra5) && (
+                            <div className="mt-2">
+                              <p className="text-sm font-semibold text-foreground/80">{t("othersExtra")}:</p>
+                              <ul className="list-disc list-inside text-sm font-medium space-y-0.5 mt-0.5">
+                                {[listing.othersExtra1, listing.othersExtra2, listing.othersExtra3, listing.othersExtra4, listing.othersExtra5]
+                                  .filter((x): x is string => !!x && x.trim().length > 0)
+                                  .map((line, idx) => (
+                                    <li key={idx} data-testid={`text-detail-others-extra-${idx + 1}`}>{line}</li>
+                                  ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       )}
 

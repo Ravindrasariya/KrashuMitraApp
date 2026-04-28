@@ -278,6 +278,13 @@ export const MARKETPLACE_BAG_GSM_OPTIONS = [40, 50, 60, 70, 80, 90, 100, 120, 15
 export const MARKETPLACE_FAN_BRANDS = ["Crompton", "Havells", "Usha", "Others"] as const;
 export const MARKETPLACE_FAN_COLORS = ["Grey", "Brown", "Black", "Others"] as const;
 
+// Task #84: generic "others" marketplace category. Most fields are free-form
+// strings the seller fills in; only the two enums below have a fixed
+// allow-list shared between the client form and server validation so the
+// dropdowns and POST/PATCH branches never drift.
+export const MARKETPLACE_OTHERS_CONDITIONS = ["new", "used", "refurbished"] as const;
+export const MARKETPLACE_OTHERS_RETURN_POLICIES = ["5_day_return", "5_day_replacement", "none"] as const;
+
 export const marketplaceListings = pgTable("marketplace_listings", {
   id: serial("id").primaryKey(),
   sellerId: varchar("seller_id").notNull().references(() => users.id),
@@ -320,6 +327,26 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   fanWarrantyYears: integer("fan_warranty_years"),
   fanDimensions: text("fan_dimensions"),
   fanPricePerPiece: integer("fan_price_per_piece"),
+  // Task #84: generic "others" category — 13 nullable columns. Only
+  // othersProductName + ≥1 photo are required at the API boundary; every
+  // other field is freehand and skipped when blank. Two enums
+  // (othersCondition, othersReturnPolicy) gate values to the allow-lists
+  // declared above. othersExtra1..5 are bare label-less rows the seller
+  // can use for anything the structured fields don't cover (e.g. SKU,
+  // model number, link).
+  othersProductName: text("others_product_name"),
+  othersBrand: text("others_brand"),
+  othersPrice: integer("others_price"),
+  othersMaterials: text("others_materials"),
+  othersCondition: text("others_condition"),
+  othersWarrantyYears: integer("others_warranty_years"),
+  othersDimensions: text("others_dimensions"),
+  othersReturnPolicy: text("others_return_policy"),
+  othersExtra1: text("others_extra1"),
+  othersExtra2: text("others_extra2"),
+  othersExtra3: text("others_extra3"),
+  othersExtra4: text("others_extra4"),
+  othersExtra5: text("others_extra5"),
   sellerVillage: text("seller_village"),
   sellerTehsil: text("seller_tehsil"),
   sellerDistrict: text("seller_district"),
@@ -361,6 +388,32 @@ export const insertMarketplaceListingSchema = createInsertSchema(marketplaceList
     // the field can be cleared on edit, and .optional() so create / partial
     // edit payloads that don't mention it are still valid.
     additionalNotes: z.string().trim().max(50).nullable().optional(),
+  })
+  // Task #84: when category is "others", `othersProductName` is the only
+  // required Others-specific field at the API boundary (everything else is
+  // optional). The route handler still does fine-grained per-field validation
+  // (length caps, enum allow-lists, integer ranges) on top of this — this
+  // refinement just makes sure a misbehaving client can't POST an Others
+  // listing without a name. Trim and reject empty/whitespace.
+  .superRefine((data, ctx) => {
+    if (data.category === "others") {
+      const name = typeof data.othersProductName === "string"
+        ? data.othersProductName.trim()
+        : "";
+      if (name.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["othersProductName"],
+          message: "Product name is required for Others listings.",
+        });
+      } else if (name.length > 80) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["othersProductName"],
+          message: "Product name must be at most 80 characters.",
+        });
+      }
+    }
   });
 
 export type MarketplaceListing = typeof marketplaceListings.$inferSelect;

@@ -19,6 +19,8 @@ import {
   MARKETPLACE_BAG_GSM_OPTIONS,
   MARKETPLACE_FAN_BRANDS,
   MARKETPLACE_FAN_COLORS,
+  MARKETPLACE_OTHERS_CONDITIONS,
+  MARKETPLACE_OTHERS_RETURN_POLICIES,
 } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -1896,8 +1898,8 @@ Respond in this structure:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece } = req.body || {};
-      if (!category || !["onion_seedling", "potato_seed", "onion_seed", "soyabean_seed", "bardan_bag", "exhaust_fan"].includes(category)) {
+      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, othersProductName, othersBrand, othersPrice, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5 } = req.body || {};
+      if (!category || !["onion_seedling", "potato_seed", "onion_seed", "soyabean_seed", "bardan_bag", "exhaust_fan", "others"].includes(category)) {
         return res.status(400).json({ message: "Invalid category" });
       }
       if (category === "onion_seedling" && !quantityBigha) {
@@ -1929,6 +1931,21 @@ Respond in this structure:
       if (category === "exhaust_fan") {
         if (fanPricePerPiece === undefined || fanPricePerPiece === null || String(fanPricePerPiece).trim() === "") {
           return res.status(400).json({ message: "fanPricePerPiece required for exhaust_fan" });
+        }
+      }
+      if (category === "others") {
+        if (!othersProductName || typeof othersProductName !== "string" || !othersProductName.trim()) {
+          return res.status(400).json({ message: "othersProductName required for others" });
+        }
+        // ≥1 photo required for the generic Others category. Without
+        // structured fields like brand/variety, the photo is the only
+        // anchor that lets buyers tell what's actually being sold —
+        // the form disables Save until a photo is added, this is the
+        // server-side guardrail mirror.
+        const photosOk = Array.isArray(photos) && photos.length > 0;
+        const legacyPhotoOk = !!photoData;
+        if (!photosOk && !legacyPhotoOk) {
+          return res.status(400).json({ message: "At least one photo is required for others" });
         }
       }
 
@@ -2107,6 +2124,62 @@ Respond in this structure:
         }
       }
 
+      // Task #84: Others-category parsing. Only product name is required at
+      // this stage (already enforced above); every other field is optional
+      // and stored only when present + non-empty after trim. The two enum
+      // columns are validated against the shared allow-lists.
+      let parsedOthersProductName: string | null = null;
+      let parsedOthersBrand: string | null = null;
+      let parsedOthersPrice: number | null = null;
+      let parsedOthersMaterials: string | null = null;
+      let parsedOthersCondition: string | null = null;
+      let parsedOthersWarrantyYears: number | null = null;
+      let parsedOthersDimensions: string | null = null;
+      let parsedOthersReturnPolicy: string | null = null;
+      const parsedOthersExtras: (string | null)[] = [null, null, null, null, null];
+      if (category === "others") {
+        parsedOthersProductName = String(othersProductName).trim().slice(0, 80);
+        const trimOpt = (raw: any, max: number): string | null => {
+          if (raw === undefined || raw === null) return null;
+          const s = String(raw).trim();
+          if (!s) return null;
+          return s.slice(0, max);
+        };
+        parsedOthersBrand = trimOpt(othersBrand, 40);
+        parsedOthersMaterials = trimOpt(othersMaterials, 60);
+        parsedOthersDimensions = trimOpt(othersDimensions, 60);
+        const extraRaw = [othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5];
+        for (let i = 0; i < 5; i++) parsedOthersExtras[i] = trimOpt(extraRaw[i], 60);
+        if (othersPrice !== undefined && othersPrice !== null && String(othersPrice).trim() !== "") {
+          const raw = String(othersPrice).trim();
+          if (!/^\d+$/.test(raw)) return res.status(400).json({ message: "Invalid othersPrice" });
+          const n = parseInt(raw, 10);
+          if (Number.isNaN(n) || n < 1 || n > 999999) return res.status(400).json({ message: "Invalid othersPrice" });
+          parsedOthersPrice = n;
+        }
+        if (othersWarrantyYears !== undefined && othersWarrantyYears !== null && String(othersWarrantyYears).trim() !== "") {
+          const raw = String(othersWarrantyYears).trim();
+          if (!/^\d+$/.test(raw)) return res.status(400).json({ message: "Invalid othersWarrantyYears" });
+          const n = parseInt(raw, 10);
+          if (Number.isNaN(n) || n < 0 || n > 50) return res.status(400).json({ message: "Invalid othersWarrantyYears" });
+          parsedOthersWarrantyYears = n;
+        }
+        if (othersCondition !== undefined && othersCondition !== null && String(othersCondition).trim() !== "" && String(othersCondition) !== "none") {
+          const v = String(othersCondition);
+          if (!MARKETPLACE_OTHERS_CONDITIONS.includes(v as typeof MARKETPLACE_OTHERS_CONDITIONS[number])) {
+            return res.status(400).json({ message: "Invalid othersCondition" });
+          }
+          parsedOthersCondition = v;
+        }
+        if (othersReturnPolicy !== undefined && othersReturnPolicy !== null && String(othersReturnPolicy).trim() !== "" && String(othersReturnPolicy) !== "none") {
+          const v = String(othersReturnPolicy);
+          if (!MARKETPLACE_OTHERS_RETURN_POLICIES.includes(v as typeof MARKETPLACE_OTHERS_RETURN_POLICIES[number])) {
+            return res.status(400).json({ message: "Invalid othersReturnPolicy" });
+          }
+          parsedOthersReturnPolicy = v;
+        }
+      }
+
       let parsedPricePerKg: number | null = null;
       if (category === "onion_seed" && onionSeedPricePerKg !== undefined && onionSeedPricePerKg !== null && String(onionSeedPricePerKg).trim() !== "") {
         const n = parseInt(String(onionSeedPricePerKg), 10);
@@ -2170,6 +2243,19 @@ Respond in this structure:
         fanWarrantyYears: category === "exhaust_fan" ? parsedFanWarrantyYears : null,
         fanDimensions: category === "exhaust_fan" ? parsedFanDimensions : null,
         fanPricePerPiece: category === "exhaust_fan" ? parsedFanPricePerPiece : null,
+        othersProductName: category === "others" ? parsedOthersProductName : null,
+        othersBrand: category === "others" ? parsedOthersBrand : null,
+        othersPrice: category === "others" ? parsedOthersPrice : null,
+        othersMaterials: category === "others" ? parsedOthersMaterials : null,
+        othersCondition: category === "others" ? parsedOthersCondition : null,
+        othersWarrantyYears: category === "others" ? parsedOthersWarrantyYears : null,
+        othersDimensions: category === "others" ? parsedOthersDimensions : null,
+        othersReturnPolicy: category === "others" ? parsedOthersReturnPolicy : null,
+        othersExtra1: category === "others" ? parsedOthersExtras[0] : null,
+        othersExtra2: category === "others" ? parsedOthersExtras[1] : null,
+        othersExtra3: category === "others" ? parsedOthersExtras[2] : null,
+        othersExtra4: category === "others" ? parsedOthersExtras[3] : null,
+        othersExtra5: category === "others" ? parsedOthersExtras[4] : null,
         sellerVillage: user.village || null,
         sellerTehsil: user.tehsil || null,
         sellerDistrict: user.district || null,
@@ -2222,7 +2308,23 @@ Respond in this structure:
       }
 
       const category = existing.category;
-      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece } = req.body || {};
+      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, othersProductName, othersBrand, othersPrice, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5 } = req.body || {};
+
+      // Task #84: Others-category PATCH guards. othersProductName must
+      // never be cleared (≥1 char remains required throughout the
+      // listing's life), and the photo collection must not be wiped to
+      // empty by an explicit `photos: []` in the body. PATCH bodies that
+      // simply omit `photos` keep the existing photo collection intact.
+      if (category === "others") {
+        if (othersProductName !== undefined) {
+          if (typeof othersProductName !== "string" || !othersProductName.trim()) {
+            return res.status(400).json({ message: "othersProductName required for others" });
+          }
+        }
+        if (Array.isArray(photos) && photos.length === 0) {
+          return res.status(400).json({ message: "At least one photo is required for others" });
+        }
+      }
 
       if (category === "onion_seedling" && quantityBigha !== undefined && !quantityBigha) {
         return res.status(400).json({ message: "quantityBigha required for onion_seedling" });
@@ -2496,6 +2598,81 @@ Respond in this structure:
         }
       }
 
+      // Task #84: Others-category PATCH parsing. Same `undefined = no change`
+      // convention as the other categories so partial edits don't wipe other
+      // columns. othersProductName cannot be cleared (guard above already
+      // returned 400); every other field accepts null/empty to clear.
+      let parsedOthersProductNamePatch: string | undefined = undefined;
+      let parsedOthersBrandPatch: string | null | undefined = undefined;
+      let parsedOthersPricePatch: number | null | undefined = undefined;
+      let parsedOthersMaterialsPatch: string | null | undefined = undefined;
+      let parsedOthersConditionPatch: string | null | undefined = undefined;
+      let parsedOthersWarrantyYearsPatch: number | null | undefined = undefined;
+      let parsedOthersDimensionsPatch: string | null | undefined = undefined;
+      let parsedOthersReturnPolicyPatch: string | null | undefined = undefined;
+      const parsedOthersExtraPatches: (string | null | undefined)[] = [undefined, undefined, undefined, undefined, undefined];
+      if (category === "others") {
+        const trimOptPatch = (raw: any, max: number): string | null | undefined => {
+          if (raw === undefined) return undefined;
+          if (raw === null) return null;
+          const s = String(raw).trim();
+          if (!s) return null;
+          return s.slice(0, max);
+        };
+        if (othersProductName !== undefined) {
+          parsedOthersProductNamePatch = String(othersProductName).trim().slice(0, 80);
+        }
+        parsedOthersBrandPatch = trimOptPatch(othersBrand, 40);
+        parsedOthersMaterialsPatch = trimOptPatch(othersMaterials, 60);
+        parsedOthersDimensionsPatch = trimOptPatch(othersDimensions, 60);
+        const extraRaw = [othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5];
+        for (let i = 0; i < 5; i++) parsedOthersExtraPatches[i] = trimOptPatch(extraRaw[i], 60);
+        if (othersPrice !== undefined) {
+          if (othersPrice === null || String(othersPrice).trim() === "") {
+            parsedOthersPricePatch = null;
+          } else {
+            const raw = String(othersPrice).trim();
+            if (!/^\d+$/.test(raw)) return res.status(400).json({ message: "Invalid othersPrice" });
+            const n = parseInt(raw, 10);
+            if (Number.isNaN(n) || n < 1 || n > 999999) return res.status(400).json({ message: "Invalid othersPrice" });
+            parsedOthersPricePatch = n;
+          }
+        }
+        if (othersWarrantyYears !== undefined) {
+          if (othersWarrantyYears === null || String(othersWarrantyYears).trim() === "") {
+            parsedOthersWarrantyYearsPatch = null;
+          } else {
+            const raw = String(othersWarrantyYears).trim();
+            if (!/^\d+$/.test(raw)) return res.status(400).json({ message: "Invalid othersWarrantyYears" });
+            const n = parseInt(raw, 10);
+            if (Number.isNaN(n) || n < 0 || n > 50) return res.status(400).json({ message: "Invalid othersWarrantyYears" });
+            parsedOthersWarrantyYearsPatch = n;
+          }
+        }
+        if (othersCondition !== undefined) {
+          if (othersCondition === null || String(othersCondition).trim() === "" || String(othersCondition) === "none") {
+            parsedOthersConditionPatch = null;
+          } else {
+            const v = String(othersCondition);
+            if (!MARKETPLACE_OTHERS_CONDITIONS.includes(v as typeof MARKETPLACE_OTHERS_CONDITIONS[number])) {
+              return res.status(400).json({ message: "Invalid othersCondition" });
+            }
+            parsedOthersConditionPatch = v;
+          }
+        }
+        if (othersReturnPolicy !== undefined) {
+          if (othersReturnPolicy === null || String(othersReturnPolicy).trim() === "" || String(othersReturnPolicy) === "none") {
+            parsedOthersReturnPolicyPatch = null;
+          } else {
+            const v = String(othersReturnPolicy);
+            if (!MARKETPLACE_OTHERS_RETURN_POLICIES.includes(v as typeof MARKETPLACE_OTHERS_RETURN_POLICIES[number])) {
+              return res.status(400).json({ message: "Invalid othersReturnPolicy" });
+            }
+            parsedOthersReturnPolicyPatch = v;
+          }
+        }
+      }
+
       let parsedPricePerQuintal: number | null | undefined = undefined;
       if (category === "soyabean_seed" && soyabeanSeedPricePerQuintal !== undefined) {
         if (soyabeanSeedPricePerQuintal === null || String(soyabeanSeedPricePerQuintal).trim() === "") {
@@ -2546,6 +2723,20 @@ Respond in this structure:
         }
         if (parsedBagMinQuantityPatch !== undefined) updates.bagMinQuantity = parsedBagMinQuantityPatch;
         if (parsedBagPricePerBagPatch !== undefined) updates.bagPricePerBag = parsedBagPricePerBagPatch;
+      } else if (category === "others") {
+        if (parsedOthersProductNamePatch !== undefined) updates.othersProductName = parsedOthersProductNamePatch;
+        if (parsedOthersBrandPatch !== undefined) updates.othersBrand = parsedOthersBrandPatch;
+        if (parsedOthersPricePatch !== undefined) updates.othersPrice = parsedOthersPricePatch;
+        if (parsedOthersMaterialsPatch !== undefined) updates.othersMaterials = parsedOthersMaterialsPatch;
+        if (parsedOthersConditionPatch !== undefined) updates.othersCondition = parsedOthersConditionPatch;
+        if (parsedOthersWarrantyYearsPatch !== undefined) updates.othersWarrantyYears = parsedOthersWarrantyYearsPatch;
+        if (parsedOthersDimensionsPatch !== undefined) updates.othersDimensions = parsedOthersDimensionsPatch;
+        if (parsedOthersReturnPolicyPatch !== undefined) updates.othersReturnPolicy = parsedOthersReturnPolicyPatch;
+        if (parsedOthersExtraPatches[0] !== undefined) updates.othersExtra1 = parsedOthersExtraPatches[0];
+        if (parsedOthersExtraPatches[1] !== undefined) updates.othersExtra2 = parsedOthersExtraPatches[1];
+        if (parsedOthersExtraPatches[2] !== undefined) updates.othersExtra3 = parsedOthersExtraPatches[2];
+        if (parsedOthersExtraPatches[3] !== undefined) updates.othersExtra4 = parsedOthersExtraPatches[3];
+        if (parsedOthersExtraPatches[4] !== undefined) updates.othersExtra5 = parsedOthersExtraPatches[4];
       } else if (category === "exhaust_fan") {
         if (parsedFanBrandPatch !== undefined) updates.fanBrand = parsedFanBrandPatch;
         if (parsedFanBrandOtherPatch !== undefined) updates.fanBrandOther = parsedFanBrandOtherPatch;

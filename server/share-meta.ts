@@ -46,6 +46,7 @@ function categoryLabel(category: string): string {
     soyabean_seed: "Soyabean Seeds (सोयाबीन बीज)",
     bardan_bag: "Bardan Bag (बारदान)",
     exhaust_fan: "Exhaust Fan (एग्जॉस्ट फैन)",
+    others: "Others (अन्य)",
   };
   return map[category] || "Listing";
 }
@@ -64,7 +65,7 @@ const SHARE_COVER_HEIGHT = 630;
  * category field only needs to be done in one place.
  */
 export type ListingDetailFact =
-  | { kind: "price"; amount: number; per: "kg" | "quintal" | "bag" | "piece" }
+  | { kind: "price"; amount: number; per: "kg" | "quintal" | "bag" | "piece" | "item" }
   | { kind: "qtyBigha"; bigha: string }
   | { kind: "qtyBags"; bags: string }
   | { kind: "availableInDays"; days: number }
@@ -79,7 +80,10 @@ export type ListingDetailFact =
   | { kind: "bagMaterial"; value: string }
   | { kind: "bagDimension"; value: string }
   | { kind: "fanBrand"; value: string; other: string | null }
-  | { kind: "fanWattage"; watts: number };
+  | { kind: "fanWattage"; watts: number }
+  | { kind: "othersProductName"; value: string }
+  | { kind: "othersBrand"; value: string }
+  | { kind: "othersCondition"; value: string };
 
 export function extractListingDetailFacts(l: MarketplaceListing): ListingDetailFact[] {
   const facts: ListingDetailFact[] = [];
@@ -115,6 +119,12 @@ export function extractListingDetailFacts(l: MarketplaceListing): ListingDetailF
       if (l.fanBrand) facts.push({ kind: "fanBrand", value: l.fanBrand, other: l.fanBrandOther ?? null });
       if (l.fanWattage != null) facts.push({ kind: "fanWattage", watts: l.fanWattage });
       break;
+    case "others":
+      if (l.othersProductName) facts.push({ kind: "othersProductName", value: l.othersProductName });
+      if (l.othersPrice != null) facts.push({ kind: "price", amount: l.othersPrice, per: "item" });
+      if (l.othersBrand) facts.push({ kind: "othersBrand", value: l.othersBrand });
+      if (l.othersCondition) facts.push({ kind: "othersCondition", value: l.othersCondition });
+      break;
   }
   return facts;
 }
@@ -122,6 +132,10 @@ export function extractListingDetailFacts(l: MarketplaceListing): ListingDetailF
 function factToEnglishLabel(f: ListingDetailFact): string {
   switch (f.kind) {
     case "price": {
+      // "item" is the per-unit for the generic Others category — render as
+      // a bare price (no slash suffix) since the seller chose not to break
+      // it down per unit. All other categories keep their original /unit.
+      if (f.per === "item") return `₹${f.amount}`;
       const per = f.per === "kg" ? "kg" : f.per === "quintal" ? "quintal" : f.per === "bag" ? "bag" : "piece";
       return `₹${f.amount}/${per}`;
     }
