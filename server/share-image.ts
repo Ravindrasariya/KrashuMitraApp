@@ -98,8 +98,13 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     // persistent cache files (and any Meta-side cached previews) are
     // invalidated. v3 = Task #78 (full-bleed photo, no white band).
     // v4 = Task #79 (notes appended to og:description; image unchanged).
-    // v5 = Task #84 (Others-category fields participate in og:description).
-    lay: 5,
+    // Task #84 deliberately does NOT bump `lay` — the composed image
+    // pixels are unchanged. Edits to Others fields still invalidate the
+    // signature via the explicit `opn`/`op`/`ob`/`oc` entries above, so
+    // the persistent cache key still flips per listing edit; only the
+    // global layout token stays stable so unrelated listings keep their
+    // existing cached JPEGs.
+    lay: 4,
   });
   return crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
 }

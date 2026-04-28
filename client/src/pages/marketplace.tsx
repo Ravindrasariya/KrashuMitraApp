@@ -1607,8 +1607,13 @@ export default function MarketplacePage() {
                             ? `₹${listing.othersPrice}`
                             : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
                         </p>
-                        <p className="text-[11px] font-medium text-foreground/70 leading-snug truncate">
-                          {[
+                        {(() => {
+                          // Task #84: hide the optional-facts line entirely
+                          // when no Others field is filled — a minimal card
+                          // (name + price/contact + location) is the
+                          // intended look. Avoid rendering a placeholder
+                          // dash, per spec.
+                          const otherFacts = [
                             listing.othersBrand,
                             othersConditionLabel(listing.othersCondition),
                             listing.othersWarrantyYears != null
@@ -1622,8 +1627,14 @@ export default function MarketplacePage() {
                             listing.othersExtra3,
                             listing.othersExtra4,
                             listing.othersExtra5,
-                          ].filter(Boolean).join(" · ") || "—"}
-                        </p>
+                          ].filter(Boolean);
+                          if (otherFacts.length === 0) return null;
+                          return (
+                            <p className="text-[11px] font-medium text-foreground/70 leading-snug truncate">
+                              {otherFacts.join(" · ")}
+                            </p>
+                          );
+                        })()}
                       </>
                     )}
                     {isOnionSeed && (
@@ -2722,16 +2733,25 @@ export default function MarketplacePage() {
                           {listing.othersDimensions && (
                             <p className="text-sm font-medium" data-testid="text-detail-others-dimensions">{t("othersDimensions")}: {listing.othersDimensions}</p>
                           )}
+                          {/* Task #84: extras are intentionally unlabeled.
+                              Each non-empty extra cell renders as a raw
+                              line so the seller can use the slot for any
+                              freeform fact (warranty terms, accessory
+                              list, certification, etc.) without an
+                              "Extra Info:" heading boxing it in. */}
                           {(listing.othersExtra1 || listing.othersExtra2 || listing.othersExtra3 || listing.othersExtra4 || listing.othersExtra5) && (
-                            <div className="mt-2">
-                              <p className="text-sm font-semibold text-foreground/80">{t("othersExtra")}:</p>
-                              <ul className="list-disc list-inside text-sm font-medium space-y-0.5 mt-0.5">
-                                {[listing.othersExtra1, listing.othersExtra2, listing.othersExtra3, listing.othersExtra4, listing.othersExtra5]
-                                  .filter((x): x is string => !!x && x.trim().length > 0)
-                                  .map((line, idx) => (
-                                    <li key={idx} data-testid={`text-detail-others-extra-${idx + 1}`}>{line}</li>
-                                  ))}
-                              </ul>
+                            <div className="mt-1.5 space-y-0.5">
+                              {[listing.othersExtra1, listing.othersExtra2, listing.othersExtra3, listing.othersExtra4, listing.othersExtra5]
+                                .filter((x): x is string => !!x && x.trim().length > 0)
+                                .map((line, idx) => (
+                                  <p
+                                    key={idx}
+                                    className="text-sm font-medium"
+                                    data-testid={`text-detail-others-extra-${idx + 1}`}
+                                  >
+                                    {line}
+                                  </p>
+                                ))}
                             </div>
                           )}
                         </div>
