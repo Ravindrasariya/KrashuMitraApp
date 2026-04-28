@@ -76,13 +76,21 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     fb: listing.fanBrand,
     fbo: listing.fanBrandOther,
     fw: listing.fanWattage,
+    // Task #79: include the freehand notes in the cache key. Notes only
+    // affect the og:description meta tag (not the rendered share image
+    // pixels), but the description is part of the same Meta link-preview
+    // record Facebook caches against `og:image:secure_url`. Bumping this
+    // key when notes change keeps WhatsApp/Facebook from showing a stale
+    // preview text alongside a freshly re-fetched image.
+    an: listing.additionalNotes ?? "",
     a: listing.isActive,
     ph: photoSig.photoIds.join(","),
     lph: photoSig.legacyPhotoSig ?? "",
     // Layout version — bump whenever the composition changes so old
     // persistent cache files (and any Meta-side cached previews) are
     // invalidated. v3 = Task #78 (full-bleed photo, no white band).
-    lay: 3,
+    // v4 = Task #79 (notes appended to og:description; image unchanged).
+    lay: 4,
   });
   return crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
 }

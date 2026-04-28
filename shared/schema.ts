@@ -325,14 +325,30 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   sellerDistrict: text("seller_district"),
   sellerLat: varchar("seller_lat"),
   sellerLng: varchar("seller_lng"),
+  // Task #79: optional 50-char freehand note (Hindi or English) the seller
+  // can use to mention things the structured fields don't cover (e.g.,
+  // "delivery available", "no GST invoice", "trial pieces shareable").
+  // Shown inside the listing detail popup and appended to og:description for
+  // social link previews when non-empty. Nullable; empty input is stored as
+  // null (the form trims and coerces "" -> null before submit).
+  additionalNotes: text("additional_notes"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const insertMarketplaceListingSchema = createInsertSchema(marketplaceListings).omit({
-  id: true,
-  createdAt: true,
-});
+export const insertMarketplaceListingSchema = createInsertSchema(marketplaceListings)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    // Hard cap at 50 chars at the API boundary so a misbehaving / non-form
+    // client can't bypass the form's maxLength={50}. The form already trims
+    // and coerces empty strings to null before submit; keep .nullable() so
+    // the field can be cleared on edit, and .optional() so create / partial
+    // edit payloads that don't mention it are still valid.
+    additionalNotes: z.string().max(50).nullable().optional(),
+  });
 
 export type MarketplaceListing = typeof marketplaceListings.$inferSelect;
 export type InsertMarketplaceListing = z.infer<typeof insertMarketplaceListingSchema>;

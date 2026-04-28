@@ -150,7 +150,14 @@ function summarizeListing(listing: MarketplaceListing): { title: string; descrip
   const parts = extractListingDetailFacts(listing).map(factToEnglishLabel).filter(Boolean);
   const detail = parts.join(" · ");
   const summary = [cat, detail, location ? `📍 ${location}` : ""].filter(Boolean).join(" — ");
-  const description = summary || BRAND_DESCRIPTION;
+  // Task #79: append the seller's freehand 50-char note when present so it
+  // surfaces in WhatsApp / Facebook / Twitter link-preview descriptions
+  // (which is where the seller is likely sharing the listing). Cap defended
+  // by Zod (.max(50)) on insert/update; we still use the raw value here so
+  // any historical data stays unchanged.
+  const notes = listing.additionalNotes?.trim();
+  const withNotes = notes ? `${summary || cat} — ${notes}` : summary;
+  const description = withNotes || BRAND_DESCRIPTION;
   return { title: BRAND_TITLE, description };
 }
 

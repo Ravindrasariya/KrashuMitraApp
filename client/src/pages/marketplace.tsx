@@ -400,6 +400,7 @@ export default function MarketplacePage() {
   const [fanWarrantyYears, setFanWarrantyYears] = useState("");
   const [fanDimensions, setFanDimensions] = useState("");
   const [fanPricePerPiece, setFanPricePerPiece] = useState("");
+  const [additionalNotes, setAdditionalNotes] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"latest" | "nearest" | "oldest">("latest");
   const [sortOpen, setSortOpen] = useState(false);
@@ -547,6 +548,7 @@ export default function MarketplacePage() {
     setFanWarrantyYears("");
     setFanDimensions("");
     setFanPricePerPiece("");
+    setAdditionalNotes("");
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -747,6 +749,13 @@ export default function MarketplacePage() {
       if (!dim) { toast({ title: t("fanDimensions"), variant: "destructive" }); return; }
       data.fanDimensions = dim.slice(0, 80);
     }
+    // Task #79: optional freehand notes apply to ALL categories. Trim and
+    // coerce empty -> null so an unset field round-trips cleanly through the
+    // Zod schema (.nullable().optional()) and so editing doesn't leave a
+    // dangling whitespace string in the DB. Cap to 50 chars defensively in
+    // case the input's maxLength is bypassed (also enforced server-side).
+    const notes = additionalNotes.trim().slice(0, 50);
+    data.additionalNotes = notes || null;
     if (editingListingId != null) {
       updateMutation.mutate({ id: editingListingId, data });
     } else {
@@ -757,6 +766,9 @@ export default function MarketplacePage() {
   async function openEditDialog(listing: ListingNoPhoto) {
     resetForm();
     setCategory(listing.category);
+    // Task #79: notes apply to every category, so prefill before the
+    // category-specific branches.
+    setAdditionalNotes(listing.additionalNotes || "");
     if (listing.category === "onion_seedling") {
       setQuantityBigha(listing.quantityBigha || "");
       setAvailableDays(listing.availableAfterDays != null ? String(listing.availableAfterDays) : "");
@@ -2155,6 +2167,27 @@ export default function MarketplacePage() {
                 </div>
               </>
             )}
+
+            {/* Task #79: optional 50-char freehand notes — rendered for ALL
+                categories (only when one is picked, to keep the empty form
+                quiet). Trimmed and coerced to null on submit; shown only in
+                the listing detail popup and appended to og:description. */}
+            {category && (
+              <div>
+                <Label className="text-sm">{t("additionalNotesLabel")}</Label>
+                <Input
+                  value={additionalNotes}
+                  onChange={(e) => setAdditionalNotes(e.target.value.slice(0, 50))}
+                  placeholder={t("additionalNotesPlaceholder")}
+                  maxLength={50}
+                  data-testid="input-additional-notes"
+                />
+                <div className="text-xs text-muted-foreground mt-1 flex justify-between">
+                  <span>{t("additionalNotesHelp")}</span>
+                  <span data-testid="text-notes-counter">{additionalNotes.length} / 50</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -2371,6 +2404,19 @@ export default function MarketplacePage() {
                         {t("listedOn")}: {new Date(listing.createdAt).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN")}
                         {" · "}{daysSinceListed(listing)} {t("daysAgo")}
                       </div>
+
+                      {/* Task #79: seller's freehand notes — detail popup
+                          only (intentionally NOT on the card grid to keep
+                          cards scannable). Hidden when null/empty. */}
+                      {listing.additionalNotes && listing.additionalNotes.trim() && (
+                        <div
+                          className="text-sm font-medium bg-muted/40 border border-muted rounded-md px-3 py-2 break-words"
+                          data-testid={`text-detail-notes-${listing.id}`}
+                        >
+                          <span className="text-muted-foreground">{t("additionalNotesLabel")}: </span>
+                          {listing.additionalNotes}
+                        </div>
+                      )}
 
                       {detailRatingQuery.data && (
                         <div className="space-y-2">
