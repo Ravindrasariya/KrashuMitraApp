@@ -1293,24 +1293,62 @@ export default function MarketplacePage() {
     }
   }, [pendingListingId, listings, detailListing, isLoading, filterCategory]);
 
+  // Tracks which listing id we have a pushState entry for, so we can pop it
+  // symmetrically when the dialog is closed by the user (X / outside click /
+  // edit / delete) — without pushing a new entry every time React re-runs
+  // this effect for the same listing.
+  const pushedListingIdRef = useRef<number | null>(null);
+
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const cur = params.get("listing");
-    const curId = cur ? parseInt(cur, 10) : null;
-    if (detailListing) {
-      if (curId !== detailListing.id) {
-        params.set("listing", String(detailListing.id));
-        const newUrl = `${window.location.pathname}?${params.toString()}`;
-        window.history.pushState({ listingId: detailListing.id }, "", newUrl);
+    if (!detailListing) {
+      // Dialog just closed. If we own a pushed history entry, pop it so the
+      // back button stack stays clean. The other popstate listener
+      // (`syncFromUrl`) won't loop us back open because the URL after the
+      // pop carries no `?listing=` param.
+      if (pushedListingIdRef.current !== null) {
+        pushedListingIdRef.current = null;
+        const state = window.history.state as { kmListingDialog?: boolean } | null;
+        if (state && state.kmListingDialog) {
+          window.history.back();
+        } else {
+          // Back button already popped our entry (popstate path). Just make
+          // sure the URL no longer carries the listing param.
+          const params = new URLSearchParams(window.location.search);
+          if (params.has("listing")) {
+            params.delete("listing");
+            const qs = params.toString();
+            window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+          }
+        }
       }
-    } else {
-      if (cur) {
-        params.delete("listing");
-        const qs = params.toString();
-        const newUrl = window.location.pathname + (qs ? `?${qs}` : "");
-        window.history.replaceState(null, "", newUrl);
-      }
+      return;
     }
+
+    if (pushedListingIdRef.current === detailListing.id) return;
+
+    // Dialog just opened (or switched listing). Two-step history dance so the
+    // phone back button always closes the popup — even when the buyer landed
+    // straight on `?listing=ID` from a shared WhatsApp link:
+    //   1. replaceState the current entry to the grid URL (no `?listing=`).
+    //      For card-opened popups (URL already had no listing param) this is
+    //      a no-op.
+    //   2. pushState the listing URL on top, marked so we recognise it.
+    // Result history: [..., /marketplace, /marketplace?listing=ID]
+    // Back → grid URL → existing `syncFromUrl` popstate handler closes the
+    // dialog. Second back → leaves the page normally (e.g. to WhatsApp).
+    const id = detailListing.id;
+    const baseParams = new URLSearchParams(window.location.search);
+    baseParams.delete("listing");
+    const baseQs = baseParams.toString();
+    const baseUrl = window.location.pathname + (baseQs ? `?${baseQs}` : "");
+    window.history.replaceState(null, "", baseUrl);
+
+    const listingParams = new URLSearchParams(baseParams);
+    listingParams.set("listing", String(id));
+    const listingUrl = `${window.location.pathname}?${listingParams.toString()}`;
+    window.history.pushState({ kmListingDialog: true, listingId: id }, "", listingUrl);
+
+    pushedListingIdRef.current = id;
   }, [detailListing]);
 
   const composeShareInfo = (listing: ListingNoPhoto): ShareInfo => {
@@ -2557,6 +2595,15 @@ export default function MarketplacePage() {
                           {renderPlaceholderIcon(listing.category, "lg")}
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setDetailListing(null)}
+                        className="absolute top-2 right-2 z-20 bg-black/60 hover:bg-black/75 text-white rounded-full p-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/70"
+                        aria-label={t("close")}
+                        data-testid="button-detail-close"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
                       {totalPhotos > 1 && (
                         <>
                           <button
