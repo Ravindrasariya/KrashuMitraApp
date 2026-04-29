@@ -1306,13 +1306,16 @@ export default function MarketplacePage() {
       // (`syncFromUrl`) won't loop us back open because the URL after the
       // pop carries no `?listing=` param.
       if (pushedListingIdRef.current !== null) {
+        const closingId = pushedListingIdRef.current;
         pushedListingIdRef.current = null;
         const state = window.history.state as { kmListingDialog?: boolean } | null;
         if (state && state.kmListingDialog) {
+          console.info("[km-history] cleanup-back", { id: closingId });
           window.history.back();
         } else {
           // Back button already popped our entry (popstate path). Just make
           // sure the URL no longer carries the listing param.
+          console.info("[km-history] cleanup-replace", { id: closingId });
           const params = new URLSearchParams(window.location.search);
           if (params.has("listing")) {
             params.delete("listing");
@@ -1336,19 +1339,66 @@ export default function MarketplacePage() {
     // Result history: [..., /marketplace, /marketplace?listing=ID]
     // Back → grid URL → existing `syncFromUrl` popstate handler closes the
     // dialog. Second back → leaves the page normally (e.g. to WhatsApp).
+    //
+    // Task #94: Chrome's "history manipulation intervention" (M86+) silently
+    // skips pushed entries when the page hasn't received user activation yet.
+    // For a deep-linked landing (WhatsApp tap → `?listing=ID` opens directly)
+    // the popup auto-opens BEFORE any tap on the page, so Chrome marks our
+    // pushState entry as "skip-on-back" and the back button jumps straight
+    // back to WhatsApp without closing the popup. Defer the dance until the
+    // first pointer/key activation if `navigator.userActivation` says the
+    // page hasn't been activated yet.
     const id = detailListing.id;
-    const baseParams = new URLSearchParams(window.location.search);
-    baseParams.delete("listing");
-    const baseQs = baseParams.toString();
-    const baseUrl = window.location.pathname + (baseQs ? `?${baseQs}` : "");
-    window.history.replaceState(null, "", baseUrl);
+    const doDance = () => {
+      // Re-check in case state changed between scheduling and firing.
+      if (pushedListingIdRef.current === id) return;
+      const baseParams = new URLSearchParams(window.location.search);
+      baseParams.delete("listing");
+      const baseQs = baseParams.toString();
+      const baseUrl = window.location.pathname + (baseQs ? `?${baseQs}` : "");
+      window.history.replaceState(null, "", baseUrl);
 
-    const listingParams = new URLSearchParams(baseParams);
-    listingParams.set("listing", String(id));
-    const listingUrl = `${window.location.pathname}?${listingParams.toString()}`;
-    window.history.pushState({ kmListingDialog: true, listingId: id }, "", listingUrl);
+      const listingParams = new URLSearchParams(baseParams);
+      listingParams.set("listing", String(id));
+      const listingUrl = `${window.location.pathname}?${listingParams.toString()}`;
+      window.history.pushState({ kmListingDialog: true, listingId: id }, "", listingUrl);
 
-    pushedListingIdRef.current = id;
+      pushedListingIdRef.current = id;
+      console.info("[km-history] dance-applied", { id });
+    };
+
+    const userActivation = (navigator as Navigator & { userActivation?: { hasBeenActive?: boolean } }).userActivation;
+    const hasBeenActive = userActivation?.hasBeenActive;
+    console.info("[km-history] dialog-open", { id, hasBeenActive });
+
+    if (hasBeenActive !== false) {
+      // Either the API is unavailable (treat as activated) or the user has
+      // already interacted with the page (clicked a card, tapped a tab,
+      // scrolled). Push the entry now — Chrome will accept it.
+      console.info("[km-history] dance-immediate", { id });
+      doDance();
+      return;
+    }
+
+    // Deep-linked landing with no activation yet. Defer the dance until the
+    // first pointer/key event so Chrome doesn't classify the pushed entry
+    // as "unwanted history manipulation" and skip it on back.
+    console.info("[km-history] dance-deferred", { id });
+    let fired = false;
+    const onActivation = () => {
+      if (fired) return;
+      fired = true;
+      window.removeEventListener("pointerdown", onActivation);
+      window.removeEventListener("keydown", onActivation);
+      console.info("[km-history] dance-now", { id });
+      doDance();
+    };
+    window.addEventListener("pointerdown", onActivation, { once: true, passive: true });
+    window.addEventListener("keydown", onActivation, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", onActivation);
+      window.removeEventListener("keydown", onActivation);
+    };
   }, [detailListing]);
 
   // Task #93: when the lightbox is opened on top of the detail popup, push a
