@@ -1513,12 +1513,6 @@ export default function MarketplacePage() {
                         </div>
                       </>
                     )}
-                    {/* Task #88: zoom-in icon is shown on every
-                        photo-bearing card, not just multi-photo ones.
-                        Single-photo cards (cardTotalPhotos === 1) need
-                        the same affordance. The swipe arrows + counter
-                        above remain gated on showCardSwipe since they
-                        only make sense for >1 photos. */}
                     <button
                       type="button"
                       aria-label={t("zoom")}
