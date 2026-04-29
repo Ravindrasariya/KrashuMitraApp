@@ -91,6 +91,7 @@ export function PhotoLightbox({
   };
 
   const onTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
     if (e.touches.length === 2) {
       pinchRef.current = {
         dist: distanceBetween(e.touches[0], e.touches[1]),
@@ -164,6 +165,10 @@ export function PhotoLightbox({
     if (e.target === e.currentTarget) onClose();
   };
 
+  const stopOutsideInteraction = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+  };
+
   const handleDoubleClick = () => {
     if (scale > 1) {
       resetTransform();
@@ -177,6 +182,12 @@ export function PhotoLightbox({
       ref={containerRef}
       className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center touch-none select-none"
       onClick={onBackdropClick}
+      onPointerDown={stopOutsideInteraction}
+      onPointerDownCapture={stopOutsideInteraction}
+      onPointerUp={stopOutsideInteraction}
+      onPointerUpCapture={stopOutsideInteraction}
+      onMouseDown={stopOutsideInteraction}
+      onMouseDownCapture={stopOutsideInteraction}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
