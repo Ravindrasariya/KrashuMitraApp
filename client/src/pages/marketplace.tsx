@@ -1351,6 +1351,49 @@ export default function MarketplacePage() {
     pushedListingIdRef.current = id;
   }, [detailListing]);
 
+  // Task #93: when the lightbox is opened on top of the detail popup, push a
+  // second history entry so the phone back button closes only the lightbox
+  // and leaves the underlying detail popup intact. A second back press then
+  // pops the dialog's own entry (handled by the effect above).
+  //
+  // We deliberately push the same URL — only the `state` marker differs —
+  // because the listing param is what `syncFromUrl` keys off, and we don't
+  // want popping the lightbox entry to make the dialog think the buyer
+  // navigated away from the listing.
+  const pushedLightboxRef = useRef(false);
+
+  useEffect(() => {
+    if (!lightboxOpen) {
+      // Lightbox just closed (X / swipe / outside-tap). If we own a pushed
+      // history entry, pop it so the back stack stays balanced. If the entry
+      // was already popped via the back button (popstate path below), the
+      // ref will already be false and we do nothing.
+      if (pushedLightboxRef.current) {
+        pushedLightboxRef.current = false;
+        const state = window.history.state as { kmListingLightbox?: boolean } | null;
+        if (state && state.kmListingLightbox) {
+          window.history.back();
+        }
+      }
+      return;
+    }
+
+    if (pushedLightboxRef.current) return;
+
+    const url = window.location.pathname + window.location.search;
+    window.history.pushState({ kmListingLightbox: true }, "", url);
+    pushedLightboxRef.current = true;
+
+    const onPop = () => {
+      // Our lightbox entry was popped by the browser back button. Close the
+      // lightbox without popping again (the browser already did it for us).
+      pushedLightboxRef.current = false;
+      setLightboxOpen(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [lightboxOpen]);
+
   const composeShareInfo = (listing: ListingNoPhoto): ShareInfo => {
     const envBase = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined)?.replace(/\/+$/, "");
     const origin = envBase || "https://km.krashuved.com";
