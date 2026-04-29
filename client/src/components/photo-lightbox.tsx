@@ -185,7 +185,7 @@ export function PhotoLightbox({
     >
       <button
         type="button"
-        className="absolute top-3 right-3 z-10 bg-black/60 text-white rounded-full p-2"
+        className="absolute top-3 right-3 z-10 bg-black/60 text-white rounded-full p-2 cursor-pointer"
         onClick={(e) => { e.stopPropagation(); onClose(); }}
         aria-label={t("close")}
         data-testid="button-lightbox-close"
@@ -197,7 +197,7 @@ export function PhotoLightbox({
         <>
           <button
             type="button"
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-black/60 text-white rounded-full p-2"
+            className="absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-black/60 text-white rounded-full p-2 cursor-pointer"
             onClick={(e) => { e.stopPropagation(); onIndexChange((index - 1 + total) % total); }}
             aria-label={t("previousPhoto")}
             data-testid="button-lightbox-prev"
@@ -206,7 +206,7 @@ export function PhotoLightbox({
           </button>
           <button
             type="button"
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-black/60 text-white rounded-full p-2"
+            className="absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-black/60 text-white rounded-full p-2 cursor-pointer"
             onClick={(e) => { e.stopPropagation(); onIndexChange((index + 1) % total); }}
             aria-label={t("nextPhoto")}
             data-testid="button-lightbox-next"
