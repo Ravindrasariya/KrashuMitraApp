@@ -1536,9 +1536,11 @@ export default function MarketplacePage() {
                 )}
 
                 <div className="relative z-10 p-2 flex flex-col flex-1 gap-1">
-                  <Badge className={`text-xs font-semibold px-1.5 py-0.5 leading-4 w-fit ${categoryBadgeColor(listing.category)}`} data-testid={`badge-category-${listing.id}`}>
-                    {categoryLabel(listing.category)}
-                  </Badge>
+                  {listing.category !== "others" && (
+                    <Badge className={`text-xs font-semibold px-1.5 py-0.5 leading-4 w-fit ${categoryBadgeColor(listing.category)}`} data-testid={`badge-category-${listing.id}`}>
+                      {categoryLabel(listing.category)}
+                    </Badge>
+                  )}
 
                   <div className="flex-1 min-h-0">
                     {isOnion && (
@@ -2580,9 +2582,11 @@ export default function MarketplacePage() {
 
                     <div className="p-4 space-y-3">
                       <div className="flex items-center gap-2">
-                        <Badge className={`text-sm font-semibold px-2 py-0.5 ${categoryBadgeColor(listing.category)}`}>
-                          {categoryLabel(listing.category)}
-                        </Badge>
+                        {listing.category !== "others" && (
+                          <Badge className={`text-sm font-semibold px-2 py-0.5 ${categoryBadgeColor(listing.category)}`}>
+                            {categoryLabel(listing.category)}
+                          </Badge>
+                        )}
                         {isOwner && (
                           <Badge variant="outline" className="text-xs">
                             {t("myListing")}
