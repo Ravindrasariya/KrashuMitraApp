@@ -1505,21 +1505,6 @@ export default function MarketplacePage() {
                         >
                           <ChevronRight className="w-4 h-4" />
                         </button>
-                        <button
-                          type="button"
-                          aria-label={t("zoom")}
-                          className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            cardSwipeRef.current.delete(listing.id);
-                            setLightboxListing(listing);
-                            setLightboxIndex(cardIdx);
-                            setLightboxOpen(true);
-                          }}
-                          data-testid={`button-card-photo-zoom-${listing.id}`}
-                        >
-                          <Maximize2 className="w-3.5 h-3.5" />
-                        </button>
                         <div
                           className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-full pointer-events-none"
                           data-testid={`text-card-photo-counter-${listing.id}`}
@@ -1528,6 +1513,27 @@ export default function MarketplacePage() {
                         </div>
                       </>
                     )}
+                    {/* Task #88: zoom-in icon is shown on every
+                        photo-bearing card, not just multi-photo ones.
+                        Single-photo cards (cardTotalPhotos === 1) need
+                        the same affordance. The swipe arrows + counter
+                        above remain gated on showCardSwipe since they
+                        only make sense for >1 photos. */}
+                    <button
+                      type="button"
+                      aria-label={t("zoom")}
+                      className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cardSwipeRef.current.delete(listing.id);
+                        setLightboxListing(listing);
+                        setLightboxIndex(cardIdx);
+                        setLightboxOpen(true);
+                      }}
+                      data-testid={`button-card-photo-zoom-${listing.id}`}
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ) : (
                   <div className={`w-full aspect-[4/3] flex items-center justify-center ${categoryPlaceholderBg(listing.category)}`}>
