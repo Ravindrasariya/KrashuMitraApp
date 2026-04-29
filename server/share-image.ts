@@ -20,24 +20,17 @@ const H = 630;
 // listing description, and URL directly below the picture in the link card.
 const PHOTO_H = H;
 
-// Resolve the directory this module lives in for both runtime modes:
-// - tsx (dev): file is at server/share-image.ts; import.meta.dirname works.
-// - esbuild CJS bundle (prod): bundled into dist/index.cjs; __dirname is dist/.
-// We must prefer __dirname when available — import.meta.dirname is undefined
-// in the CJS bundle, and reading it at module top-level crashes the process.
 declare const __dirname: string | undefined;
-function moduleDir(): string {
-  if (typeof __dirname !== "undefined") return __dirname;
-  return import.meta.dirname;
-}
 
-// In dev: <repo>/client/public/share-cover.png
-// In prod: <install>/dist/public/share-cover.png (Vite emits it there)
+// In dev (tsx): npm run dev runs from <repo>/, cover at
+//   <repo>/client/public/share-cover.png
+// In prod (CJS bundle at <install>/dist/index.cjs): cover at
+//   <install>/dist/public/share-cover.png (Vite emits it there).
 function resolveShareCoverPath(): string {
   if (typeof __dirname !== "undefined") {
-    return path.resolve(moduleDir(), "public/share-cover.png");
+    return path.resolve(__dirname, "public/share-cover.png");
   }
-  return path.resolve(moduleDir(), "../client/public/share-cover.png");
+  return path.resolve(process.cwd(), "client/public/share-cover.png");
 }
 
 // Photo signature inputs the share version needs. Splitting this out so the
@@ -169,10 +162,13 @@ function cacheSet(key: string, value: Buffer): void {
 function resolveShareImageCacheDir(): string {
   const env = process.env.SHARE_IMAGE_CACHE_DIR?.trim();
   if (env) return path.resolve(env);
-  // Sibling of the module's parent dir.
-  // - Dev (tsx): server/.. → repo root → <repo>/.share-image-cache
-  // - Prod (CJS): dist/..  → install root → <install>/.share-image-cache
-  return path.resolve(moduleDir(), "..", ".share-image-cache");
+  // Sibling of the install/repo root.
+  // - Dev (tsx): cwd is <repo>           → <repo>/.share-image-cache
+  // - Prod (CJS): __dirname is dist/     → <install>/.share-image-cache
+  if (typeof __dirname !== "undefined") {
+    return path.resolve(__dirname, "..", ".share-image-cache");
+  }
+  return path.resolve(process.cwd(), ".share-image-cache");
 }
 
 let cacheDirReady = false;
