@@ -321,7 +321,6 @@ export default function AuthPage() {
                     onChange={(e) =>
                       setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
                     }
-                    placeholder="9876543210"
                     data-testid="input-phone"
                     autoComplete="tel-national"
                   />
