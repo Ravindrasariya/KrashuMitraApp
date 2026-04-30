@@ -225,7 +225,7 @@ function PriceTrendsSection({ language }: { language: string }) {
     const current = getEntry(date, districtKey);
     const prev = getEntry(dates[dateIdx + 1], districtKey);
     if (!current || !prev) return 0;
-    return Number(current.modalPrice) - Number(prev.modalPrice);
+    return Math.round(Number(current.modalPrice) - Number(prev.modalPrice));
   };
 
   const formatDate = (d: string) => {
