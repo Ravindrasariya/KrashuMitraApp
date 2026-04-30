@@ -104,6 +104,7 @@ const translations = {
   cropCardCreated: { hi: "फसल कार्ड बनाया गया!", en: "Crop card created!" },
   eventAdded: { hi: "गतिविधि जोड़ी गई!", en: "Event added!" },
   phoneNumber: { hi: "फ़ोन नंबर", en: "Phone Number" },
+  phonePlaceholder: { hi: "कृपया अपना मोबाइल नंबर दर्ज करें", en: "Please provide your mobile number" },
   pin: { hi: "पिन", en: "PIN" },
   newPin: { hi: "नया पिन", en: "New PIN" },
   confirmPin: { hi: "पिन की पुष्टि करें", en: "Confirm PIN" },
