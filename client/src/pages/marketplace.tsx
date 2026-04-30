@@ -1306,16 +1306,13 @@ export default function MarketplacePage() {
       // (`syncFromUrl`) won't loop us back open because the URL after the
       // pop carries no `?listing=` param.
       if (pushedListingIdRef.current !== null) {
-        const closingId = pushedListingIdRef.current;
         pushedListingIdRef.current = null;
         const state = window.history.state as { kmListingDialog?: boolean } | null;
         if (state && state.kmListingDialog) {
-          console.info("[km-history] cleanup-back", { id: closingId });
           window.history.back();
         } else {
           // Back button already popped our entry (popstate path). Just make
           // sure the URL no longer carries the listing param.
-          console.info("[km-history] cleanup-replace", { id: closingId });
           const params = new URLSearchParams(window.location.search);
           if (params.has("listing")) {
             params.delete("listing");
@@ -1364,18 +1361,15 @@ export default function MarketplacePage() {
       window.history.pushState({ kmListingDialog: true, listingId: id }, "", listingUrl);
 
       pushedListingIdRef.current = id;
-      console.info("[km-history] dance-applied", { id });
     };
 
     const userActivation = (navigator as Navigator & { userActivation?: { hasBeenActive?: boolean } }).userActivation;
     const hasBeenActive = userActivation?.hasBeenActive;
-    console.info("[km-history] dialog-open", { id, hasBeenActive });
 
     if (hasBeenActive !== false) {
       // Either the API is unavailable (treat as activated) or the user has
       // already interacted with the page (clicked a card, tapped a tab,
       // scrolled). Push the entry now — Chrome will accept it.
-      console.info("[km-history] dance-immediate", { id });
       doDance();
       return;
     }
@@ -1383,14 +1377,12 @@ export default function MarketplacePage() {
     // Deep-linked landing with no activation yet. Defer the dance until the
     // first pointer/key event so Chrome doesn't classify the pushed entry
     // as "unwanted history manipulation" and skip it on back.
-    console.info("[km-history] dance-deferred", { id });
     let fired = false;
     const onActivation = () => {
       if (fired) return;
       fired = true;
       window.removeEventListener("pointerdown", onActivation);
       window.removeEventListener("keydown", onActivation);
-      console.info("[km-history] dance-now", { id });
       doDance();
     };
     window.addEventListener("pointerdown", onActivation, { once: true, passive: true });
