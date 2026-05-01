@@ -1,4 +1,5 @@
 import type { MarketplaceListing } from "@shared/schema";
+import { formatRupeeAmount } from "@shared/price-format";
 import { storage } from "./storage";
 
 const CACHE_TTL_MS = 30_000;
@@ -135,9 +136,13 @@ function factToEnglishLabel(f: ListingDetailFact): string {
       // "item" is the per-unit for the generic Others category — render as
       // a bare price (no slash suffix) since the seller chose not to break
       // it down per unit. All other categories keep their original /unit.
-      if (f.per === "item") return `₹${f.amount}`;
+      // Task #99: amounts may now have paise; render via the shared helper
+      // so whole values (₹19) drop ".00" while fractional ones keep two
+      // decimal places (₹19.80).
+      const amt = formatRupeeAmount(f.amount) ?? String(f.amount);
+      if (f.per === "item") return `₹${amt}`;
       const per = f.per === "kg" ? "kg" : f.per === "quintal" ? "quintal" : f.per === "bag" ? "bag" : "piece";
-      return `₹${f.amount}/${per}`;
+      return `₹${amt}/${per}`;
     }
     case "qtyBigha": return `${f.bigha} bigha`;
     case "qtyBags": return `${f.bags} bags`;

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, pgSequence, serial, integer, text, varchar, timestamp, boolean, date, uniqueIndex, numeric } from "drizzle-orm/pg-core";
+import { pgTable, pgSequence, serial, integer, text, varchar, timestamp, boolean, date, uniqueIndex, numeric, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -300,10 +300,14 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   onionSeedType: text("onion_seed_type"),
   onionSeedVariety: text("onion_seed_variety"),
   onionSeedBrand: text("onion_seed_brand"),
-  onionSeedPricePerKg: integer("onion_seed_price_per_kg"),
+  // Task #99: marketplace prices switched from `integer` to
+  // `doublePrecision` so sellers can list with paise (e.g. ₹19.80). Display
+  // uses `formatRupeeAmount` which strips the trailing ".00" for whole
+  // values. Migration is a safe widening cast.
+  onionSeedPricePerKg: doublePrecision("onion_seed_price_per_kg"),
   soyabeanSeedDuration: text("soyabean_seed_duration"),
   soyabeanSeedVariety: text("soyabean_seed_variety"),
-  soyabeanSeedPricePerQuintal: integer("soyabean_seed_price_per_quintal"),
+  soyabeanSeedPricePerQuintal: doublePrecision("soyabean_seed_price_per_quintal"),
   bagCommodityType: text("bag_commodity_type").array(),
   bagCommodityOther: text("bag_commodity_other"),
   bagMaterialType: text("bag_material_type"),
@@ -311,7 +315,7 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   bagGsm: integer("bag_gsm").array(),
   bagColor: text("bag_color"),
   bagMinQuantity: integer("bag_min_quantity"),
-  bagPricePerBag: integer("bag_price_per_bag"),
+  bagPricePerBag: doublePrecision("bag_price_per_bag"),
   fanBrand: text("fan_brand"),
   fanBrandOther: text("fan_brand_other"),
   fanColor: text("fan_color"),
@@ -326,7 +330,7 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   fanCountryOfOrigin: text("fan_country_of_origin"),
   fanWarrantyYears: integer("fan_warranty_years"),
   fanDimensions: text("fan_dimensions"),
-  fanPricePerPiece: integer("fan_price_per_piece"),
+  fanPricePerPiece: doublePrecision("fan_price_per_piece"),
   // Task #84: generic "others" category — 13 nullable columns. Only
   // othersProductName + ≥1 photo are required at the API boundary; every
   // other field is freehand and skipped when blank. Two enums
@@ -336,7 +340,7 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   // model number, link).
   othersProductName: text("others_product_name"),
   othersBrand: text("others_brand"),
-  othersPrice: integer("others_price"),
+  othersPrice: doublePrecision("others_price"),
   othersMaterials: text("others_materials"),
   othersCondition: text("others_condition"),
   othersWarrantyYears: integer("others_warranty_years"),

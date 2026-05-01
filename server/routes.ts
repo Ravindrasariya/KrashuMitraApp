@@ -22,6 +22,7 @@ import {
   MARKETPLACE_OTHERS_CONDITIONS,
   MARKETPLACE_OTHERS_RETURN_POLICIES,
 } from "@shared/schema";
+import { parsePriceInput } from "@shared/price-format";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import sharp from "sharp";
@@ -2024,12 +2025,9 @@ Respond in this structure:
         }
         parsedBagGsm = Array.from(gsmSeen).sort((a, b) => a - b);
 
-        const priceRaw = String(bagPricePerBag).trim();
-        if (!/^\d+$/.test(priceRaw)) {
-          return res.status(400).json({ message: "Invalid bagPricePerBag" });
-        }
-        const priceN = parseInt(priceRaw, 10);
-        if (Number.isNaN(priceN) || priceN < 1 || priceN > 999999) {
+        // Task #99: bag price now accepts paise (1 or 2 decimal places).
+        const priceN = parsePriceInput(bagPricePerBag, 1, 999999);
+        if (priceN === null) {
           return res.status(400).json({ message: "Invalid bagPricePerBag" });
         }
         parsedBagPricePerBag = priceN;
@@ -2106,7 +2104,13 @@ Respond in this structure:
           parsedFanSpeedRpm = intRangeReq(fanSpeedRpm, 1, 10000, "fanSpeedRpm");
           parsedFanBladeCount = intRangeReq(fanBladeCount, 1, 50, "fanBladeCount");
           parsedFanWarrantyYears = intRangeReq(fanWarrantyYears, 0, 50, "fanWarrantyYears");
-          parsedFanPricePerPiece = intRangeReq(fanPricePerPiece, 1, 999999, "fanPricePerPiece");
+          // Task #99: fan price accepts paise; route it through the shared
+          // helper instead of the integer-only `intRangeReq`.
+          {
+            const priceN = parsePriceInput(fanPricePerPiece, 1, 999999);
+            if (priceN === null) throw new Error("Invalid fanPricePerPiece");
+            parsedFanPricePerPiece = priceN;
+          }
           const bladeMatStr = typeof fanBladeMaterial === "string" ? fanBladeMaterial.trim() : "";
           if (!bladeMatStr) return res.status(400).json({ message: "fanBladeMaterial required for exhaust_fan" });
           if (bladeMatStr.length > 40) return res.status(400).json({ message: "fanBladeMaterial must be 40 characters or fewer" });
@@ -2151,10 +2155,9 @@ Respond in this structure:
         const extraRaw = [othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5];
         for (let i = 0; i < 5; i++) parsedOthersExtras[i] = trimOpt(extraRaw[i], 60);
         if (othersPrice !== undefined && othersPrice !== null && String(othersPrice).trim() !== "") {
-          const raw = String(othersPrice).trim();
-          if (!/^\d+$/.test(raw)) return res.status(400).json({ message: "Invalid othersPrice" });
-          const n = parseInt(raw, 10);
-          if (Number.isNaN(n) || n < 1 || n > 999999) return res.status(400).json({ message: "Invalid othersPrice" });
+          // Task #99: others price now accepts paise.
+          const n = parsePriceInput(othersPrice, 1, 999999);
+          if (n === null) return res.status(400).json({ message: "Invalid othersPrice" });
           parsedOthersPrice = n;
         }
         if (othersWarrantyYears !== undefined && othersWarrantyYears !== null && String(othersWarrantyYears).trim() !== "") {
@@ -2185,10 +2188,11 @@ Respond in this structure:
         }
       }
 
+      // Task #99: onion-seed and soyabean prices now accept paise (decimal).
       let parsedPricePerKg: number | null = null;
       if (category === "onion_seed" && onionSeedPricePerKg !== undefined && onionSeedPricePerKg !== null && String(onionSeedPricePerKg).trim() !== "") {
-        const n = parseInt(String(onionSeedPricePerKg), 10);
-        if (Number.isNaN(n) || n < 0 || n > 999999) {
+        const n = parsePriceInput(onionSeedPricePerKg, 0, 999999);
+        if (n === null) {
           return res.status(400).json({ message: "Invalid price per kg" });
         }
         parsedPricePerKg = n;
@@ -2196,12 +2200,8 @@ Respond in this structure:
 
       let parsedPricePerQuintal: number | null = null;
       if (category === "soyabean_seed" && soyabeanSeedPricePerQuintal !== undefined && soyabeanSeedPricePerQuintal !== null && String(soyabeanSeedPricePerQuintal).trim() !== "") {
-        const raw = String(soyabeanSeedPricePerQuintal).trim();
-        if (!/^\d+$/.test(raw)) {
-          return res.status(400).json({ message: "Invalid price per quintal" });
-        }
-        const n = parseInt(raw, 10);
-        if (Number.isNaN(n) || n < 0 || n > 999999) {
+        const n = parsePriceInput(soyabeanSeedPricePerQuintal, 0, 999999);
+        if (n === null) {
           return res.status(400).json({ message: "Invalid price per quintal" });
         }
         parsedPricePerQuintal = n;
@@ -2463,12 +2463,9 @@ Respond in this structure:
           parsedBagGsmPatch = Array.from(seen).sort((a, b) => a - b);
         }
         if (bagPricePerBag !== undefined && bagPricePerBag !== null && String(bagPricePerBag).trim() !== "") {
-          const raw = String(bagPricePerBag).trim();
-          if (!/^\d+$/.test(raw)) {
-            return res.status(400).json({ message: "Invalid bagPricePerBag" });
-          }
-          const n = parseInt(raw, 10);
-          if (Number.isNaN(n) || n < 1 || n > 999999) {
+          // Task #99: bag price now accepts paise.
+          const n = parsePriceInput(bagPricePerBag, 1, 999999);
+          if (n === null) {
             return res.status(400).json({ message: "Invalid bagPricePerBag" });
           }
           parsedBagPricePerBagPatch = n;
@@ -2576,8 +2573,14 @@ Respond in this structure:
           parsedFanBladeCountPatch = intRangeReqPatch(bladeCountRaw, 1, 50, "fanBladeCount");
           const warrantyRaw = fanWarrantyYears !== undefined ? fanWarrantyYears : existing.fanWarrantyYears;
           parsedFanWarrantyYearsPatch = intRangeReqPatch(warrantyRaw, 0, 50, "fanWarrantyYears");
-          const priceRaw = fanPricePerPiece !== undefined ? fanPricePerPiece : existing.fanPricePerPiece;
-          parsedFanPricePerPiecePatch = intRangeReqPatch(priceRaw, 1, 999999, "fanPricePerPiece");
+          // Task #99: fan price accepts paise; route through the shared
+          // helper instead of `intRangeReqPatch` (integer-only).
+          {
+            const priceRaw = fanPricePerPiece !== undefined ? fanPricePerPiece : existing.fanPricePerPiece;
+            const n = parsePriceInput(priceRaw, 1, 999999);
+            if (n === null) throw new Error("Invalid fanPricePerPiece");
+            parsedFanPricePerPiecePatch = n;
+          }
 
           const bladeMatRaw = fanBladeMaterial !== undefined ? fanBladeMaterial : existing.fanBladeMaterial;
           parsedFanBladeMaterialPatch = reqStr(bladeMatRaw, 40, "fanBladeMaterial");
@@ -2590,13 +2593,14 @@ Respond in this structure:
         }
       }
 
+      // Task #99: onion-seed price PATCH accepts paise.
       let parsedPricePerKg: number | null | undefined = undefined;
       if (category === "onion_seed" && onionSeedPricePerKg !== undefined) {
         if (onionSeedPricePerKg === null || String(onionSeedPricePerKg).trim() === "") {
           parsedPricePerKg = null;
         } else {
-          const n = parseInt(String(onionSeedPricePerKg), 10);
-          if (Number.isNaN(n) || n < 0 || n > 999999) {
+          const n = parsePriceInput(onionSeedPricePerKg, 0, 999999);
+          if (n === null) {
             return res.status(400).json({ message: "Invalid price per kg" });
           }
           parsedPricePerKg = n;
@@ -2636,10 +2640,9 @@ Respond in this structure:
           if (othersPrice === null || String(othersPrice).trim() === "") {
             parsedOthersPricePatch = null;
           } else {
-            const raw = String(othersPrice).trim();
-            if (!/^\d+$/.test(raw)) return res.status(400).json({ message: "Invalid othersPrice" });
-            const n = parseInt(raw, 10);
-            if (Number.isNaN(n) || n < 1 || n > 999999) return res.status(400).json({ message: "Invalid othersPrice" });
+            // Task #99: others price PATCH accepts paise.
+            const n = parsePriceInput(othersPrice, 1, 999999);
+            if (n === null) return res.status(400).json({ message: "Invalid othersPrice" });
             parsedOthersPricePatch = n;
           }
         }
@@ -2682,17 +2685,14 @@ Respond in this structure:
         }
       }
 
+      // Task #99: soyabean price PATCH accepts paise.
       let parsedPricePerQuintal: number | null | undefined = undefined;
       if (category === "soyabean_seed" && soyabeanSeedPricePerQuintal !== undefined) {
         if (soyabeanSeedPricePerQuintal === null || String(soyabeanSeedPricePerQuintal).trim() === "") {
           parsedPricePerQuintal = null;
         } else {
-          const raw = String(soyabeanSeedPricePerQuintal).trim();
-          if (!/^\d+$/.test(raw)) {
-            return res.status(400).json({ message: "Invalid price per quintal" });
-          }
-          const n = parseInt(raw, 10);
-          if (Number.isNaN(n) || n < 0 || n > 999999) {
+          const n = parsePriceInput(soyabeanSeedPricePerQuintal, 0, 999999);
+          if (n === null) {
             return res.status(400).json({ message: "Invalid price per quintal" });
           }
           parsedPricePerQuintal = n;

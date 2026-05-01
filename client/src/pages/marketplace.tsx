@@ -37,6 +37,7 @@ import {
   MARKETPLACE_FAN_COLORS,
   type MarketplaceListing,
 } from "@shared/schema";
+import { formatRupeeAmount, parsePriceInput } from "@shared/price-format";
 
 type ListingNoPhoto = Omit<MarketplaceListing, "photoData"> & {
   photoCount: number;
@@ -638,7 +639,22 @@ export default function MarketplacePage() {
       data.onionSeedType = onionSeedType || null;
       data.onionSeedVariety = onionSeedVariety;
       data.onionSeedBrand = onionSeedBrand && onionSeedBrand !== "none" ? onionSeedBrand : null;
-      data.onionSeedPricePerKg = onionSeedPricePerKg ? parseInt(onionSeedPricePerKg, 10) : null;
+      // Task #99: prices accept up to 2 decimal places (paise). Empty -> null
+      // (price is optional). Non-empty + malformed -> toast and bail.
+      const onionSeedPriceStr = onionSeedPricePerKg.trim();
+      if (onionSeedPriceStr) {
+        // Min `0` to mirror the server's POST/PATCH validators — onion seed
+        // listings are allowed to have a 0 price (placeholder until the
+        // seller sets it), and existing rows may already store 0.
+        const n = parsePriceInput(onionSeedPriceStr, 0, 999999);
+        if (n === null) {
+          toast({ title: t("pricePerKg"), variant: "destructive" });
+          return;
+        }
+        data.onionSeedPricePerKg = n;
+      } else {
+        data.onionSeedPricePerKg = null;
+      }
     } else if (category === "soyabean_seed") {
       if (!soyabeanVariety.trim()) {
         toast({ title: t("soyabeanVariety"), variant: "destructive" });
@@ -646,7 +662,20 @@ export default function MarketplacePage() {
       }
       data.soyabeanSeedDuration = soyabeanDuration || null;
       data.soyabeanSeedVariety = soyabeanVariety.trim();
-      data.soyabeanSeedPricePerQuintal = soyabeanPricePerQuintal ? parseInt(soyabeanPricePerQuintal, 10) : null;
+      // Task #99: same paise-aware parsing as onion seed.
+      const soyaPriceStr = soyabeanPricePerQuintal.trim();
+      if (soyaPriceStr) {
+        // Min `0` to mirror the server's validators (same rationale as
+        // onion seed above).
+        const n = parsePriceInput(soyaPriceStr, 0, 999999);
+        if (n === null) {
+          toast({ title: t("pricePerQuintal"), variant: "destructive" });
+          return;
+        }
+        data.soyabeanSeedPricePerQuintal = n;
+      } else {
+        data.soyabeanSeedPricePerQuintal = null;
+      }
     } else if (category === "bardan_bag") {
       if (!Array.isArray(bagCommodityType) || bagCommodityType.length === 0) {
         toast({ title: t("bagCommodityType"), variant: "destructive" });
@@ -680,13 +709,10 @@ export default function MarketplacePage() {
         gsmSet.add(n);
       }
       const gsmArr = Array.from(gsmSet).sort((a, b) => a - b);
+      // Task #99: bag price accepts paise (up to 2 decimals).
       const priceStr = bagPricePerBag.trim();
-      if (!/^\d+$/.test(priceStr)) {
-        toast({ title: t("pricePerBag"), variant: "destructive" });
-        return;
-      }
-      const priceNum = parseInt(priceStr, 10);
-      if (priceNum < 1 || priceNum > 999999) {
+      const priceNum = parsePriceInput(priceStr, 1, 999999);
+      if (priceNum === null) {
         toast({ title: t("pricePerBag"), variant: "destructive" });
         return;
       }
@@ -759,6 +785,8 @@ export default function MarketplacePage() {
         data.fanColor = colorSelected;
         data.fanColorOther = null;
       }
+      // Integer-only specs (wattage, RPM, blade count, etc). Price is
+      // handled separately below — it accepts paise.
       const numFields: { val: string; min: number; max: number; key: string; label: string }[] = [
         { val: fanWattage, min: 1, max: 10000, key: "fanWattage", label: t("fanWattage") },
         { val: fanVoltage, min: 1, max: 1000, key: "fanVoltage", label: t("fanVoltage") },
@@ -767,13 +795,19 @@ export default function MarketplacePage() {
         { val: fanSpeedRpm, min: 1, max: 10000, key: "fanSpeedRpm", label: t("fanSpeedRpm") },
         { val: fanBladeCount, min: 1, max: 50, key: "fanBladeCount", label: t("fanBladeCount") },
         { val: fanWarrantyYears, min: 0, max: 50, key: "fanWarrantyYears", label: t("fanWarrantyYears") },
-        { val: fanPricePerPiece, min: 1, max: 999999, key: "fanPricePerPiece", label: t("pricePerPiece") },
       ];
       for (const f of numFields) {
         const r = intReq(f.val, f.min, f.max, f.label);
         if (r === null) return;
         data[f.key] = r;
       }
+      // Task #99: fan price accepts paise (up to 2 decimals).
+      const fanPriceN = parsePriceInput(fanPricePerPiece, 1, 999999);
+      if (fanPriceN === null) {
+        toast({ title: t("pricePerPiece"), variant: "destructive" });
+        return;
+      }
+      data.fanPricePerPiece = fanPriceN;
       const bladeMat = fanBladeMaterial.trim();
       if (!bladeMat) { toast({ title: t("fanBladeMaterial"), variant: "destructive" }); return; }
       data.fanBladeMaterial = bladeMat.slice(0, 40);
@@ -815,11 +849,11 @@ export default function MarketplacePage() {
       data.othersExtra3 = trimOpt(othersExtra3, 60);
       data.othersExtra4 = trimOpt(othersExtra4, 60);
       data.othersExtra5 = trimOpt(othersExtra5, 60);
+      // Task #99: others price accepts paise (up to 2 decimals).
       const priceStr = othersPrice.trim();
       if (priceStr) {
-        if (!/^\d+$/.test(priceStr)) { toast({ title: t("othersPrice"), variant: "destructive" }); return; }
-        const n = parseInt(priceStr, 10);
-        if (n < 1 || n > 999999) { toast({ title: t("othersPrice"), variant: "destructive" }); return; }
+        const n = parsePriceInput(priceStr, 1, 999999);
+        if (n === null) { toast({ title: t("othersPrice"), variant: "destructive" }); return; }
         data.othersPrice = n;
       } else {
         data.othersPrice = null;
@@ -870,11 +904,11 @@ export default function MarketplacePage() {
       setOnionSeedType(listing.onionSeedType || "");
       setOnionSeedVariety(listing.onionSeedVariety || "");
       setOnionSeedBrand(listing.onionSeedBrand || "none");
-      setOnionSeedPricePerKg(listing.onionSeedPricePerKg != null ? String(listing.onionSeedPricePerKg) : "");
+      setOnionSeedPricePerKg(formatRupeeAmount(listing.onionSeedPricePerKg) ?? "");
     } else if (listing.category === "soyabean_seed") {
       setSoyabeanDuration(listing.soyabeanSeedDuration || "");
       setSoyabeanVariety(listing.soyabeanSeedVariety || "");
-      setSoyabeanPricePerQuintal(listing.soyabeanSeedPricePerQuintal != null ? String(listing.soyabeanSeedPricePerQuintal) : "");
+      setSoyabeanPricePerQuintal(formatRupeeAmount(listing.soyabeanSeedPricePerQuintal) ?? "");
     } else if (listing.category === "bardan_bag") {
       setBagCommodityType(Array.isArray(listing.bagCommodityType) ? listing.bagCommodityType : []);
       setBagCommodityOther(listing.bagCommodityOther || "");
@@ -883,7 +917,7 @@ export default function MarketplacePage() {
       setBagGsm(Array.isArray(listing.bagGsm) ? listing.bagGsm.map(String) : []);
       setBagColor(listing.bagColor || "none");
       setBagMinQuantity(listing.bagMinQuantity != null ? String(listing.bagMinQuantity) : "");
-      setBagPricePerBag(listing.bagPricePerBag != null ? String(listing.bagPricePerBag) : "");
+      setBagPricePerBag(formatRupeeAmount(listing.bagPricePerBag) ?? "");
     } else if (listing.category === "exhaust_fan") {
       setFanBrand(listing.fanBrand || "none");
       setFanBrandOther(listing.fanBrandOther || "");
@@ -899,11 +933,11 @@ export default function MarketplacePage() {
       setFanCountryOfOrigin(listing.fanCountryOfOrigin || "");
       setFanWarrantyYears(listing.fanWarrantyYears != null ? String(listing.fanWarrantyYears) : "");
       setFanDimensions(listing.fanDimensions || "");
-      setFanPricePerPiece(listing.fanPricePerPiece != null ? String(listing.fanPricePerPiece) : "");
+      setFanPricePerPiece(formatRupeeAmount(listing.fanPricePerPiece) ?? "");
     } else if (listing.category === "others") {
       setOthersProductName(listing.othersProductName || "");
       setOthersBrand(listing.othersBrand || "");
-      setOthersPrice(listing.othersPrice != null ? String(listing.othersPrice) : "");
+      setOthersPrice(formatRupeeAmount(listing.othersPrice) ?? "");
       setOthersMaterials(listing.othersMaterials || "");
       setOthersCondition(listing.othersCondition || "unset");
       setOthersWarrantyYears(listing.othersWarrantyYears != null ? String(listing.othersWarrantyYears) : "");
@@ -1161,14 +1195,37 @@ export default function MarketplacePage() {
     return fanColorLabelLocal(c);
   };
 
+  // Task #99: route every price render through the shared `formatRupeeAmount`
+  // helper so whole values (₹19) drop the decimal portion and fractional ones
+  // (₹19.80) keep exactly two decimals.
   const formatPrice = (n: number | null | undefined) => {
-    if (n == null) return null;
-    return language === "hi" ? `₹${n} / किलो` : `₹${n} / kg`;
+    const amt = formatRupeeAmount(n);
+    if (amt === null) return null;
+    return language === "hi" ? `₹${amt} / किलो` : `₹${amt} / kg`;
   };
 
   const formatPricePerQuintal = (n: number | null | undefined) => {
-    if (n == null) return null;
-    return language === "hi" ? `₹${n} / क्विंटल` : `₹${n} / quintal`;
+    const amt = formatRupeeAmount(n);
+    if (amt === null) return null;
+    return language === "hi" ? `₹${amt} / क्विंटल` : `₹${amt} / quintal`;
+  };
+
+  const formatPricePerBag = (n: number | null | undefined) => {
+    const amt = formatRupeeAmount(n);
+    if (amt === null) return null;
+    return language === "hi" ? `₹${amt} / बैग` : `₹${amt} / bag`;
+  };
+
+  const formatPricePerPiece = (n: number | null | undefined) => {
+    const amt = formatRupeeAmount(n);
+    if (amt === null) return null;
+    return language === "hi" ? `₹${amt} / पीस` : `₹${amt} / piece`;
+  };
+
+  const formatPriceBare = (n: number | null | undefined) => {
+    const amt = formatRupeeAmount(n);
+    if (amt === null) return null;
+    return `₹${amt}`;
   };
 
   const soyabeanDurationLabel = (val: string | null | undefined) => {
@@ -1696,7 +1753,7 @@ export default function MarketplacePage() {
                     {isBardanBag && (
                       <>
                         <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
-                          {language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`}
+                          {formatPricePerBag(listing.bagPricePerBag)}
                         </p>
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[bagCommodityListLabel(listing.bagCommodityType, listing.bagCommodityOther), bagMaterialLabel(listing.bagMaterialType)].filter(Boolean).join(" · ") || "—"}
@@ -1711,7 +1768,7 @@ export default function MarketplacePage() {
                     {isFan && (
                       <>
                         <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
-                          {language === "hi" ? `₹${listing.fanPricePerPiece} / पीस` : `₹${listing.fanPricePerPiece} / piece`}
+                          {formatPricePerPiece(listing.fanPricePerPiece)}
                         </p>
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[
@@ -1729,7 +1786,7 @@ export default function MarketplacePage() {
                         </p>
                         <p className="text-xs font-medium text-foreground leading-snug" data-testid={`text-price-${listing.id}`}>
                           {listing.othersPrice != null
-                            ? `₹${listing.othersPrice}`
+                            ? formatPriceBare(listing.othersPrice)
                             : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
                         </p>
                         {(() => {
@@ -2046,7 +2103,8 @@ export default function MarketplacePage() {
                   <Label className="text-sm">{t("pricePerKg")}</Label>
                   <Input
                     type="number"
-                    inputMode="numeric"
+                    inputMode="decimal"
+                    step="0.01"
                     min={0}
                     max={999999}
                     value={onionSeedPricePerKg}
@@ -2103,7 +2161,8 @@ export default function MarketplacePage() {
                   <Label className="text-sm">{t("pricePerQuintal")}</Label>
                   <Input
                     type="number"
-                    inputMode="numeric"
+                    inputMode="decimal"
+                    step="0.01"
                     min={0}
                     max={999999}
                     value={soyabeanPricePerQuintal}
@@ -2262,7 +2321,8 @@ export default function MarketplacePage() {
                   <Label className="text-sm">{t("pricePerBag")}</Label>
                   <Input
                     type="number"
-                    inputMode="numeric"
+                    inputMode="decimal"
+                    step="0.01"
                     min={1}
                     max={999999}
                     value={bagPricePerBag}
@@ -2455,7 +2515,8 @@ export default function MarketplacePage() {
                   <Label className="text-sm">{t("pricePerPiece")}</Label>
                   <Input
                     type="number"
-                    inputMode="numeric"
+                    inputMode="decimal"
+                    step="0.01"
                     min={1}
                     max={999999}
                     value={fanPricePerPiece}
@@ -2496,7 +2557,8 @@ export default function MarketplacePage() {
                   <Label className="text-sm">{t("othersPrice")}</Label>
                   <Input
                     type="number"
-                    inputMode="numeric"
+                    inputMode="decimal"
+                    step="0.01"
                     min={1}
                     max={999999}
                     value={othersPrice}
@@ -2763,7 +2825,7 @@ export default function MarketplacePage() {
                       {isBardanBag && (
                         <div>
                           <p className="text-xl font-bold" data-testid="text-detail-price">
-                            {language === "hi" ? `₹${listing.bagPricePerBag} / बैग` : `₹${listing.bagPricePerBag} / bag`}
+                            {formatPricePerBag(listing.bagPricePerBag)}
                           </p>
                           {listing.bagCommodityType && (
                             <p className="text-sm font-medium">{t("bagCommodityType")}: {bagCommodityListLabel(listing.bagCommodityType, listing.bagCommodityOther) || "—"}</p>
@@ -2821,7 +2883,7 @@ export default function MarketplacePage() {
                       {isFan && (
                         <div>
                           <p className="text-xl font-bold" data-testid="text-detail-price">
-                            {language === "hi" ? `₹${listing.fanPricePerPiece} / पीस` : `₹${listing.fanPricePerPiece} / piece`}
+                            {formatPricePerPiece(listing.fanPricePerPiece)}
                           </p>
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
                             <p className="text-sm font-medium">{t("fanBrand")}: {fanBrandText(listing.fanBrand, listing.fanBrandOther) || "—"}</p>
@@ -2846,7 +2908,7 @@ export default function MarketplacePage() {
                           </p>
                           <p className="text-lg font-semibold mt-0.5" data-testid="text-detail-price">
                             {listing.othersPrice != null
-                              ? `₹${listing.othersPrice}`
+                              ? formatPriceBare(listing.othersPrice)
                               : <span className="text-foreground/70">{t("contactForPrice")}</span>}
                           </p>
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
