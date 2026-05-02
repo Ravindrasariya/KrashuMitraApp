@@ -5,6 +5,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { storage } from "./storage";
 import type { MarketplaceListing, MarketplacePhoto } from "@shared/schema";
+import { formatRupeeAmount } from "@shared/price-format";
 // (Task #78) The composed share-image is now full-bleed: it's just the
 // listing's first photo (or the brand cover as a fallback) cropped to
 // 1200×630 with no overlay band, no badge, no location pill, no domain
@@ -110,7 +111,11 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     // off"; image unchanged). Bumped because the description format
     // itself changed for every listing that ever had a price, so even
     // pre-existing listings need a fresh Meta scrape.
-    lay: 5,
+    // v6 = Task #102 (deal overlay band rendered onto the share image
+    // pixels: pink "-NN% OFF" badge + KrashuVed price line + struck
+    // M.R.P. line). Bumped so every cached JPEG with a discounted
+    // listing is re-rendered with the new overlay.
+    lay: 6,
   });
   return crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
 }
@@ -455,17 +460,105 @@ export async function composeListingShareImage(meta: ShareImageMeta): Promise<Sh
   }
 }
 
+// Task #102: pull the (price, mrp, unit-suffix) tuple for whichever
+// category the listing belongs to. Returns null when MRP is missing or
+// not greater than the price — i.e., when there's no discount to render.
+// The unit string ("/kg", "/quintal", etc.) is suffixed onto the price
+// in the overlay so the band reads "Rs 1,950/kg" rather than ambiguous
+// "Rs 1,950"; the Others category has no per-unit so it omits the slash.
+function dealInfoForListing(
+  listing: MarketplaceListing,
+): { price: number; mrp: number; unit: string } | null {
+  switch (listing.category) {
+    case "onion_seed":
+      if (listing.onionSeedPricePerKg != null && listing.onionSeedMrpPerKg != null && listing.onionSeedMrpPerKg > listing.onionSeedPricePerKg) {
+        return { price: listing.onionSeedPricePerKg, mrp: listing.onionSeedMrpPerKg, unit: "/kg" };
+      }
+      return null;
+    case "soyabean_seed":
+      if (listing.soyabeanSeedPricePerQuintal != null && listing.soyabeanSeedMrpPerQuintal != null && listing.soyabeanSeedMrpPerQuintal > listing.soyabeanSeedPricePerQuintal) {
+        return { price: listing.soyabeanSeedPricePerQuintal, mrp: listing.soyabeanSeedMrpPerQuintal, unit: "/quintal" };
+      }
+      return null;
+    case "bardan_bag":
+      if (listing.bagPricePerBag != null && listing.bagMrpPerBag != null && listing.bagMrpPerBag > listing.bagPricePerBag) {
+        return { price: listing.bagPricePerBag, mrp: listing.bagMrpPerBag, unit: "/bag" };
+      }
+      return null;
+    case "exhaust_fan":
+      if (listing.fanPricePerPiece != null && listing.fanMrpPerPiece != null && listing.fanMrpPerPiece > listing.fanPricePerPiece) {
+        return { price: listing.fanPricePerPiece, mrp: listing.fanMrpPerPiece, unit: "/piece" };
+      }
+      return null;
+    case "others":
+      if (listing.othersPrice != null && listing.othersMrp != null && listing.othersMrp > listing.othersPrice) {
+        return { price: listing.othersPrice, mrp: listing.othersMrp, unit: "" };
+      }
+      return null;
+    default:
+      return null;
+  }
+}
+
+// Escape characters that have meaning inside SVG text content. Listing
+// numerics never contain these in practice but the helper is defensive
+// so a future caller can pass arbitrary user copy without breaking the
+// composite (sharp would reject the SVG and the whole share-image
+// render would fall back to no-overlay).
+function svgEscape(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// Task #102: build the small "deal" SVG band that gets composited over
+// the bottom-left of the share-image photo. ASCII-only on purpose —
+// share-image runs through sharp's libvips/librsvg pipeline which has
+// inconsistent Devanagari and ₹-glyph coverage across hosts (the same
+// reason the white footer band was removed in Task #78). "Rs" prefix +
+// "OFF" are universally renderable. Returns null when there's no deal,
+// in which case the photo is composited untouched.
+function renderDealOverlaySvg(listing: MarketplaceListing): Buffer | null {
+  const deal = dealInfoForListing(listing);
+  if (!deal) return null;
+  const pct = Math.round(((deal.mrp - deal.price) / deal.mrp) * 100);
+  const priceStr = `Rs ${formatRupeeAmount(deal.price) ?? deal.price}${deal.unit}`;
+  const mrpStr = `Rs ${formatRupeeAmount(deal.mrp) ?? deal.mrp}${deal.unit}`;
+  const bandW = 560;
+  const bandH = 130;
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${bandW}" height="${bandH}" viewBox="0 0 ${bandW} ${bandH}">
+  <rect x="0" y="0" width="${bandW}" height="${bandH}" rx="14" ry="14" fill="rgba(0,0,0,0.72)"/>
+  <rect x="20" y="22" width="170" height="56" rx="10" ry="10" fill="#db2777"/>
+  <text x="105" y="61" font-family="DejaVu Sans, Arial, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle">-${pct}% OFF</text>
+  <text x="210" y="62" font-family="DejaVu Sans, Arial, sans-serif" font-size="40" font-weight="bold" fill="#ffffff">${svgEscape(priceStr)}</text>
+  <text x="20" y="112" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="#e5e7eb">M.R.P.: <tspan text-decoration="line-through">${svgEscape(mrpStr)}</tspan></text>
+</svg>`;
+  return Buffer.from(svg, "utf8");
+}
+
 async function composeListingShareImageInner(meta: ShareImageMeta): Promise<ShareImageResult> {
   const { listing, etag } = meta;
 
   // Task #78: the composed image is now just the top layer (1200×630 photo
-  // or brand-cover fallback) re-encoded to a tuned JPEG. No SVG overlay,
-  // no white band, no Devanagari text — Meta renders the brand title and
-  // listing description directly below the picture from og:title and
-  // og:description, so duplicating them inside the picture is wasted space.
+  // or brand-cover fallback) re-encoded to a tuned JPEG. No white band,
+  // no Devanagari text — Meta renders the brand title and listing
+  // description directly below the picture from og:title and og:description.
+  // Task #102: when the listing has BOTH a KrashuVed price AND an MRP for
+  // its category (with mrp > price), composite a small Amazon-style deal
+  // overlay onto the bottom-left of the photo so WhatsApp / Facebook link
+  // previews surface the discount visually, not just in the description text.
   const topLayer = await buildTopLayer(listing, meta.photos);
+  const overlay = renderDealOverlaySvg(listing);
 
-  const buffer = await sharp(topLayer)
+  const composed = overlay
+    ? await sharp(topLayer)
+        .composite([{ input: overlay, top: H - 150, left: 32 }])
+        .toBuffer()
+    : topLayer;
+
+  const buffer = await sharp(composed)
     // mozjpeg + lower quality together cut the composed preview from
     // ~145 KB at q=86 down to ~60–80 KB with no visible degradation at
     // WhatsApp / Facebook preview thumbnail size. This only affects the

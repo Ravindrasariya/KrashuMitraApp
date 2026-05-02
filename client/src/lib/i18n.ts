@@ -677,6 +677,15 @@ const translations = {
   // the prefix for the struck-through MRP line on listing cards.
   mrp: { hi: "एम.आर.पी.", en: "M.R.P." },
   percentOff: { hi: "% छूट", en: "% off" },
+  // Task #102: placeholder for the KrashuVed-side input in the seller form.
+  // The category-specific per-unit label (e.g. "Price per Kg") sits ABOVE
+  // both inputs as a section heading, so each input only needs a short
+  // placeholder ("KrashuVed Price" / "M.R.P.") to disambiguate the pair.
+  krashuvedPrice: { hi: "कृषुवेद मूल्य", en: "KrashuVed Price" },
+  // Task #102: clearer client-side toast when the seller types an MRP that
+  // is less than or equal to the KrashuVed price. Keeps the message short
+  // enough to fit a one-line toast on a phone.
+  mrpMustExceedPrice: { hi: "एम.आर.पी. कृषुवेद मूल्य से अधिक होना चाहिए", en: "M.R.P. must be more than KrashuVed Price" },
   myListing: { hi: "मेरी सूची", en: "My listing" },
   rateThisListing: { hi: "इस सूची को रेट करें", en: "Rate this listing" },
   sellerRating: { hi: "विक्रेता रेटिंग", en: "Seller Rating" },

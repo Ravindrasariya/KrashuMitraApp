@@ -685,7 +685,7 @@ export default function MarketplacePage() {
       const onionMrp = parseMrpField(onionSeedMrpPerKg, 0, t("mrp"));
       if (onionMrp === undefined) return;
       if (onionMrp != null && data.onionSeedPricePerKg != null && onionMrp <= data.onionSeedPricePerKg) {
-        toast({ title: t("mrp"), description: t("mrp"), variant: "destructive" });
+        toast({ title: t("mrpMustExceedPrice"), variant: "destructive" });
         return;
       }
       data.onionSeedMrpPerKg = onionMrp;
@@ -713,7 +713,7 @@ export default function MarketplacePage() {
       const soyaMrp = parseMrpField(soyabeanMrpPerQuintal, 0, t("mrp"));
       if (soyaMrp === undefined) return;
       if (soyaMrp != null && data.soyabeanSeedPricePerQuintal != null && soyaMrp <= data.soyabeanSeedPricePerQuintal) {
-        toast({ title: t("mrp"), variant: "destructive" });
+        toast({ title: t("mrpMustExceedPrice"), variant: "destructive" });
         return;
       }
       data.soyabeanSeedMrpPerQuintal = soyaMrp;
@@ -781,7 +781,7 @@ export default function MarketplacePage() {
       const bMrp = parseMrpField(bagMrp, 1, t("mrp"));
       if (bMrp === undefined) return;
       if (bMrp != null && bMrp <= priceNum) {
-        toast({ title: t("mrp"), variant: "destructive" });
+        toast({ title: t("mrpMustExceedPrice"), variant: "destructive" });
         return;
       }
       data.bagMrpPerBag = bMrp;
@@ -859,7 +859,7 @@ export default function MarketplacePage() {
       const fMrp = parseMrpField(fanMrp, 1, t("mrp"));
       if (fMrp === undefined) return;
       if (fMrp != null && fMrp <= fanPriceN) {
-        toast({ title: t("mrp"), variant: "destructive" });
+        toast({ title: t("mrpMustExceedPrice"), variant: "destructive" });
         return;
       }
       data.fanMrpPerPiece = fMrp;
@@ -916,7 +916,7 @@ export default function MarketplacePage() {
       const oMrp = parseMrpField(othersMrp, 1, t("mrp"));
       if (oMrp === undefined) return;
       if (oMrp != null && data.othersPrice != null && oMrp <= data.othersPrice) {
-        toast({ title: t("mrp"), variant: "destructive" });
+        toast({ title: t("mrpMustExceedPrice"), variant: "destructive" });
         return;
       }
       data.othersMrp = oMrp;
@@ -1295,24 +1295,42 @@ export default function MarketplacePage() {
     return `₹${amt}`;
   };
 
-  // Task #102: tiny presentational helper that renders the supplemental
-  // "MRP ₹X, -NN% off" line under a KrashuVed price. Returns null when MRP
-  // is missing, equal, or below price (server enforces > but we defensively
-  // guard the renderer too). Used in both grid cards (compact "xs") and the
-  // listing detail popup ("sm"). Kept as a closure inside the component so
-  // it can use `t` from useTranslation without prop-drilling.
-  const renderMrpExtra = (
+  // Task #102: Amazon-style two-line deal treatment. When the seller has set
+  // BOTH a KrashuVed price and an MRP (with mrp > price), the listing card
+  // and detail dialog render:
+  //   line 1: pink "-NN%" badge   ₹<KrashuVed price>
+  //   line 2: M.R.P.: ₹<struck-through MRP>
+  // Both helpers return null when MRP is missing / equal / below price so
+  // unaffected listings render exactly as before.
+  //
+  // Splitting into two helpers (badge + struck line) lets us prepend the
+  // badge INSIDE the existing price <p> (so it sits next to the price,
+  // not above it) while the struck MRP becomes its own line below.
+  const renderDiscountBadge = (
+    price: number | null | undefined,
+    mrp: number | null | undefined,
+  ) => {
+    if (price == null || mrp == null || mrp <= price) return null;
+    const pct = Math.round(((mrp - price) / mrp) * 100);
+    return (
+      <span
+        className="inline-flex items-center rounded px-1.5 py-0.5 mr-1.5 bg-pink-600 text-white font-bold text-[10px] leading-none align-middle"
+        data-testid="badge-discount"
+      >
+        -{pct}{t("percentOff")}
+      </span>
+    );
+  };
+  const renderMrpStruck = (
     price: number | null | undefined,
     mrp: number | null | undefined,
     size: "xs" | "sm" = "xs",
   ) => {
     if (price == null || mrp == null || mrp <= price) return null;
-    const pct = Math.round(((mrp - price) / mrp) * 100);
     const sizeCls = size === "sm" ? "text-sm" : "text-[11px]";
     return (
-      <p className={`${sizeCls} font-medium text-muted-foreground leading-snug`} data-testid="text-mrp-extra">
-        <span className="line-through">{t("mrp")} ₹{formatRupeeAmount(mrp)}</span>
-        <span className="ml-1.5 font-bold text-pink-600">-{pct}{t("percentOff")}</span>
+      <p className={`${sizeCls} font-medium text-muted-foreground leading-snug`} data-testid="text-mrp-struck">
+        {t("mrp")}: <span className="line-through">₹{formatRupeeAmount(mrp)}</span>
       </p>
     );
   };
@@ -1842,9 +1860,10 @@ export default function MarketplacePage() {
                     {isBardanBag && (
                       <>
                         <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {renderDiscountBadge(listing.bagPricePerBag, listing.bagMrpPerBag)}
                           {formatPricePerBag(listing.bagPricePerBag)}
                         </p>
-                        {renderMrpExtra(listing.bagPricePerBag, listing.bagMrpPerBag)}
+                        {renderMrpStruck(listing.bagPricePerBag, listing.bagMrpPerBag)}
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[bagCommodityListLabel(listing.bagCommodityType, listing.bagCommodityOther), bagMaterialLabel(listing.bagMaterialType)].filter(Boolean).join(" · ") || "—"}
                         </p>
@@ -1858,9 +1877,10 @@ export default function MarketplacePage() {
                     {isFan && (
                       <>
                         <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {renderDiscountBadge(listing.fanPricePerPiece, listing.fanMrpPerPiece)}
                           {formatPricePerPiece(listing.fanPricePerPiece)}
                         </p>
-                        {renderMrpExtra(listing.fanPricePerPiece, listing.fanMrpPerPiece)}
+                        {renderMrpStruck(listing.fanPricePerPiece, listing.fanMrpPerPiece)}
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[
                             fanBrandText(listing.fanBrand, listing.fanBrandOther),
@@ -1876,11 +1896,12 @@ export default function MarketplacePage() {
                           {listing.othersProductName || "—"}
                         </p>
                         <p className="text-xs font-medium text-foreground leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {renderDiscountBadge(listing.othersPrice, listing.othersMrp)}
                           {listing.othersPrice != null
                             ? formatPriceBare(listing.othersPrice)
                             : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
                         </p>
-                        {renderMrpExtra(listing.othersPrice, listing.othersMrp)}
+                        {renderMrpStruck(listing.othersPrice, listing.othersMrp)}
                         {(() => {
                           // Task #84: hide the optional-facts line entirely
                           // when no Others field is filled — a minimal card
@@ -1914,11 +1935,12 @@ export default function MarketplacePage() {
                     {isOnionSeed && (
                       <>
                         <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {renderDiscountBadge(listing.onionSeedPricePerKg, listing.onionSeedMrpPerKg)}
                           {listing.onionSeedPricePerKg != null
                             ? formatPrice(listing.onionSeedPricePerKg)
                             : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
                         </p>
-                        {renderMrpExtra(listing.onionSeedPricePerKg, listing.onionSeedMrpPerKg)}
+                        {renderMrpStruck(listing.onionSeedPricePerKg, listing.onionSeedMrpPerKg)}
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[hn(listing.onionSeedType), hn(listing.onionSeedVariety), hn(listing.onionSeedBrand)].filter(Boolean).join(" · ") || "—"}
                         </p>
@@ -1927,11 +1949,12 @@ export default function MarketplacePage() {
                     {isSoyabeanSeed && (
                       <>
                         <p className="text-sm font-bold leading-snug" data-testid={`text-price-${listing.id}`}>
+                          {renderDiscountBadge(listing.soyabeanSeedPricePerQuintal, listing.soyabeanSeedMrpPerQuintal)}
                           {listing.soyabeanSeedPricePerQuintal != null
                             ? formatPricePerQuintal(listing.soyabeanSeedPricePerQuintal)
                             : <span className="text-foreground/70 font-medium">{t("contactForPrice")}</span>}
                         </p>
-                        {renderMrpExtra(listing.soyabeanSeedPricePerQuintal, listing.soyabeanSeedMrpPerQuintal)}
+                        {renderMrpStruck(listing.soyabeanSeedPricePerQuintal, listing.soyabeanSeedMrpPerQuintal)}
                         <p className="text-xs font-medium text-foreground leading-snug truncate">
                           {[soyabeanDurationLabel(listing.soyabeanSeedDuration), listing.soyabeanSeedVariety].filter(Boolean).join(" · ") || "—"}
                         </p>
@@ -2193,9 +2216,9 @@ export default function MarketplacePage() {
 
             {category === "onion_seed" && (
               <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-sm">{t("pricePerKg")}</Label>
+                <div>
+                  <Label className="text-sm">{t("pricePerKg")}</Label>
+                  <div className="grid grid-cols-2 gap-2">
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2204,12 +2227,9 @@ export default function MarketplacePage() {
                       max={999999}
                       value={onionSeedPricePerKg}
                       onChange={(e) => setOnionSeedPricePerKg(e.target.value)}
-                      placeholder="0"
+                      placeholder={t("krashuvedPrice")}
                       data-testid="input-onion-seed-price"
                     />
-                  </div>
-                  <div>
-                    <Label className="text-sm">{t("mrp")}</Label>
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2267,9 +2287,9 @@ export default function MarketplacePage() {
 
             {category === "soyabean_seed" && (
               <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-sm">{t("pricePerQuintal")}</Label>
+                <div>
+                  <Label className="text-sm">{t("pricePerQuintal")}</Label>
+                  <div className="grid grid-cols-2 gap-2">
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2278,12 +2298,9 @@ export default function MarketplacePage() {
                       max={999999}
                       value={soyabeanPricePerQuintal}
                       onChange={(e) => setSoyabeanPricePerQuintal(e.target.value)}
-                      placeholder="0"
+                      placeholder={t("krashuvedPrice")}
                       data-testid="input-soyabean-price"
                     />
-                  </div>
-                  <div>
-                    <Label className="text-sm">{t("mrp")}</Label>
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2443,9 +2460,9 @@ export default function MarketplacePage() {
                     data-testid="input-bag-min-quantity"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-sm">{t("pricePerBag")}</Label>
+                <div>
+                  <Label className="text-sm">{t("pricePerBag")}</Label>
+                  <div className="grid grid-cols-2 gap-2">
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2454,12 +2471,9 @@ export default function MarketplacePage() {
                       max={999999}
                       value={bagPricePerBag}
                       onChange={(e) => setBagPricePerBag(e.target.value)}
-                      placeholder="0"
+                      placeholder={t("krashuvedPrice")}
                       data-testid="input-bag-price"
                     />
-                  </div>
-                  <div>
-                    <Label className="text-sm">{t("mrp")}</Label>
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2653,9 +2667,9 @@ export default function MarketplacePage() {
                     data-testid="input-fan-dimensions"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-sm">{t("pricePerPiece")}</Label>
+                <div>
+                  <Label className="text-sm">{t("pricePerPiece")}</Label>
+                  <div className="grid grid-cols-2 gap-2">
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2664,12 +2678,9 @@ export default function MarketplacePage() {
                       max={999999}
                       value={fanPricePerPiece}
                       onChange={(e) => setFanPricePerPiece(e.target.value)}
-                      placeholder="0"
+                      placeholder={t("krashuvedPrice")}
                       data-testid="input-fan-price"
                     />
-                  </div>
-                  <div>
-                    <Label className="text-sm">{t("mrp")}</Label>
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2711,9 +2722,9 @@ export default function MarketplacePage() {
                     data-testid="input-others-brand"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-sm">{t("othersPrice")}</Label>
+                <div>
+                  <Label className="text-sm">{t("othersPrice")}</Label>
+                  <div className="grid grid-cols-2 gap-2">
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2722,12 +2733,9 @@ export default function MarketplacePage() {
                       max={999999}
                       value={othersPrice}
                       onChange={(e) => setOthersPrice(e.target.value)}
-                      placeholder="0"
+                      placeholder={t("krashuvedPrice")}
                       data-testid="input-others-price"
                     />
-                  </div>
-                  <div>
-                    <Label className="text-sm">{t("mrp")}</Label>
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -2999,9 +3007,10 @@ export default function MarketplacePage() {
                       {isBardanBag && (
                         <div>
                           <p className="text-xl font-bold" data-testid="text-detail-price">
+                            {renderDiscountBadge(listing.bagPricePerBag, listing.bagMrpPerBag)}
                             {formatPricePerBag(listing.bagPricePerBag)}
                           </p>
-                          {renderMrpExtra(listing.bagPricePerBag, listing.bagMrpPerBag, "sm")}
+                          {renderMrpStruck(listing.bagPricePerBag, listing.bagMrpPerBag, "sm")}
                           {listing.bagCommodityType && (
                             <p className="text-sm font-medium">{t("bagCommodityType")}: {bagCommodityListLabel(listing.bagCommodityType, listing.bagCommodityOther) || "—"}</p>
                           )}
@@ -3025,11 +3034,12 @@ export default function MarketplacePage() {
                       {isOnionSeed && (
                         <div>
                           <p className="text-xl font-bold" data-testid="text-detail-price">
+                            {renderDiscountBadge(listing.onionSeedPricePerKg, listing.onionSeedMrpPerKg)}
                             {listing.onionSeedPricePerKg != null
                               ? formatPrice(listing.onionSeedPricePerKg)
                               : <span className="text-foreground/70">{t("contactForPrice")}</span>}
                           </p>
-                          {renderMrpExtra(listing.onionSeedPricePerKg, listing.onionSeedMrpPerKg, "sm")}
+                          {renderMrpStruck(listing.onionSeedPricePerKg, listing.onionSeedMrpPerKg, "sm")}
                           {listing.onionSeedType && (
                             <p className="text-sm font-medium">{t("onionSeedType")}: {hn(listing.onionSeedType)}</p>
                           )}
@@ -3044,11 +3054,12 @@ export default function MarketplacePage() {
                       {isSoyabeanSeed && (
                         <div>
                           <p className="text-xl font-bold" data-testid="text-detail-price">
+                            {renderDiscountBadge(listing.soyabeanSeedPricePerQuintal, listing.soyabeanSeedMrpPerQuintal)}
                             {listing.soyabeanSeedPricePerQuintal != null
                               ? formatPricePerQuintal(listing.soyabeanSeedPricePerQuintal)
                               : <span className="text-foreground/70">{t("contactForPrice")}</span>}
                           </p>
-                          {renderMrpExtra(listing.soyabeanSeedPricePerQuintal, listing.soyabeanSeedMrpPerQuintal, "sm")}
+                          {renderMrpStruck(listing.soyabeanSeedPricePerQuintal, listing.soyabeanSeedMrpPerQuintal, "sm")}
                           {listing.soyabeanSeedDuration && (
                             <p className="text-sm font-medium">{t("soyabeanDuration")}: {soyabeanDurationLabel(listing.soyabeanSeedDuration)}</p>
                           )}
@@ -3060,9 +3071,10 @@ export default function MarketplacePage() {
                       {isFan && (
                         <div>
                           <p className="text-xl font-bold" data-testid="text-detail-price">
+                            {renderDiscountBadge(listing.fanPricePerPiece, listing.fanMrpPerPiece)}
                             {formatPricePerPiece(listing.fanPricePerPiece)}
                           </p>
-                          {renderMrpExtra(listing.fanPricePerPiece, listing.fanMrpPerPiece, "sm")}
+                          {renderMrpStruck(listing.fanPricePerPiece, listing.fanMrpPerPiece, "sm")}
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
                             <p className="text-sm font-medium">{t("fanBrand")}: {fanBrandText(listing.fanBrand, listing.fanBrandOther) || "—"}</p>
                             <p className="text-sm font-medium">{t("fanColor")}: {fanColorText(listing.fanColor, listing.fanColorOther) || "—"}</p>
@@ -3085,11 +3097,12 @@ export default function MarketplacePage() {
                             {listing.othersProductName || "—"}
                           </p>
                           <p className="text-lg font-semibold mt-0.5" data-testid="text-detail-price">
+                            {renderDiscountBadge(listing.othersPrice, listing.othersMrp)}
                             {listing.othersPrice != null
                               ? formatPriceBare(listing.othersPrice)
                               : <span className="text-foreground/70">{t("contactForPrice")}</span>}
                           </p>
-                          {renderMrpExtra(listing.othersPrice, listing.othersMrp, "sm")}
+                          {renderMrpStruck(listing.othersPrice, listing.othersMrp, "sm")}
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
                             {listing.othersBrand && (
                               <p className="text-sm font-medium" data-testid="text-detail-others-brand">{t("othersBrand")}: {listing.othersBrand}</p>
