@@ -524,7 +524,9 @@ function renderDealOverlaySvg(listing: MarketplaceListing): Buffer | null {
   if (!deal) return null;
   const pct = Math.round(((deal.mrp - deal.price) / deal.mrp) * 100);
   const priceStr = `Rs ${formatRupeeAmount(deal.price) ?? deal.price}${deal.unit}`;
-  const mrpStr = `Rs ${formatRupeeAmount(deal.mrp) ?? deal.mrp}${deal.unit}`;
+  // Bare MRP amount (no /unit suffix) per spec: the unit context is
+  // already established by the price line above.
+  const mrpStr = `Rs ${formatRupeeAmount(deal.mrp) ?? deal.mrp}`;
   const bandW = 560;
   const bandH = 130;
   const svg = `<?xml version="1.0" encoding="UTF-8"?>

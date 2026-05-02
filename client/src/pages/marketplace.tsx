@@ -1317,7 +1317,7 @@ export default function MarketplacePage() {
         className="inline-flex items-center rounded px-1.5 py-0.5 mr-1.5 bg-pink-600 text-white font-bold text-[10px] leading-none align-middle"
         data-testid="badge-discount"
       >
-        -{pct}{t("percentOff")}
+        -{pct}%
       </span>
     );
   };
