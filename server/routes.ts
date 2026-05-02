@@ -1899,7 +1899,7 @@ Respond in this structure:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, othersProductName, othersBrand, othersPrice, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5 } = req.body || {};
+      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, onionSeedMrpPerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, soyabeanSeedMrpPerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, bagMrpPerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, fanMrpPerPiece, othersProductName, othersBrand, othersPrice, othersMrp, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5 } = req.body || {};
       if (!category || !["onion_seedling", "potato_seed", "onion_seed", "soyabean_seed", "bardan_bag", "exhaust_fan", "others"].includes(category)) {
         return res.status(400).json({ message: "Invalid category" });
       }
@@ -2207,6 +2207,57 @@ Respond in this structure:
         parsedPricePerQuintal = n;
       }
 
+      // Task #102: optional MRP per category. Same paise-aware parsing as
+      // the paired KrashuVed price; if both are present the MRP must be
+      // strictly greater so the discount-percentage badge is meaningful.
+      const parseOptionalMrp = (raw: any, min: number, label: string): number | null | "ERR" => {
+        if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+        const n = parsePriceInput(raw, min, 999999);
+        if (n === null) return "ERR";
+        return n;
+      };
+      let parsedOnionSeedMrp: number | null = null;
+      let parsedSoyabeanMrp: number | null = null;
+      let parsedBagMrp: number | null = null;
+      let parsedFanMrp: number | null = null;
+      let parsedOthersMrp: number | null = null;
+      if (category === "onion_seed") {
+        const r = parseOptionalMrp(onionSeedMrpPerKg, 0, "onionSeedMrpPerKg");
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP per kg" });
+        parsedOnionSeedMrp = r;
+        if (parsedOnionSeedMrp != null && parsedPricePerKg != null && parsedOnionSeedMrp <= parsedPricePerKg) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      } else if (category === "soyabean_seed") {
+        const r = parseOptionalMrp(soyabeanSeedMrpPerQuintal, 0, "soyabeanSeedMrpPerQuintal");
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP per quintal" });
+        parsedSoyabeanMrp = r;
+        if (parsedSoyabeanMrp != null && parsedPricePerQuintal != null && parsedSoyabeanMrp <= parsedPricePerQuintal) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      } else if (category === "bardan_bag") {
+        const r = parseOptionalMrp(bagMrpPerBag, 1, "bagMrpPerBag");
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP per bag" });
+        parsedBagMrp = r;
+        if (parsedBagMrp != null && parsedBagPricePerBag != null && parsedBagMrp <= parsedBagPricePerBag) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      } else if (category === "exhaust_fan") {
+        const r = parseOptionalMrp(fanMrpPerPiece, 1, "fanMrpPerPiece");
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP per piece" });
+        parsedFanMrp = r;
+        if (parsedFanMrp != null && parsedFanPricePerPiece != null && parsedFanMrp <= parsedFanPricePerPiece) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      } else if (category === "others") {
+        const r = parseOptionalMrp(othersMrp, 1, "othersMrp");
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP" });
+        parsedOthersMrp = r;
+        if (parsedOthersMrp != null && parsedOthersPrice != null && parsedOthersMrp <= parsedOthersPrice) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      }
+
       const listing = await storage.createMarketplaceListing({
         sellerId: userId,
         category,
@@ -2222,9 +2273,11 @@ Respond in this structure:
         onionSeedVariety: category === "onion_seed" && onionSeedVariety ? String(onionSeedVariety).slice(0, 100) : null,
         onionSeedBrand: category === "onion_seed" && onionSeedBrand ? String(onionSeedBrand).slice(0, 100) : null,
         onionSeedPricePerKg: parsedPricePerKg,
+        onionSeedMrpPerKg: category === "onion_seed" ? parsedOnionSeedMrp : null,
         soyabeanSeedDuration: category === "soyabean_seed" && soyabeanSeedDuration ? String(soyabeanSeedDuration).slice(0, 20) : null,
         soyabeanSeedVariety: category === "soyabean_seed" && soyabeanSeedVariety ? String(soyabeanSeedVariety).trim().slice(0, 100) : null,
         soyabeanSeedPricePerQuintal: parsedPricePerQuintal,
+        soyabeanSeedMrpPerQuintal: category === "soyabean_seed" ? parsedSoyabeanMrp : null,
         bagCommodityType: category === "bardan_bag" ? parsedBagCommodityTypes : null,
         bagCommodityOther: category === "bardan_bag" ? parsedBagCommodityOther : null,
         bagMaterialType: category === "bardan_bag" && bagMaterialType ? String(bagMaterialType).slice(0, 30) : null,
@@ -2233,6 +2286,7 @@ Respond in this structure:
         bagColor: category === "bardan_bag" && bagColor && String(bagColor) !== "none" && String(bagColor).trim() !== "" ? String(bagColor).slice(0, 20) : null,
         bagMinQuantity: category === "bardan_bag" ? parsedBagMinQuantity : null,
         bagPricePerBag: category === "bardan_bag" ? parsedBagPricePerBag : null,
+        bagMrpPerBag: category === "bardan_bag" ? parsedBagMrp : null,
         fanBrand: category === "exhaust_fan" ? parsedFanBrand : null,
         fanBrandOther: category === "exhaust_fan" ? parsedFanBrandOther : null,
         fanColor: category === "exhaust_fan" ? parsedFanColor : null,
@@ -2248,9 +2302,11 @@ Respond in this structure:
         fanWarrantyYears: category === "exhaust_fan" ? parsedFanWarrantyYears : null,
         fanDimensions: category === "exhaust_fan" ? parsedFanDimensions : null,
         fanPricePerPiece: category === "exhaust_fan" ? parsedFanPricePerPiece : null,
+        fanMrpPerPiece: category === "exhaust_fan" ? parsedFanMrp : null,
         othersProductName: category === "others" ? parsedOthersProductName : null,
         othersBrand: category === "others" ? parsedOthersBrand : null,
         othersPrice: category === "others" ? parsedOthersPrice : null,
+        othersMrp: category === "others" ? parsedOthersMrp : null,
         othersMaterials: category === "others" ? parsedOthersMaterials : null,
         othersCondition: category === "others" ? parsedOthersCondition : null,
         othersWarrantyYears: category === "others" ? parsedOthersWarrantyYears : null,
@@ -2313,7 +2369,7 @@ Respond in this structure:
       }
 
       const category = existing.category;
-      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, othersProductName, othersBrand, othersPrice, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5 } = req.body || {};
+      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, onionSeedMrpPerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, soyabeanSeedMrpPerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, bagMrpPerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, fanMrpPerPiece, othersProductName, othersBrand, othersPrice, othersMrp, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5 } = req.body || {};
 
       // Task #84: Others-category PATCH guards. othersProductName must
       // never be cleared (≥1 char remains required throughout the
@@ -2699,6 +2755,69 @@ Respond in this structure:
         }
       }
 
+      // Task #102: MRP PATCH parsing per category. Same `undefined = no
+      // change` semantics as the other fields. After parsing we cross-check
+      // `mrp > price` using the EFFECTIVE values (incoming if defined, else
+      // existing) so editing one without touching the other still validates.
+      const parseOptionalMrpPatch = (raw: any, min: number): number | null | undefined | "ERR" => {
+        if (raw === undefined) return undefined;
+        if (raw === null || String(raw).trim() === "") return null;
+        const n = parsePriceInput(raw, min, 999999);
+        if (n === null) return "ERR";
+        return n;
+      };
+      let parsedOnionSeedMrpPatch: number | null | undefined = undefined;
+      let parsedSoyabeanMrpPatch: number | null | undefined = undefined;
+      let parsedBagMrpPatch: number | null | undefined = undefined;
+      let parsedFanMrpPatch: number | null | undefined = undefined;
+      let parsedOthersMrpPatch: number | null | undefined = undefined;
+      if (category === "onion_seed") {
+        const r = parseOptionalMrpPatch(onionSeedMrpPerKg, 0);
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP per kg" });
+        parsedOnionSeedMrpPatch = r;
+        const effPrice = parsedPricePerKg !== undefined ? parsedPricePerKg : existing.onionSeedPricePerKg;
+        const effMrp = parsedOnionSeedMrpPatch !== undefined ? parsedOnionSeedMrpPatch : existing.onionSeedMrpPerKg;
+        if (effMrp != null && effPrice != null && effMrp <= effPrice) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      } else if (category === "soyabean_seed") {
+        const r = parseOptionalMrpPatch(soyabeanSeedMrpPerQuintal, 0);
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP per quintal" });
+        parsedSoyabeanMrpPatch = r;
+        const effPrice = parsedPricePerQuintal !== undefined ? parsedPricePerQuintal : existing.soyabeanSeedPricePerQuintal;
+        const effMrp = parsedSoyabeanMrpPatch !== undefined ? parsedSoyabeanMrpPatch : existing.soyabeanSeedMrpPerQuintal;
+        if (effMrp != null && effPrice != null && effMrp <= effPrice) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      } else if (category === "bardan_bag") {
+        const r = parseOptionalMrpPatch(bagMrpPerBag, 1);
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP per bag" });
+        parsedBagMrpPatch = r;
+        const effPrice = parsedBagPricePerBagPatch !== undefined ? parsedBagPricePerBagPatch : existing.bagPricePerBag;
+        const effMrp = parsedBagMrpPatch !== undefined ? parsedBagMrpPatch : existing.bagMrpPerBag;
+        if (effMrp != null && effPrice != null && effMrp <= effPrice) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      } else if (category === "exhaust_fan") {
+        const r = parseOptionalMrpPatch(fanMrpPerPiece, 1);
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP per piece" });
+        parsedFanMrpPatch = r;
+        const effPrice = parsedFanPricePerPiecePatch !== undefined ? parsedFanPricePerPiecePatch : existing.fanPricePerPiece;
+        const effMrp = parsedFanMrpPatch !== undefined ? parsedFanMrpPatch : existing.fanMrpPerPiece;
+        if (effMrp != null && effPrice != null && effMrp <= effPrice) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      } else if (category === "others") {
+        const r = parseOptionalMrpPatch(othersMrp, 1);
+        if (r === "ERR") return res.status(400).json({ message: "Invalid MRP" });
+        parsedOthersMrpPatch = r;
+        const effPrice = parsedOthersPricePatch !== undefined ? parsedOthersPricePatch : existing.othersPrice;
+        const effMrp = parsedOthersMrpPatch !== undefined ? parsedOthersMrpPatch : existing.othersMrp;
+        if (effMrp != null && effPrice != null && effMrp <= effPrice) {
+          return res.status(400).json({ message: "MRP must be more than KrashuVed Price" });
+        }
+      }
+
       const updates: Partial<typeof existing> = {};
       if (category === "onion_seedling") {
         if (quantityBigha !== undefined) updates.quantityBigha = quantityBigha ? String(quantityBigha).slice(0, 20) : null;
@@ -2713,12 +2832,14 @@ Respond in this structure:
         if (onionSeedVariety !== undefined) updates.onionSeedVariety = onionSeedVariety ? String(onionSeedVariety).slice(0, 100) : null;
         if (onionSeedBrand !== undefined) updates.onionSeedBrand = onionSeedBrand ? String(onionSeedBrand).slice(0, 100) : null;
         if (parsedPricePerKg !== undefined) updates.onionSeedPricePerKg = parsedPricePerKg;
+        if (parsedOnionSeedMrpPatch !== undefined) updates.onionSeedMrpPerKg = parsedOnionSeedMrpPatch;
       } else if (category === "soyabean_seed") {
         if (soyabeanSeedDuration !== undefined) updates.soyabeanSeedDuration = soyabeanSeedDuration ? String(soyabeanSeedDuration).slice(0, 20) : null;
         if (soyabeanSeedVariety !== undefined && typeof soyabeanSeedVariety === "string" && soyabeanSeedVariety.trim()) {
           updates.soyabeanSeedVariety = soyabeanSeedVariety.trim().slice(0, 100);
         }
         if (parsedPricePerQuintal !== undefined) updates.soyabeanSeedPricePerQuintal = parsedPricePerQuintal;
+        if (parsedSoyabeanMrpPatch !== undefined) updates.soyabeanSeedMrpPerQuintal = parsedSoyabeanMrpPatch;
       } else if (category === "bardan_bag") {
         if (parsedBagCommodityTypesPatch !== undefined) updates.bagCommodityType = parsedBagCommodityTypesPatch;
         if (parsedBagCommodityOtherPatch !== undefined) updates.bagCommodityOther = parsedBagCommodityOtherPatch;
@@ -2732,10 +2853,12 @@ Respond in this structure:
         }
         if (parsedBagMinQuantityPatch !== undefined) updates.bagMinQuantity = parsedBagMinQuantityPatch;
         if (parsedBagPricePerBagPatch !== undefined) updates.bagPricePerBag = parsedBagPricePerBagPatch;
+        if (parsedBagMrpPatch !== undefined) updates.bagMrpPerBag = parsedBagMrpPatch;
       } else if (category === "others") {
         if (parsedOthersProductNamePatch !== undefined) updates.othersProductName = parsedOthersProductNamePatch;
         if (parsedOthersBrandPatch !== undefined) updates.othersBrand = parsedOthersBrandPatch;
         if (parsedOthersPricePatch !== undefined) updates.othersPrice = parsedOthersPricePatch;
+        if (parsedOthersMrpPatch !== undefined) updates.othersMrp = parsedOthersMrpPatch;
         if (parsedOthersMaterialsPatch !== undefined) updates.othersMaterials = parsedOthersMaterialsPatch;
         if (parsedOthersConditionPatch !== undefined) updates.othersCondition = parsedOthersConditionPatch;
         if (parsedOthersWarrantyYearsPatch !== undefined) updates.othersWarrantyYears = parsedOthersWarrantyYearsPatch;
@@ -2762,6 +2885,7 @@ Respond in this structure:
         if (parsedFanWarrantyYearsPatch !== undefined) updates.fanWarrantyYears = parsedFanWarrantyYearsPatch;
         if (parsedFanDimensionsPatch !== undefined) updates.fanDimensions = parsedFanDimensionsPatch;
         if (parsedFanPricePerPiecePatch !== undefined) updates.fanPricePerPiece = parsedFanPricePerPiecePatch;
+        if (parsedFanMrpPatch !== undefined) updates.fanMrpPerPiece = parsedFanMrpPatch;
       }
 
       if (Object.keys(updates).length > 0) {

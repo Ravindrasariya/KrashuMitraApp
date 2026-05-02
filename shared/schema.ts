@@ -305,9 +305,15 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   // uses `formatRupeeAmount` which strips the trailing ".00" for whole
   // values. Migration is a safe widening cast.
   onionSeedPricePerKg: doublePrecision("onion_seed_price_per_kg"),
+  // Task #102: optional M.R.P. paired with KrashuVed Price. When present
+  // and strictly greater than the KrashuVed price, the listing card shows
+  // a "-NN%" discount badge next to the price and a struck-through MRP
+  // line below. Server enforces `mrp > price` whenever both are set.
+  onionSeedMrpPerKg: doublePrecision("onion_seed_mrp_per_kg"),
   soyabeanSeedDuration: text("soyabean_seed_duration"),
   soyabeanSeedVariety: text("soyabean_seed_variety"),
   soyabeanSeedPricePerQuintal: doublePrecision("soyabean_seed_price_per_quintal"),
+  soyabeanSeedMrpPerQuintal: doublePrecision("soyabean_seed_mrp_per_quintal"),
   bagCommodityType: text("bag_commodity_type").array(),
   bagCommodityOther: text("bag_commodity_other"),
   bagMaterialType: text("bag_material_type"),
@@ -316,6 +322,7 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   bagColor: text("bag_color"),
   bagMinQuantity: integer("bag_min_quantity"),
   bagPricePerBag: doublePrecision("bag_price_per_bag"),
+  bagMrpPerBag: doublePrecision("bag_mrp_per_bag"),
   fanBrand: text("fan_brand"),
   fanBrandOther: text("fan_brand_other"),
   fanColor: text("fan_color"),
@@ -331,6 +338,7 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   fanWarrantyYears: integer("fan_warranty_years"),
   fanDimensions: text("fan_dimensions"),
   fanPricePerPiece: doublePrecision("fan_price_per_piece"),
+  fanMrpPerPiece: doublePrecision("fan_mrp_per_piece"),
   // Task #84: generic "others" category — 13 nullable columns. Only
   // othersProductName + ≥1 photo are required at the API boundary; every
   // other field is freehand and skipped when blank. Two enums
@@ -341,6 +349,7 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   othersProductName: text("others_product_name"),
   othersBrand: text("others_brand"),
   othersPrice: doublePrecision("others_price"),
+  othersMrp: doublePrecision("others_mrp"),
   othersMaterials: text("others_materials"),
   othersCondition: text("others_condition"),
   othersWarrantyYears: integer("others_warranty_years"),

@@ -66,7 +66,11 @@ const SHARE_COVER_HEIGHT = 630;
  * category field only needs to be done in one place.
  */
 export type ListingDetailFact =
-  | { kind: "price"; amount: number; per: "kg" | "quintal" | "bag" | "piece" | "item" }
+  // Task #102: optional `marketAmount` is the seller-provided MRP
+  // (always strictly greater than `amount` when present — server-enforced).
+  // When supplied, the OG description renders as
+  // "₹236/kg (MRP ₹1,999/kg, 88% off)".
+  | { kind: "price"; amount: number; per: "kg" | "quintal" | "bag" | "piece" | "item"; marketAmount?: number | null }
   | { kind: "qtyBigha"; bigha: string }
   | { kind: "qtyBags"; bags: string }
   | { kind: "availableInDays"; days: number }
@@ -100,29 +104,29 @@ export function extractListingDetailFacts(l: MarketplaceListing): ListingDetailF
       if (l.potatoBrand) facts.push({ kind: "potatoBrand", value: l.potatoBrand });
       break;
     case "onion_seed":
-      if (l.onionSeedPricePerKg != null) facts.push({ kind: "price", amount: l.onionSeedPricePerKg, per: "kg" });
+      if (l.onionSeedPricePerKg != null) facts.push({ kind: "price", amount: l.onionSeedPricePerKg, per: "kg", marketAmount: l.onionSeedMrpPerKg ?? null });
       if (l.onionSeedType) facts.push({ kind: "onionSeedType", value: l.onionSeedType });
       if (l.onionSeedVariety) facts.push({ kind: "onionSeedVariety", value: l.onionSeedVariety });
       if (l.onionSeedBrand) facts.push({ kind: "onionSeedBrand", value: l.onionSeedBrand });
       break;
     case "soyabean_seed":
-      if (l.soyabeanSeedPricePerQuintal != null) facts.push({ kind: "price", amount: l.soyabeanSeedPricePerQuintal, per: "quintal" });
+      if (l.soyabeanSeedPricePerQuintal != null) facts.push({ kind: "price", amount: l.soyabeanSeedPricePerQuintal, per: "quintal", marketAmount: l.soyabeanSeedMrpPerQuintal ?? null });
       if (l.soyabeanSeedDuration) facts.push({ kind: "soyabeanDuration", value: l.soyabeanSeedDuration });
       if (l.soyabeanSeedVariety) facts.push({ kind: "soyabeanVariety", value: l.soyabeanSeedVariety });
       break;
     case "bardan_bag":
-      if (l.bagPricePerBag != null) facts.push({ kind: "price", amount: l.bagPricePerBag, per: "bag" });
+      if (l.bagPricePerBag != null) facts.push({ kind: "price", amount: l.bagPricePerBag, per: "bag", marketAmount: l.bagMrpPerBag ?? null });
       if (l.bagMaterialType) facts.push({ kind: "bagMaterial", value: l.bagMaterialType });
       if (l.bagDimension) facts.push({ kind: "bagDimension", value: l.bagDimension });
       break;
     case "exhaust_fan":
-      if (l.fanPricePerPiece != null) facts.push({ kind: "price", amount: l.fanPricePerPiece, per: "piece" });
+      if (l.fanPricePerPiece != null) facts.push({ kind: "price", amount: l.fanPricePerPiece, per: "piece", marketAmount: l.fanMrpPerPiece ?? null });
       if (l.fanBrand) facts.push({ kind: "fanBrand", value: l.fanBrand, other: l.fanBrandOther ?? null });
       if (l.fanWattage != null) facts.push({ kind: "fanWattage", watts: l.fanWattage });
       break;
     case "others":
       if (l.othersProductName) facts.push({ kind: "othersProductName", value: l.othersProductName });
-      if (l.othersPrice != null) facts.push({ kind: "price", amount: l.othersPrice, per: "item" });
+      if (l.othersPrice != null) facts.push({ kind: "price", amount: l.othersPrice, per: "item", marketAmount: l.othersMrp ?? null });
       if (l.othersBrand) facts.push({ kind: "othersBrand", value: l.othersBrand });
       if (l.othersCondition) facts.push({ kind: "othersCondition", value: l.othersCondition });
       break;
@@ -140,9 +144,18 @@ function factToEnglishLabel(f: ListingDetailFact): string {
       // so whole values (₹19) drop ".00" while fractional ones keep two
       // decimal places (₹19.80).
       const amt = formatRupeeAmount(f.amount) ?? String(f.amount);
-      if (f.per === "item") return `₹${amt}`;
-      const per = f.per === "kg" ? "kg" : f.per === "quintal" ? "quintal" : f.per === "bag" ? "bag" : "piece";
-      return `₹${amt}/${per}`;
+      const per = f.per === "kg" ? "kg" : f.per === "quintal" ? "quintal" : f.per === "bag" ? "bag" : f.per === "piece" ? "piece" : null;
+      const base = per ? `₹${amt}/${per}` : `₹${amt}`;
+      // Task #102: when a valid MRP is set (server enforces mrp > amount),
+      // append "(MRP ₹X[/unit], NN% off)" so the OG description surfaces
+      // the discount alongside the bare price.
+      if (f.marketAmount != null && f.marketAmount > f.amount) {
+        const mrpAmt = formatRupeeAmount(f.marketAmount) ?? String(f.marketAmount);
+        const mrpStr = per ? `₹${mrpAmt}/${per}` : `₹${mrpAmt}`;
+        const off = Math.round(((f.marketAmount - f.amount) / f.marketAmount) * 100);
+        return `${base} (MRP ${mrpStr}, ${off}% off)`;
+      }
+      return base;
     }
     case "qtyBigha": return `${f.bigha} bigha`;
     case "qtyBags": return `${f.bags} bags`;

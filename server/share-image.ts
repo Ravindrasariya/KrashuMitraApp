@@ -53,6 +53,15 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     p2: listing.soyabeanSeedPricePerQuintal,
     p3: listing.bagPricePerBag,
     p4: listing.fanPricePerPiece,
+    // Task #102: include MRP fields so OG descriptions ("MRP ₹X, NN% off")
+    // bust the cached preview text whenever the seller changes the MRP.
+    // Image pixels themselves don't render MRP today, but description does
+    // and Meta caches both together against `og:image:secure_url`.
+    mrp1: listing.onionSeedMrpPerKg,
+    mrp2: listing.soyabeanSeedMrpPerQuintal,
+    mrp3: listing.bagMrpPerBag,
+    mrp4: listing.fanMrpPerPiece,
+    omrp: listing.othersMrp,
     qb: listing.quantityBigha,
     qg: listing.quantityBags,
     aad: listing.availableAfterDays,
@@ -97,7 +106,11 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     // the persistent cache key still flips per listing edit; only the
     // global layout token stays stable so unrelated listings keep their
     // existing cached JPEGs.
-    lay: 4,
+    // v5 = Task #102 (MRP appended to og:description as "MRP ₹X, NN%
+    // off"; image unchanged). Bumped because the description format
+    // itself changed for every listing that ever had a price, so even
+    // pre-existing listings need a fresh Meta scrape.
+    lay: 5,
   });
   return crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
 }

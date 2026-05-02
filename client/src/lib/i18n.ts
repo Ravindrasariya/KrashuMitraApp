@@ -672,6 +672,11 @@ const translations = {
   othersExtra: { hi: "अतिरिक्त जानकारी", en: "Extra Info" },
   othersExtraPlaceholder: { hi: "वैकल्पिक", en: "Optional" },
   othersPhotoRequired: { hi: "कृपया कम से कम एक उत्पाद फोटो जोड़ें", en: "Please add at least one product photo" },
+  // Task #102: optional MRP paired with the KrashuVed Price. Used as the
+  // placeholder for the small MRP input next to the price field, and as
+  // the prefix for the struck-through MRP line on listing cards.
+  mrp: { hi: "एम.आर.पी.", en: "M.R.P." },
+  percentOff: { hi: "% छूट", en: "% off" },
   myListing: { hi: "मेरी सूची", en: "My listing" },
   rateThisListing: { hi: "इस सूची को रेट करें", en: "Rate this listing" },
   sellerRating: { hi: "विक्रेता रेटिंग", en: "Seller Rating" },
