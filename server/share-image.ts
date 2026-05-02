@@ -115,7 +115,12 @@ function buildContentSigHash(listing: MarketplaceListing, photoSig: PhotoSigInpu
     // pixels: pink "-NN% OFF" badge + KrashuVed price line + struck
     // M.R.P. line). Bumped so every cached JPEG with a discounted
     // listing is re-rendered with the new overlay.
-    lay: 6,
+    // v7 = Task #102 follow-up: removed the leading category prefix
+    // (e.g. "Others (अन्य) — ") from the OG description in
+    // share-meta.ts. Image pixels are unchanged but bumping `lay`
+    // re-versions every share URL so WhatsApp / Facebook re-scrape
+    // the description text on the next link share.
+    lay: 7,
   });
   return crypto.createHash("sha1").update(summarySig).digest("hex").slice(0, 12);
 }

@@ -189,18 +189,24 @@ function factToEnglishLabel(f: ListingDetailFact): string {
 }
 
 function summarizeListing(listing: MarketplaceListing): { title: string; description: string } {
-  const cat = categoryLabel(listing.category);
   const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");
   const parts = extractListingDetailFacts(listing).map(factToEnglishLabel).filter(Boolean);
   const detail = parts.join(" · ");
-  const summary = [cat, detail, location ? `📍 ${location}` : ""].filter(Boolean).join(" — ");
+  // Task #102 follow-up: drop the leading "Others (अन्य) — " /
+  // "Onion (प्याज) — " category prefix from WhatsApp / Facebook /
+  // Twitter link-preview descriptions. The same prefix was already
+  // removed from listing cards and the detail dialog; keeping it on
+  // the share preview alone made the two surfaces look inconsistent.
+  // The category is already implied by the listing's photo + brand
+  // title above the description.
+  const summary = [detail, location ? `📍 ${location}` : ""].filter(Boolean).join(" — ");
   // Task #79: append the seller's freehand 50-char note when present so it
   // surfaces in WhatsApp / Facebook / Twitter link-preview descriptions
   // (which is where the seller is likely sharing the listing). Cap defended
   // by Zod (.max(50)) on insert/update; we still use the raw value here so
   // any historical data stays unchanged.
   const notes = listing.additionalNotes?.trim();
-  const withNotes = notes ? `${summary || cat} — ${notes}` : summary;
+  const withNotes = notes ? (summary ? `${summary} — ${notes}` : notes) : summary;
   const description = withNotes || BRAND_DESCRIPTION;
   return { title: BRAND_TITLE, description };
 }
