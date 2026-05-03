@@ -6,8 +6,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { formatRupeeAmount } from "@shared/price-format";
 import { buildListingDescription, getListingUnitPrice } from "@shared/listing-summary";
 import type { MarketplaceListing } from "@shared/schema";
@@ -89,8 +91,9 @@ const blockArrows = (e: KeyboardEvent<HTMLInputElement>) => {
 };
 
 export function BillDialog({ open, onOpenChange, listing, user }: Props) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { toast } = useToast();
+  const [generating, setGenerating] = useState(false);
 
   const storageKey = useMemo(() => draftKey(user?.id, listing.id), [user?.id, listing.id]);
 
@@ -153,10 +156,13 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
     setDraft((d) => ({ ...d, shipping: { ...d.shipping, ...patch } }));
 
   const productNet = (num(draft.product.unitPrice) - num(draft.product.discount)) * (num(draft.product.qty) || 0);
-  const productTotal = productNet + (productNet * num(draft.product.taxRate)) / 100;
+  const productTaxAmount = (productNet * num(draft.product.taxRate)) / 100;
+  const productTotal = productNet + productTaxAmount;
   const shippingNet = num(draft.shipping.unitPrice) - num(draft.shipping.discount);
-  const shippingTotal = shippingNet + (shippingNet * num(draft.shipping.taxRate)) / 100;
+  const shippingTaxAmount = (shippingNet * num(draft.shipping.taxRate)) / 100;
+  const shippingTotal = shippingNet + shippingTaxAmount;
   const grandTotal = productTotal + shippingTotal;
+  const grandTax = productTaxAmount + shippingTaxAmount;
 
   const firmMissing = !user?.firmName || !user.firmName.trim();
   const buyerAddressValid = draft.buyerAddress.trim().length > 0;
@@ -170,13 +176,151 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
     onOpenChange(false);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!buyerAddressValid) {
       toast({ description: t("billBuyerAddressRequired"), variant: "destructive" });
       return;
     }
-    toast({ description: t("billPdfComingSoon") });
-    clearDraftAndClose();
+    if (generating) return;
+    setGenerating(true);
+    try {
+      // 1) Reserve a globally-unique sequence number on the server.
+      const reserveRes = await apiRequest("POST", "/api/bills", {
+        ...draft,
+        listingId: listing.id,
+      });
+      const { orderNumber, invoiceNumber, billDate } = (await reserveRes.json()) as {
+        orderNumber: string;
+        invoiceNumber: string;
+        billDate: string;
+      };
+
+      // 2) Resolve seller / signatory display.
+      const firmName = user?.firmName?.trim() ?? "";
+      const profileName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim();
+      const sellerName = firmName || profileName || (user?.phoneNumber ?? "");
+      const sellerAddressLines = firmName
+        ? [
+            user?.firmAddress ?? "",
+            [user?.firmState, user?.firmPincode].filter(Boolean).join(" - "),
+          ]
+        : [
+            [user?.village, user?.tehsil].filter(Boolean).join(", "),
+            [user?.district, user?.state, user?.postalCode].filter(Boolean).join(", "),
+          ];
+
+      const formatDate = (iso: string): string => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+        return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+      };
+
+      // 3) Build PDF.
+      const { renderBillPdf, amountInWordsEn } = await import("@/lib/bill-pdf");
+      const blob = await renderBillPdf({
+        language,
+        sellerName,
+        sellerAddressLines,
+        panNo: user?.firmPan ?? null,
+        gstNo: user?.firmGst ?? null,
+        orderNumber,
+        orderDate: formatDate(billDate),
+        buyerName: draft.buyerName,
+        buyerAddress: draft.buyerAddress,
+        buyerPhone: draft.buyerPhone,
+        invoiceNumber,
+        invoiceDate: formatDate(billDate),
+        product: {
+          description: draft.product.description,
+          unitPrice: num(draft.product.unitPrice),
+          discount: num(draft.product.discount),
+          qty: num(draft.product.qty) || 0,
+          netAmount: productNet,
+          taxRate: num(draft.product.taxRate),
+          taxAmount: productTaxAmount,
+          totalAmount: productTotal,
+        },
+        shipping: {
+          description: draft.shipping.description,
+          unitPrice: num(draft.shipping.unitPrice),
+          discount: num(draft.shipping.discount),
+          qty: null,
+          netAmount: shippingNet,
+          taxRate: num(draft.shipping.taxRate),
+          taxAmount: shippingTaxAmount,
+          totalAmount: shippingTotal,
+        },
+        totals: { taxAmount: grandTax, totalAmount: grandTotal },
+        amountInWords: amountInWordsEn(grandTotal),
+        paymentMode: draft.paymentType,
+        signatoryName: sellerName,
+        labels: {
+          taxInvoice: t("billPdfTaxInvoice"),
+          originalForRecipient: t("billPdfOriginalForRecipient"),
+          soldBy: t("billPdfSoldBy"),
+          billingAddress: t("billPdfBillingAddress"),
+          panNo: t("billPdfPanNo"),
+          gstNo: t("billPdfGstNo"),
+          orderNumber: t("billPdfOrderNumber"),
+          orderDate: t("billPdfOrderDate"),
+          invoiceNumber: t("billPdfInvoiceNumber"),
+          invoiceDate: t("billPdfInvoiceDate"),
+          slNo: t("billColSlNo"),
+          description: t("billColDescription"),
+          unitPrice: t("billColUnitPrice"),
+          discount: t("billColDiscount"),
+          qty: t("billColQty"),
+          netAmount: t("billColNet"),
+          taxRate: t("billColTaxRate"),
+          taxType: t("billPdfTaxType"),
+          taxAmount: t("billPdfTaxAmount"),
+          total: t("billColTotal"),
+          totalRow: t("billPdfTotal"),
+          amountInWords: t("billPdfAmountInWords"),
+          paymentMode: t("billPdfPaymentMode"),
+          cash: t("cash"),
+          credit: t("billCredit"),
+          forLabel: t("billPdfFor"),
+          authorisedSignatory: t("billPdfAuthorisedSignatory"),
+          noSignatureRequired: t("billPdfNoSignatureRequired"),
+          thankYou: t("billPdfThankYou"),
+        },
+      });
+
+      const fileName = `KrashuVed-Bill-${invoiceNumber}.pdf`;
+      const file = new File([blob], fileName, { type: "application/pdf" });
+
+      // 4) Try Web Share with the file; fall back to download.
+      let shared = false;
+      const nav = navigator as Navigator & {
+        canShare?: (data: { files: File[] }) => boolean;
+        share?: (data: { files: File[]; title?: string; text?: string }) => Promise<void>;
+      };
+      if (typeof nav.canShare === "function" && typeof nav.share === "function" && nav.canShare({ files: [file] })) {
+        try {
+          await nav.share({ files: [file], title: invoiceNumber });
+          shared = true;
+        } catch {
+          /* user cancelled — fall through to download */
+        }
+      }
+      if (!shared) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+
+      clearDraftAndClose();
+    } catch (err) {
+      console.error("Bill generation failed", err);
+      toast({ description: t("billGenerateFailed"), variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleCancel = () => {
@@ -440,15 +584,22 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={handleCancel} data-testid="button-bill-cancel">
+          <Button variant="outline" onClick={handleCancel} disabled={generating} data-testid="button-bill-cancel">
             {t("cancel")}
           </Button>
           <Button
             onClick={handleGenerate}
-            disabled={!buyerAddressValid}
+            disabled={!buyerAddressValid || generating}
             data-testid="button-bill-generate"
           >
-            {t("generateBill")}
+            {generating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {t("billGenerating")}
+              </>
+            ) : (
+              t("generateBill")
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

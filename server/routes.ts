@@ -219,6 +219,62 @@ export async function registerRoutes(
     }
   });
 
+  // Task #108: Reserve a globally-unique bill sequence number and persist
+  // the draft snapshot. The same sequence value is used to format both the
+  // order number (ON{YYYYMMDD}{N}) and the invoice number (IN{YYYYMMDD}{N}).
+  const billLineSchema = z.object({
+    description: z.string().max(2000),
+    unitPrice: z.string().max(20),
+    discount: z.string().max(20),
+    qty: z.string().max(20),
+    taxRate: z.string().max(20),
+  });
+  const billDraftSchema = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+    buyerName: z.string().max(200).optional().default(""),
+    buyerAddress: z.string().trim().min(1).max(1000),
+    buyerPhone: z.string().max(20).optional().default(""),
+    paymentType: z.enum(["cash", "credit"]),
+    product: billLineSchema,
+    shipping: billLineSchema,
+    listingId: z.number().int().positive().nullable().optional(),
+  });
+  app.post("/api/bills", isAuthenticated, async (req: any, res) => {
+    try {
+      const parsed = billDraftSchema.parse(req.body);
+      // Ownership check: only attach `listingId` when the listing actually
+      // belongs to this seller. Otherwise null it out so we never link a bill
+      // across tenants.
+      let safeListingId: number | null = null;
+      if (parsed.listingId != null) {
+        const listing = await storage.getMarketplaceListing(parsed.listingId);
+        if (listing && listing.sellerId === req.session.userId) {
+          safeListingId = parsed.listingId;
+        }
+      }
+      const created = await storage.createBill({
+        sellerId: req.session.userId,
+        listingId: safeListingId,
+        billDate: parsed.date,
+        paymentType: parsed.paymentType,
+        payload: parsed,
+      });
+      const yyyymmdd = parsed.date.replace(/-/g, "");
+      res.json({
+        sequenceNo: created.sequenceNo,
+        orderNumber: `ON${yyyymmdd}${created.sequenceNo}`,
+        invoiceNumber: `IN${yyyymmdd}${created.sequenceNo}`,
+        billDate: parsed.date,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid bill data", errors: error.errors });
+      }
+      console.error("Error creating bill:", error);
+      res.status(500).json({ message: "Failed to create bill" });
+    }
+  });
+
   app.post("/api/geocode/reverse", isAuthenticated, async (req: any, res) => {
     try {
       const { lat, lng } = req.body;
