@@ -379,12 +379,16 @@ export async function renderBillPdf(data: BillPdfData): Promise<Blob> {
     // प्रकार, क्र) — html2canvas's default canvas renderer draws glyphs
     // one-by-one without OpenType shaping and corrupts these ligatures.
     // The inlined data: URL @font-face above keeps the SVG from going blank.
+    // Only enable foreignObjectRendering when the font inlining succeeded.
+    // Otherwise the SVG foreignObject would have no font and produce a blank
+    // capture. Falling back to the default canvas renderer means Devanagari
+    // shaping degrades, but the PDF will still be readable.
     const canvas = await html2canvas(node, {
       scale: 2,
       backgroundColor: "#ffffff",
       useCORS: true,
       logging: false,
-      foreignObjectRendering: true,
+      foreignObjectRendering: inlinedFontCss.length > 0,
     });
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     const pdfW = pdf.internal.pageSize.getWidth();
