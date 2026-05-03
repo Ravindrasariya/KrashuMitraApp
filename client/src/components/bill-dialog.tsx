@@ -356,6 +356,9 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                   />
                 </td>
                 <td className="border p-1">
+                  {/* Shipping has no qty multiplier (net = unitPrice - discount),
+                      so this cell is intentionally disabled. Wheel/arrow locks
+                      are not needed — a disabled input ignores both. */}
                   <Input
                     disabled
                     value={draft.shipping.qty}
