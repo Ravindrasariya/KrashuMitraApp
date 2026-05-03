@@ -409,7 +409,16 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid id" });
       const parsed = markPaidSchema.parse(req.body ?? {});
-      const date = parsed.paidDate === undefined ? new Date().toISOString().slice(0, 10) : parsed.paidDate;
+      // IST date — Node's TZ is set to Asia/Kolkata, but use locale to be safe.
+      const istToday = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      const date = parsed.paidDate === undefined ? istToday : parsed.paidDate;
+      // Cash bills are auto-paid on creation and may not be toggled — only
+      // credit bills can have their paid status mutated through this route.
+      const existing = await storage.getBill(req.session.userId, id);
+      if (!existing) return res.status(404).json({ message: "Bill not found" });
+      if (existing.paymentType !== "credit") {
+        return res.status(400).json({ message: "Only credit bills can be toggled" });
+      }
       const updated = await storage.markBillPaid(req.session.userId, id, date);
       if (!updated) return res.status(404).json({ message: "Bill not found" });
       res.json(updated);

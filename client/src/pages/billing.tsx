@@ -43,7 +43,8 @@ function fmtDate(iso: string | null | undefined): string {
   return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
 }
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  // IST date — `en-CA` returns ISO `YYYY-MM-DD` in the requested time zone.
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
 function billGrandTotal(b: Bill): number {

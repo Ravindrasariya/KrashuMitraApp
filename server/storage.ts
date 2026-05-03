@@ -111,6 +111,7 @@ export interface IStorage {
   findBuyerByNamePhone(sellerId: string, name: string, phone: string): Promise<Buyer | undefined>;
   updateBuyer(sellerId: string, buyerId: number, data: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance">>): Promise<Buyer | undefined>;
   mergeBuyers(sellerId: string, survivorId: number, deletedId: number): Promise<Buyer | undefined>;
+  getBill(sellerId: string, billId: number): Promise<Bill | undefined>;
   listBillsForBuyer(sellerId: string, buyerId: number): Promise<Bill[]>;
   markBillPaid(sellerId: string, billId: number, paidDate: string | null): Promise<Bill | undefined>;
 }
@@ -795,6 +796,13 @@ class DatabaseStorage implements IStorage {
         .returning();
       return updated;
     });
+  }
+
+  async getBill(sellerId: string, billId: number): Promise<Bill | undefined> {
+    const [row] = await db.select().from(bills)
+      .where(and(eq(bills.sellerId, sellerId), eq(bills.id, billId)))
+      .limit(1);
+    return row;
   }
 
   async listBillsForBuyer(sellerId: string, buyerId: number): Promise<Bill[]> {
