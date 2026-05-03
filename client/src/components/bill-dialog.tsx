@@ -325,7 +325,11 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
       clearDraftAndClose();
     } catch (err) {
       console.error("Bill generation failed", err);
-      toast({ description: t("billGenerateFailed"), variant: "destructive" });
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({
+        description: `${t("billGenerateFailed")}${msg ? `: ${msg}` : ""}`,
+        variant: "destructive",
+      });
     } finally {
       setGenerating(false);
     }

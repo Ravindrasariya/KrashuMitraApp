@@ -620,7 +620,11 @@ async function sharePdf(
     toast({ description: t("billDownloadedDesktop") });
   } catch (e) {
     console.error("share pdf failed", e);
-    toast({ description: t("shareFailed"), variant: "destructive" });
+    const msg = e instanceof Error ? e.message : String(e);
+    toast({
+      description: `${t("shareFailed")}${msg ? `: ${msg}` : ""}`,
+      variant: "destructive",
+    });
   }
 }
 
