@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type WheelEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { formatRupeeAmount } from "@shared/price-format";
@@ -29,6 +30,15 @@ interface LineState {
   taxRate: string;
 }
 
+interface DraftState {
+  date: string;
+  buyerName: string;
+  buyerAddress: string;
+  buyerPhone: string;
+  product: LineState;
+  shipping: LineState;
+}
+
 function num(s: string): number {
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
@@ -38,48 +48,131 @@ function fmt(n: number): string {
   return formatRupeeAmount(Math.round(n * 100) / 100) ?? "0";
 }
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function draftKey(userId: string | undefined, listingId: number): string {
+  return `kmBillDraft:${userId ?? "anon"}:${listingId}`;
+}
+
+function loadDraft(key: string): DraftState | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.product && parsed.shipping) {
+      return parsed as DraftState;
+    }
+  } catch {
+    /* ignore corrupt draft */
+  }
+  return null;
+}
+
+// Block mouse-wheel and Up/Down arrow value changes on number inputs so
+// sellers don't accidentally bump their bill numbers while scrolling.
+const blockWheel = (e: WheelEvent<HTMLInputElement>) => {
+  e.currentTarget.blur();
+};
+const blockArrows = (e: KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    e.preventDefault();
+  }
+};
+
 export function BillDialog({ open, onOpenChange, listing, user }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
 
-  const { defaultDescription, defaultUnitPrice, defaultDiscount } = useMemo(() => {
+  const storageKey = useMemo(() => draftKey(user?.id, listing.id), [user?.id, listing.id]);
+
+  const defaults = useMemo<DraftState>(() => {
     const desc = buildListingDescription(listing as MarketplaceListing);
     const { price, mrp } = getListingUnitPrice(listing as MarketplaceListing);
     const unit = mrp != null ? mrp : price != null ? price : 0;
     const disc = mrp != null && price != null && mrp > price ? mrp - price : 0;
     return {
-      defaultDescription: desc,
-      defaultUnitPrice: String(unit),
-      defaultDiscount: String(disc),
+      date: todayIso(),
+      buyerName: "",
+      buyerAddress: "",
+      buyerPhone: "",
+      product: {
+        description: desc,
+        unitPrice: String(unit),
+        discount: String(disc),
+        qty: "1",
+        taxRate: "0",
+      },
+      shipping: {
+        description: t("billShippingDescription"),
+        unitPrice: "",
+        discount: "",
+        qty: "",
+        taxRate: "0",
+      },
     };
-  }, [listing]);
+  }, [listing, t]);
 
-  const [product, setProduct] = useState<LineState>({
-    description: defaultDescription,
-    unitPrice: defaultUnitPrice,
-    discount: defaultDiscount,
-    qty: "1",
-    taxRate: "0",
-  });
-  const [shipping, setShipping] = useState<LineState>({
-    description: t("billShippingDescription"),
-    unitPrice: "",
-    discount: "",
-    qty: "",
-    taxRate: "0",
-  });
+  const [draft, setDraft] = useState<DraftState>(defaults);
+  const [hydrated, setHydrated] = useState(false);
 
-  const productNet = (num(product.unitPrice) - num(product.discount)) * (num(product.qty) || 0);
-  const productTotal = productNet + (productNet * num(product.taxRate)) / 100;
-  const shippingNet = num(shipping.unitPrice) - num(shipping.discount);
-  const shippingTotal = shippingNet + (shippingNet * num(shipping.taxRate)) / 100;
+  // Hydrate from localStorage every time the dialog opens for this listing.
+  useEffect(() => {
+    if (!open) {
+      setHydrated(false);
+      return;
+    }
+    const saved = loadDraft(storageKey);
+    setDraft(saved ?? defaults);
+    setHydrated(true);
+  }, [open, storageKey, defaults]);
+
+  // Persist on every change once hydrated. Skip the very first render after
+  // open so we don't immediately rewrite the saved draft with defaults.
+  useEffect(() => {
+    if (!open || !hydrated) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(draft));
+    } catch {
+      /* quota / private mode — silent */
+    }
+  }, [draft, hydrated, open, storageKey]);
+
+  const setProduct = (patch: Partial<LineState>) =>
+    setDraft((d) => ({ ...d, product: { ...d.product, ...patch } }));
+  const setShipping = (patch: Partial<LineState>) =>
+    setDraft((d) => ({ ...d, shipping: { ...d.shipping, ...patch } }));
+
+  const productNet = (num(draft.product.unitPrice) - num(draft.product.discount)) * (num(draft.product.qty) || 0);
+  const productTotal = productNet + (productNet * num(draft.product.taxRate)) / 100;
+  const shippingNet = num(draft.shipping.unitPrice) - num(draft.shipping.discount);
+  const shippingTotal = shippingNet + (shippingNet * num(draft.shipping.taxRate)) / 100;
   const grandTotal = productTotal + shippingTotal;
 
   const firmMissing = !user?.firmName || !user.firmName.trim();
+  const buyerAddressValid = draft.buyerAddress.trim().length > 0;
+
+  const clearDraftAndClose = () => {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      /* ignore */
+    }
+    onOpenChange(false);
+  };
 
   const handleGenerate = () => {
+    if (!buyerAddressValid) {
+      toast({ description: t("billBuyerAddressRequired"), variant: "destructive" });
+      return;
+    }
     toast({ description: t("billPdfComingSoon") });
-    onOpenChange(false);
+    clearDraftAndClose();
+  };
+
+  const handleCancel = () => {
+    clearDraftAndClose();
   };
 
   const numCellClass = "w-24 min-w-[6rem]";
@@ -100,6 +193,52 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
           </div>
         )}
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="bill-date">{t("billDate")}</Label>
+            <Input
+              id="bill-date"
+              type="date"
+              value={draft.date}
+              onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+              data-testid="input-bill-date"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="bill-buyer-name">{t("billBuyerName")}</Label>
+            <Input
+              id="bill-buyer-name"
+              value={draft.buyerName}
+              onChange={(e) => setDraft((d) => ({ ...d, buyerName: e.target.value }))}
+              data-testid="input-bill-buyer-name"
+            />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="bill-buyer-address">
+              {t("billBuyerAddress")} <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="bill-buyer-address"
+              rows={2}
+              value={draft.buyerAddress}
+              onChange={(e) => setDraft((d) => ({ ...d, buyerAddress: e.target.value }))}
+              aria-invalid={!buyerAddressValid}
+              data-testid="input-bill-buyer-address"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="bill-buyer-phone">{t("billBuyerPhone")}</Label>
+            <Input
+              id="bill-buyer-phone"
+              type="tel"
+              inputMode="numeric"
+              value={draft.buyerPhone}
+              onChange={(e) => setDraft((d) => ({ ...d, buyerPhone: e.target.value }))}
+              data-testid="input-bill-buyer-phone"
+            />
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -119,8 +258,8 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                 <td className="border p-2 text-center font-medium" data-testid="text-bill-product-sl">1</td>
                 <td className="border p-1">
                   <Textarea
-                    value={product.description}
-                    onChange={(e) => setProduct({ ...product, description: e.target.value })}
+                    value={draft.product.description}
+                    onChange={(e) => setProduct({ description: e.target.value })}
                     rows={2}
                     className="min-w-[12rem]"
                     data-testid="input-bill-product-description"
@@ -130,8 +269,10 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                   <Input
                     type="number"
                     inputMode="decimal"
-                    value={product.unitPrice}
-                    onChange={(e) => setProduct({ ...product, unitPrice: e.target.value })}
+                    value={draft.product.unitPrice}
+                    onChange={(e) => setProduct({ unitPrice: e.target.value })}
+                    onWheel={blockWheel}
+                    onKeyDown={blockArrows}
                     className={`${numCellClass} text-right`}
                     data-testid="input-bill-product-unit-price"
                   />
@@ -140,8 +281,10 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                   <Input
                     type="number"
                     inputMode="decimal"
-                    value={product.discount}
-                    onChange={(e) => setProduct({ ...product, discount: e.target.value })}
+                    value={draft.product.discount}
+                    onChange={(e) => setProduct({ discount: e.target.value })}
+                    onWheel={blockWheel}
+                    onKeyDown={blockArrows}
                     className={`${numCellClass} text-right`}
                     data-testid="input-bill-product-discount"
                   />
@@ -150,8 +293,10 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                   <Input
                     type="number"
                     inputMode="numeric"
-                    value={product.qty}
-                    onChange={(e) => setProduct({ ...product, qty: e.target.value })}
+                    value={draft.product.qty}
+                    onChange={(e) => setProduct({ qty: e.target.value })}
+                    onWheel={blockWheel}
+                    onKeyDown={blockArrows}
                     className={`${numCellClass} text-right`}
                     data-testid="input-bill-product-qty"
                   />
@@ -163,8 +308,10 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                   <Input
                     type="number"
                     inputMode="decimal"
-                    value={product.taxRate}
-                    onChange={(e) => setProduct({ ...product, taxRate: e.target.value })}
+                    value={draft.product.taxRate}
+                    onChange={(e) => setProduct({ taxRate: e.target.value })}
+                    onWheel={blockWheel}
+                    onKeyDown={blockArrows}
                     className={`${numCellClass} text-right`}
                     data-testid="input-bill-product-tax"
                   />
@@ -177,8 +324,8 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                 <td className="border p-2 text-center font-medium" data-testid="text-bill-shipping-sl">2</td>
                 <td className="border p-1">
                   <Textarea
-                    value={shipping.description}
-                    onChange={(e) => setShipping({ ...shipping, description: e.target.value })}
+                    value={draft.shipping.description}
+                    onChange={(e) => setShipping({ description: e.target.value })}
                     rows={1}
                     className="min-w-[12rem]"
                     data-testid="input-bill-shipping-description"
@@ -188,8 +335,10 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                   <Input
                     type="number"
                     inputMode="decimal"
-                    value={shipping.unitPrice}
-                    onChange={(e) => setShipping({ ...shipping, unitPrice: e.target.value })}
+                    value={draft.shipping.unitPrice}
+                    onChange={(e) => setShipping({ unitPrice: e.target.value })}
+                    onWheel={blockWheel}
+                    onKeyDown={blockArrows}
                     className={`${numCellClass} text-right`}
                     data-testid="input-bill-shipping-unit-price"
                   />
@@ -198,8 +347,10 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                   <Input
                     type="number"
                     inputMode="decimal"
-                    value={shipping.discount}
-                    onChange={(e) => setShipping({ ...shipping, discount: e.target.value })}
+                    value={draft.shipping.discount}
+                    onChange={(e) => setShipping({ discount: e.target.value })}
+                    onWheel={blockWheel}
+                    onKeyDown={blockArrows}
                     className={`${numCellClass} text-right`}
                     data-testid="input-bill-shipping-discount"
                   />
@@ -207,7 +358,7 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                 <td className="border p-1">
                   <Input
                     disabled
-                    value={shipping.qty}
+                    value={draft.shipping.qty}
                     className={`${numCellClass} text-right`}
                     data-testid="input-bill-shipping-qty"
                   />
@@ -219,8 +370,10 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                   <Input
                     type="number"
                     inputMode="decimal"
-                    value={shipping.taxRate}
-                    onChange={(e) => setShipping({ ...shipping, taxRate: e.target.value })}
+                    value={draft.shipping.taxRate}
+                    onChange={(e) => setShipping({ taxRate: e.target.value })}
+                    onWheel={blockWheel}
+                    onKeyDown={blockArrows}
                     className={`${numCellClass} text-right`}
                     data-testid="input-bill-shipping-tax"
                   />
@@ -242,8 +395,15 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
           </table>
         </div>
 
-        <DialogFooter>
-          <Button onClick={handleGenerate} data-testid="button-bill-generate">
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={handleCancel} data-testid="button-bill-cancel">
+            {t("cancel")}
+          </Button>
+          <Button
+            onClick={handleGenerate}
+            disabled={!buyerAddressValid}
+            data-testid="button-bill-generate"
+          >
             {t("generateBill")}
           </Button>
         </DialogFooter>

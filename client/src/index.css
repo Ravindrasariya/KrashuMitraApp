@@ -178,6 +178,20 @@
     @apply hidden;
   }
 
+  /* Task #109: hide native number-input spinner buttons. Sellers were
+   * accidentally bumping bill values via the up/down arrows; the bill
+   * dialog also blocks wheel + arrow-key changes via JS handlers. CSS-only
+   * change here — typing/paste/mobile numeric keypad still work. */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   /* Placeholder styling for contentEditable div */
   [contenteditable][data-placeholder]:empty::before {
     content: attr(data-placeholder);
