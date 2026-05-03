@@ -209,6 +209,7 @@ function BuyerRow({
         aria-expanded={expanded}
         onClick={onToggleExpand}
         onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             onToggleExpand();
@@ -218,6 +219,7 @@ function BuyerRow({
         <td className="p-2">
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            onKeyDown={(e) => e.stopPropagation()}
             aria-label={t("editBuyer")}
             className="p-1 rounded-md hover:bg-primary/10 hover:text-primary transition-colors"
             data-testid={`button-edit-buyer-${buyer.id}`}
