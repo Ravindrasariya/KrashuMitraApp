@@ -191,7 +191,7 @@ export async function registerRoutes(
   app.patch("/api/farmer/profile", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;
-      const { firstName, village, tehsil, district, state, postalCode, latitude, longitude } = req.body;
+      const { firstName, village, tehsil, district, state, postalCode, latitude, longitude, firmName, firmAddress, firmState, firmPincode, firmPan, firmGst } = req.body;
       if (typeof req.body !== "object" || req.body === null) {
         return res.status(400).json({ message: "Invalid request body" });
       }
@@ -204,6 +204,12 @@ export async function registerRoutes(
       if (postalCode !== undefined) updateData.postalCode = String(postalCode).slice(0, 10);
       if (latitude !== undefined) updateData.latitude = String(latitude).slice(0, 20);
       if (longitude !== undefined) updateData.longitude = String(longitude).slice(0, 20);
+      if (firmName !== undefined) updateData.firmName = String(firmName).slice(0, 200);
+      if (firmAddress !== undefined) updateData.firmAddress = String(firmAddress).slice(0, 500);
+      if (firmState !== undefined) updateData.firmState = String(firmState).slice(0, 100);
+      if (firmPincode !== undefined) updateData.firmPincode = String(firmPincode).slice(0, 10);
+      if (firmPan !== undefined) updateData.firmPan = String(firmPan).slice(0, 20);
+      if (firmGst !== undefined) updateData.firmGst = String(firmGst).slice(0, 20);
       const updated = await storage.updateUserProfile(userId, updateData);
       if (!updated) return res.status(404).json({ message: "User not found" });
       res.json(updated);

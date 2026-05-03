@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Loader2, Save, User, Phone, IdCard } from "lucide-react";
+import { MapPin, Loader2, Save, User, Phone, IdCard, Building2 } from "lucide-react";
 import type { User as UserType } from "@shared/schema";
 
 export default function ProfilePage() {
@@ -33,6 +33,12 @@ export default function ProfilePage() {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [detecting, setDetecting] = useState(false);
+  const [firmName, setFirmName] = useState("");
+  const [firmAddress, setFirmAddress] = useState("");
+  const [firmState, setFirmState] = useState("");
+  const [firmPincode, setFirmPincode] = useState("");
+  const [firmPan, setFirmPan] = useState("");
+  const [firmGst, setFirmGst] = useState("");
 
   useEffect(() => {
     if (profile) {
@@ -44,6 +50,12 @@ export default function ProfilePage() {
       setPostalCode(profile.postalCode || "");
       setLat(profile.latitude || "");
       setLng(profile.longitude || "");
+      setFirmName(profile.firmName || "");
+      setFirmAddress(profile.firmAddress || "");
+      setFirmState(profile.firmState || "");
+      setFirmPincode(profile.firmPincode || "");
+      setFirmPan(profile.firmPan || "");
+      setFirmGst(profile.firmGst || "");
     }
   }, [profile]);
 
@@ -54,7 +66,7 @@ export default function ProfilePage() {
   }, [authLoading, isAuthenticated, setLocation]);
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { firstName: string; village: string; tehsil: string; district: string; state: string; postalCode: string; latitude?: string; longitude?: string }) => {
+    mutationFn: async (data: { firstName: string; village: string; tehsil: string; district: string; state: string; postalCode: string; latitude?: string; longitude?: string; firmName: string; firmAddress: string; firmState: string; firmPincode: string; firmPan: string; firmGst: string }) => {
       const res = await apiRequest("PATCH", "/api/farmer/profile", data);
       return res.json();
     },
@@ -116,6 +128,12 @@ export default function ProfilePage() {
       postalCode: postalCode.trim(),
       latitude: lat || undefined,
       longitude: lng || undefined,
+      firmName: firmName.trim(),
+      firmAddress: firmAddress.trim(),
+      firmState: firmState.trim(),
+      firmPincode: firmPincode.trim(),
+      firmPan: firmPan.trim(),
+      firmGst: firmGst.trim(),
     });
   }
 
@@ -244,6 +262,80 @@ export default function ProfilePage() {
                 inputMode="numeric"
                 maxLength={6}
                 data-testid="input-profile-postal-code"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t">
+          <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5 mb-3">
+            <Building2 className="w-4 h-4" />
+            {t("firmDetails")}
+          </p>
+
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="firmName" className="text-sm">{t("firmName")}</Label>
+              <Input
+                id="firmName"
+                value={firmName}
+                onChange={(e) => setFirmName(e.target.value)}
+                placeholder={t("firmNamePlaceholder")}
+                data-testid="input-profile-firm-name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="firmAddress" className="text-sm">{t("firmAddress")}</Label>
+              <Input
+                id="firmAddress"
+                value={firmAddress}
+                onChange={(e) => setFirmAddress(e.target.value)}
+                placeholder={t("firmAddressPlaceholder")}
+                data-testid="input-profile-firm-address"
+              />
+            </div>
+            <div>
+              <Label htmlFor="firmState" className="text-sm">{t("firmState")}</Label>
+              <Input
+                id="firmState"
+                value={firmState}
+                onChange={(e) => setFirmState(e.target.value)}
+                placeholder={t("firmStatePlaceholder")}
+                data-testid="input-profile-firm-state"
+              />
+            </div>
+            <div>
+              <Label htmlFor="firmPincode" className="text-sm">{t("firmPincode")}</Label>
+              <Input
+                id="firmPincode"
+                value={firmPincode}
+                onChange={(e) => setFirmPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder={t("firmPincodePlaceholder")}
+                inputMode="numeric"
+                maxLength={6}
+                data-testid="input-profile-firm-pincode"
+              />
+            </div>
+            <div>
+              <Label htmlFor="firmPan" className="text-sm">{t("firmPan")}</Label>
+              <Input
+                id="firmPan"
+                value={firmPan}
+                onChange={(e) => setFirmPan(e.target.value.toUpperCase().slice(0, 20))}
+                placeholder={t("firmPanPlaceholder")}
+                maxLength={20}
+                data-testid="input-profile-firm-pan"
+              />
+            </div>
+            <div>
+              <Label htmlFor="firmGst" className="text-sm">{t("firmGst")}</Label>
+              <Input
+                id="firmGst"
+                value={firmGst}
+                onChange={(e) => setFirmGst(e.target.value.toUpperCase().slice(0, 20))}
+                placeholder={t("firmGstPlaceholder")}
+                maxLength={20}
+                data-testid="input-profile-firm-gst"
               />
             </div>
           </div>
