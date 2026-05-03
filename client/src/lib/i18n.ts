@@ -558,6 +558,7 @@ const translations = {
   billBuyerAddress: { hi: "खरीदार का पता", en: "Buyer Address" },
   billBuyerPhone: { hi: "खरीदार का फ़ोन", en: "Buyer Phone" },
   billBuyerAddressRequired: { hi: "खरीदार का पता आवश्यक है", en: "Buyer address is required" },
+  billCredit: { hi: "उधार", en: "Credit" },
   addSale: { hi: "बिक्री जोड़ें", en: "Add Sale" },
   selectItem: { hi: "आइटम चुनें", en: "Select Item" },
   onionSeedling: { hi: "प्याज रोप", en: "Onion Seedling" },

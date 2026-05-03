@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { formatRupeeAmount } from "@shared/price-format";
@@ -30,11 +32,14 @@ interface LineState {
   taxRate: string;
 }
 
+type PaymentType = "cash" | "credit";
+
 interface DraftState {
   date: string;
   buyerName: string;
   buyerAddress: string;
   buyerPhone: string;
+  paymentType: PaymentType;
   product: LineState;
   shipping: LineState;
 }
@@ -62,7 +67,9 @@ function loadDraft(key: string): DraftState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && parsed.product && parsed.shipping) {
-      return parsed as DraftState;
+      // Backward-compat: older drafts may not have paymentType yet.
+      const paymentType: PaymentType = parsed.paymentType === "credit" ? "credit" : "cash";
+      return { ...(parsed as DraftState), paymentType };
     }
   } catch {
     /* ignore corrupt draft */
@@ -97,6 +104,7 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
       buyerName: "",
       buyerAddress: "",
       buyerPhone: "",
+      paymentType: "cash",
       product: {
         description: desc,
         unitPrice: String(unit),
@@ -193,7 +201,7 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label htmlFor="bill-date">{t("billDate")}</Label>
             <Input
@@ -213,13 +221,12 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
               data-testid="input-bill-buyer-name"
             />
           </div>
-          <div className="space-y-1 sm:col-span-2">
+          <div className="space-y-1">
             <Label htmlFor="bill-buyer-address">
               {t("billBuyerAddress")} <span className="text-destructive">*</span>
             </Label>
-            <Textarea
+            <Input
               id="bill-buyer-address"
-              rows={2}
               value={draft.buyerAddress}
               onChange={(e) => setDraft((d) => ({ ...d, buyerAddress: e.target.value }))}
               aria-invalid={!buyerAddressValid}
@@ -387,7 +394,41 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
               </tr>
               <tr className="font-semibold bg-muted/50">
                 <td className="border p-2" colSpan={6}>
-                  <div className="text-right pr-2">{t("billTotal")}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="bill-payment-type" className="text-xs font-normal text-muted-foreground">
+                        {t("paymentType")}
+                      </Label>
+                      <Select
+                        value={draft.paymentType}
+                        onValueChange={(v) => setDraft((d) => ({ ...d, paymentType: v as PaymentType }))}
+                      >
+                        <SelectTrigger
+                          id="bill-payment-type"
+                          className="h-8 w-[7.5rem]"
+                          data-testid="select-bill-payment-type"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">{t("cash")}</SelectItem>
+                          <SelectItem value="credit">{t("billCredit")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Badge
+                        variant="outline"
+                        className={
+                          draft.paymentType === "cash"
+                            ? "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800"
+                            : "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800"
+                        }
+                        data-testid="badge-bill-payment-type"
+                      >
+                        {draft.paymentType === "cash" ? t("cash") : t("billCredit")}
+                      </Badge>
+                    </div>
+                    <div className="text-right pr-2">{t("billTotal")}</div>
+                  </div>
                 </td>
                 <td className="border p-2"></td>
                 <td className="border p-2 text-right tabular-nums" data-testid="text-bill-grand-total">
