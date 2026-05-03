@@ -306,6 +306,7 @@ export async function registerRoutes(
     address: z.string().trim().max(1000).optional(),
     redFlag: z.boolean().optional(),
     openingBalance: z.union([z.string(), z.number()]).optional(),
+    archived: z.boolean().optional(),
     mergeWith: z.number().int().positive().optional(),
   });
 
@@ -379,12 +380,13 @@ export async function registerRoutes(
 
       const patch: Partial<{
         name: string; phone: string; address: string;
-        redFlag: boolean; openingBalance: string;
+        redFlag: boolean; openingBalance: string; archived: boolean;
       }> = {};
       if (parsed.name != null) patch.name = normalizeBuyerName(parsed.name);
       if (parsed.phone != null) patch.phone = normalizeBuyerPhone(parsed.phone);
       if (parsed.address != null) patch.address = parsed.address.trim();
       if (parsed.redFlag != null) patch.redFlag = parsed.redFlag;
+      if (parsed.archived != null) patch.archived = parsed.archived;
       if (parsed.openingBalance != null) {
         const ob = Number(parsed.openingBalance);
         if (!Number.isFinite(ob) || ob < 0) return res.status(400).json({ message: "Invalid opening balance" });
