@@ -1,92 +1,23 @@
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import * as htmlToImage from "html-to-image";
 import numberToWords from "number-to-words";
 
 // ---------------------------------------------------------------------------
-// Inline-font helper
+// Renderer notes
 // ---------------------------------------------------------------------------
-// html2canvas's `foreignObjectRendering: true` mode is the only way to get
-// correct Devanagari ligature shaping (हस्ताक्षरकर्ता, प्रकार, क्र, etc.) —
-// it uses an SVG <foreignObject>, which delegates text rendering back to the
-// browser's native shaper. The catch: the resulting SVG is sandboxed and can
-// only see same-origin font files. Our Noto Sans Devanagari is loaded from
-// fonts.gstatic.com, so it is unavailable inside the SVG and the captured
-// image comes out blank.
+// We use `html-to-image` rather than `html2canvas` because html2canvas's
+// `foreignObjectRendering: true` mode (the only way html2canvas can shape
+// complex Devanagari conjuncts correctly) is broken under Firefox: the SVG
+// foreignObject conversion taints the canvas and toDataURL() returns blank
+// pixels, even when the captured DOM and fonts are correct (html2canvas
+// issues #2008, #2455). Tasks #119, #120 and #121 in this project tried to
+// work around it (CSP, font preload, inlined data: URL @font-face injected
+// into the captured node) — none fixed the Firefox blank output.
 //
-// Fix: fetch Google's font CSS once, inline every referenced .woff2 file as
-// a base64 data: URL, and inject the rewritten @font-face block into the
-// off-screen invoice container. The font is then "same-origin" (data: URLs
-// have no origin restrictions inside foreignObject) and shaping works.
-const FONTS_CSS_URL =
-  "https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&family=Inter:wght@400;600;700&display=swap";
-
-let inlinedFontCssPromise: Promise<string> | null = null;
-let inlinedFontCssReady = false;
-
-function arrayBufferToBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(
-      null,
-      Array.from(bytes.subarray(i, i + chunk)) as unknown as number[],
-    );
-  }
-  return btoa(binary);
-}
-
-async function getInlinedFontCss(): Promise<string> {
-  // Reuse a successful (non-empty) result; retry on failure so a transient
-  // network/CSP error doesn't permanently degrade PDF rendering.
-  if (inlinedFontCssReady && inlinedFontCssPromise) return inlinedFontCssPromise;
-  if (inlinedFontCssPromise) return inlinedFontCssPromise;
-  const attempt = (async () => {
-    try {
-      const cssRes = await fetch(FONTS_CSS_URL, { credentials: "omit" });
-      if (!cssRes.ok) return "";
-      let cssText = await cssRes.text();
-      // Match url(...) with optional single/double quotes and any path that
-      // contains .woff2 (handles ?query suffixes and quoted forms).
-      const urlRegex = /url\(\s*['"]?(https:\/\/[^'")\s]+\.woff2[^'")\s]*)['"]?\s*\)/g;
-      const urls = Array.from(
-        new Set(Array.from(cssText.matchAll(urlRegex), (m) => m[1])),
-      );
-      if (urls.length === 0) return "";
-      const pairs = await Promise.all(
-        urls.map(async (u) => {
-          try {
-            const r = await fetch(u, { credentials: "omit" });
-            if (!r.ok) return null;
-            const buf = await r.arrayBuffer();
-            return [u, `data:font/woff2;base64,${arrayBufferToBase64(buf)}`] as const;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      let replacedAny = false;
-      for (const pair of pairs) {
-        if (!pair) continue;
-        const [orig, dataUrl] = pair;
-        cssText = cssText.split(orig).join(dataUrl);
-        replacedAny = true;
-      }
-      if (!replacedAny) return "";
-      inlinedFontCssReady = true;
-      return cssText;
-    } catch {
-      return "";
-    }
-  })();
-  inlinedFontCssPromise = attempt;
-  const result = await attempt;
-  // If the attempt failed, clear the cached promise so the next caller retries.
-  if (!result) {
-    inlinedFontCssPromise = null;
-  }
-  return result;
-}
+// `html-to-image` uses a similar serialize-to-SVG pipeline but inspects
+// document.fonts itself and embeds matching @font-face rules into the SVG
+// it generates, which works correctly across Firefox / Safari / Chrome and
+// preserves native Devanagari shaping.
 
 export type BillLanguage = "hi" | "en";
 export type BillPaymentMode = "cash" | "credit";
@@ -195,7 +126,7 @@ function brandWordmarkHtml(language: BillLanguage): string {
   );
 }
 
-function lineRowHtml(slNo: string, line: BillPdfLine, labels: BillPdfData["labels"]): string {
+function lineRowHtml(slNo: string, line: BillPdfLine, _labels: BillPdfData["labels"]): string {
   return `
     <tr>
       <td class="td c">${escapeHtml(slNo)}</td>
@@ -212,7 +143,7 @@ function lineRowHtml(slNo: string, line: BillPdfLine, labels: BillPdfData["label
   `;
 }
 
-function buildInvoiceHtml(d: BillPdfData, inlinedFontCss = ""): string {
+function buildInvoiceHtml(d: BillPdfData): string {
   const sellerLines = d.sellerAddressLines.filter((l) => l && l.trim().length > 0);
   const panRow = d.panNo && d.panNo.trim()
     ? `<div class="row-line"><strong>${escapeHtml(d.labels.panNo)}</strong>&nbsp;${escapeHtml(d.panNo.trim())}</div>`
@@ -242,7 +173,6 @@ function buildInvoiceHtml(d: BillPdfData, inlinedFontCss = ""): string {
     letter-spacing: 0.01em;
   ">
     <style>
-      ${inlinedFontCss}
       .invoice .td { border: 1px solid #d1d5db; padding: 6px 8px; vertical-align: top; }
       .invoice .th { border: 1px solid #d1d5db; padding: 6px 8px; background: #f3f4f6; font-weight: 600; }
       .invoice .l { text-align: left; }
@@ -356,20 +286,14 @@ export async function renderBillPdf(data: BillPdfData): Promise<Blob> {
   host.style.top = "0";
   host.style.zIndex = "-1";
   host.style.background = "#ffffff";
-  // Fetch + inline Noto Sans Devanagari (and Inter) as base64 data: URLs so
-  // the SVG foreignObject renderer below can see the font without a
-  // cross-origin fetch. Result is cached module-level — only fetched once.
-  const inlinedFontCss = await getInlinedFontCss();
-
-  // The @font-face rules MUST live INSIDE the .invoice node we capture —
-  // html2canvas's foreignObject SVG only includes descendants of the node it
-  // captures, so a sibling <style> tag would be left behind and the SVG would
-  // render blank (this is exactly what happened in Firefox in Task #120).
-  host.innerHTML = buildInvoiceHtml(data, inlinedFontCss);
+  host.innerHTML = buildInvoiceHtml(data);
   document.body.appendChild(host);
   try {
-    // Belt-and-braces: also wait for the page-level fonts to be ready (the
-    // inlined ones above register independently inside the host element).
+    // Make sure the Devanagari webfont is fully loaded before html-to-image
+    // walks document.fonts to embed @font-face rules in its SVG. Without
+    // this, the first PDF generated immediately after a hard refresh can
+    // miss the Devanagari face and fall back to a system font that doesn't
+    // shape conjuncts correctly.
     await document.fonts.ready;
     await Promise.all([
       document.fonts.load('400 12px "Noto Sans Devanagari"'),
@@ -377,23 +301,17 @@ export async function renderBillPdf(data: BillPdfData): Promise<Blob> {
     ]);
 
     const node = host.querySelector(".invoice") as HTMLElement;
-    // foreignObjectRendering uses SVG <foreignObject> which preserves the
-    // browser's native text shaping engine (Harfbuzz). This is required for
-    // complex Devanagari conjuncts containing half-र (हस्ताक्षरकर्ता,
-    // प्रकार, क्र) — html2canvas's default canvas renderer draws glyphs
-    // one-by-one without OpenType shaping and corrupts these ligatures.
-    // The inlined data: URL @font-face above keeps the SVG from going blank.
-    // Only enable foreignObjectRendering when the font inlining succeeded.
-    // Otherwise the SVG foreignObject would have no font and produce a blank
-    // capture. Falling back to the default canvas renderer means Devanagari
-    // shaping degrades, but the PDF will still be readable.
-    const canvas = await html2canvas(node, {
-      scale: 2,
+    // skipFonts:false (the default) tells html-to-image to walk
+    // document.fonts and embed the loaded Devanagari face into the SVG
+    // <foreignObject> it generates, so the captured invoice keeps native
+    // shaping in Firefox/Safari/Chrome.
+    const canvas = await htmlToImage.toCanvas(node, {
+      pixelRatio: 2,
       backgroundColor: "#ffffff",
-      useCORS: true,
-      logging: false,
-      foreignObjectRendering: inlinedFontCss.length > 0,
+      cacheBust: false,
+      skipFonts: false,
     });
+
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     const pdfW = pdf.internal.pageSize.getWidth();
     const pdfH = pdf.internal.pageSize.getHeight();
