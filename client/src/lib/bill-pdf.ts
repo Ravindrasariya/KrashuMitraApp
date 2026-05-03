@@ -7,17 +7,86 @@ import numberToWords from "number-to-words";
 // ---------------------------------------------------------------------------
 // We use `html-to-image` rather than `html2canvas` because html2canvas's
 // `foreignObjectRendering: true` mode (the only way html2canvas can shape
-// complex Devanagari conjuncts correctly) is broken under Firefox: the SVG
-// foreignObject conversion taints the canvas and toDataURL() returns blank
-// pixels, even when the captured DOM and fonts are correct (html2canvas
-// issues #2008, #2455). Tasks #119, #120 and #121 in this project tried to
-// work around it (CSP, font preload, inlined data: URL @font-face injected
-// into the captured node) — none fixed the Firefox blank output.
+// complex Devanagari conjuncts correctly) was producing blank output under
+// Firefox.
 //
-// `html-to-image` uses a similar serialize-to-SVG pipeline but inspects
-// document.fonts itself and embeds matching @font-face rules into the SVG
-// it generates, which works correctly across Firefox / Safari / Chrome and
-// preserves native Devanagari shaping.
+// However, html-to-image's built-in font walker has a bug
+// (bubkoo/html-to-image#495 family): when it iterates Google Fonts'
+// @font-face rules some rules have an undefined `fontFamily`, and the
+// library throws "font is undefined". To avoid that code path we build the
+// @font-face CSS ourselves — fetching Google's font CSS once, inlining
+// each woff2 file as a base64 data: URL — and pass it via the library's
+// `fontEmbedCSS` option. The SVG foreignObject then sees same-origin
+// (data: URL) fonts, native browser shaping is preserved, and the broken
+// font walker is skipped entirely.
+
+const FONTS_CSS_URL =
+  "https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&family=Inter:wght@400;600;700&display=swap";
+
+let inlinedFontCssPromise: Promise<string> | null = null;
+let inlinedFontCssReady = false;
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(
+      null,
+      Array.from(bytes.subarray(i, i + chunk)) as unknown as number[],
+    );
+  }
+  return btoa(binary);
+}
+
+async function getInlinedFontCss(): Promise<string> {
+  // Reuse a successful (non-empty) result; retry on failure so a transient
+  // network error doesn't permanently degrade PDF rendering.
+  if (inlinedFontCssReady && inlinedFontCssPromise) return inlinedFontCssPromise;
+  if (inlinedFontCssPromise) return inlinedFontCssPromise;
+  const attempt = (async () => {
+    try {
+      const cssRes = await fetch(FONTS_CSS_URL, { credentials: "omit" });
+      if (!cssRes.ok) return "";
+      let cssText = await cssRes.text();
+      const urlRegex = /url\(\s*['"]?(https:\/\/[^'")\s]+\.woff2[^'")\s]*)['"]?\s*\)/g;
+      const urls = Array.from(
+        new Set(Array.from(cssText.matchAll(urlRegex), (m) => m[1])),
+      );
+      if (urls.length === 0) return "";
+      const pairs = await Promise.all(
+        urls.map(async (u) => {
+          try {
+            const r = await fetch(u, { credentials: "omit" });
+            if (!r.ok) return null;
+            const buf = await r.arrayBuffer();
+            return [u, `data:font/woff2;base64,${arrayBufferToBase64(buf)}`] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      let replacedAny = false;
+      for (const pair of pairs) {
+        if (!pair) continue;
+        const [orig, dataUrl] = pair;
+        cssText = cssText.split(orig).join(dataUrl);
+        replacedAny = true;
+      }
+      if (!replacedAny) return "";
+      inlinedFontCssReady = true;
+      return cssText;
+    } catch {
+      return "";
+    }
+  })();
+  inlinedFontCssPromise = attempt;
+  const result = await attempt;
+  if (!result) {
+    inlinedFontCssPromise = null;
+  }
+  return result;
+}
 
 export type BillLanguage = "hi" | "en";
 export type BillPaymentMode = "cash" | "credit";
@@ -300,16 +369,22 @@ export async function renderBillPdf(data: BillPdfData): Promise<Blob> {
       document.fonts.load('700 12px "Noto Sans Devanagari"'),
     ]);
 
+    // Build our own @font-face CSS with woff2 files inlined as data: URLs,
+    // and pass it via `fontEmbedCSS`. When this option is set the library
+    // skips its broken built-in font walker (which throws "font is
+    // undefined" while iterating Google Fonts @font-face rules) and
+    // injects our pre-built CSS directly into the captured SVG.
+    const fontEmbedCSS = await getInlinedFontCss();
+
     const node = host.querySelector(".invoice") as HTMLElement;
-    // skipFonts:false (the default) tells html-to-image to walk
-    // document.fonts and embed the loaded Devanagari face into the SVG
-    // <foreignObject> it generates, so the captured invoice keeps native
-    // shaping in Firefox/Safari/Chrome.
     const canvas = await htmlToImage.toCanvas(node, {
       pixelRatio: 2,
       backgroundColor: "#ffffff",
       cacheBust: false,
-      skipFonts: false,
+      // Pass our inlined CSS when available; if it failed to fetch, also
+      // skip the library's font walker so it doesn't throw.
+      fontEmbedCSS: fontEmbedCSS || "",
+      skipFonts: !fontEmbedCSS,
     });
 
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
