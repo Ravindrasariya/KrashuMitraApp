@@ -1,5 +1,10 @@
 import type { MarketplaceListing } from "@shared/schema";
 import { formatRupeeAmount } from "@shared/price-format";
+import {
+  extractListingDetailFacts as sharedExtractFacts,
+  factToEnglishLabel as sharedFactLabel,
+  type ListingDetailFact as SharedListingDetailFact,
+} from "@shared/listing-summary";
 import { storage } from "./storage";
 
 const CACHE_TTL_MS = 30_000;
@@ -59,134 +64,12 @@ const SHARE_COVER_PATH = "/share-cover.png";
 const SHARE_COVER_WIDTH = 1200;
 const SHARE_COVER_HEIGHT = 630;
 
-/**
- * Per-category extraction of the raw "interesting" facts from a listing,
- * shared between the OG description (English-mixed) and the per-listing
- * share-image card (Hindi). Centralizing this here so adding a new
- * category field only needs to be done in one place.
- */
-export type ListingDetailFact =
-  // Task #102: optional `marketAmount` is the seller-provided MRP
-  // (always strictly greater than `amount` when present — server-enforced).
-  // When supplied, the OG description renders as
-  // "₹236/kg (MRP ₹1,999/kg, 88% off)".
-  | { kind: "price"; amount: number; per: "kg" | "quintal" | "bag" | "piece" | "item"; marketAmount?: number | null }
-  | { kind: "qtyBigha"; bigha: string }
-  | { kind: "qtyBags"; bags: string }
-  | { kind: "availableInDays"; days: number }
-  | { kind: "onionType"; value: string }
-  | { kind: "potatoVariety"; value: string }
-  | { kind: "potatoBrand"; value: string }
-  | { kind: "onionSeedType"; value: string }
-  | { kind: "onionSeedVariety"; value: string }
-  | { kind: "onionSeedBrand"; value: string }
-  | { kind: "soyabeanDuration"; value: string }
-  | { kind: "soyabeanVariety"; value: string }
-  | { kind: "bagMaterial"; value: string }
-  | { kind: "bagDimension"; value: string }
-  | { kind: "fanBrand"; value: string; other: string | null }
-  | { kind: "fanWattage"; watts: number }
-  | { kind: "othersProductName"; value: string }
-  | { kind: "othersBrand"; value: string }
-  | { kind: "othersCondition"; value: string };
-
-export function extractListingDetailFacts(l: MarketplaceListing): ListingDetailFact[] {
-  const facts: ListingDetailFact[] = [];
-  switch (l.category) {
-    case "onion_seedling":
-      if (l.quantityBigha) facts.push({ kind: "qtyBigha", bigha: l.quantityBigha });
-      if (l.availableAfterDays != null) facts.push({ kind: "availableInDays", days: l.availableAfterDays });
-      if (l.onionType) facts.push({ kind: "onionType", value: l.onionType });
-      break;
-    case "potato_seed":
-      if (l.quantityBags) facts.push({ kind: "qtyBags", bags: l.quantityBags });
-      if (l.potatoVariety) facts.push({ kind: "potatoVariety", value: l.potatoVariety });
-      if (l.potatoBrand) facts.push({ kind: "potatoBrand", value: l.potatoBrand });
-      break;
-    case "onion_seed":
-      if (l.onionSeedPricePerKg != null) facts.push({ kind: "price", amount: l.onionSeedPricePerKg, per: "kg", marketAmount: l.onionSeedMrpPerKg ?? null });
-      if (l.onionSeedType) facts.push({ kind: "onionSeedType", value: l.onionSeedType });
-      if (l.onionSeedVariety) facts.push({ kind: "onionSeedVariety", value: l.onionSeedVariety });
-      if (l.onionSeedBrand) facts.push({ kind: "onionSeedBrand", value: l.onionSeedBrand });
-      break;
-    case "soyabean_seed":
-      if (l.soyabeanSeedPricePerQuintal != null) facts.push({ kind: "price", amount: l.soyabeanSeedPricePerQuintal, per: "quintal", marketAmount: l.soyabeanSeedMrpPerQuintal ?? null });
-      if (l.soyabeanSeedDuration) facts.push({ kind: "soyabeanDuration", value: l.soyabeanSeedDuration });
-      if (l.soyabeanSeedVariety) facts.push({ kind: "soyabeanVariety", value: l.soyabeanSeedVariety });
-      break;
-    case "bardan_bag":
-      if (l.bagPricePerBag != null) facts.push({ kind: "price", amount: l.bagPricePerBag, per: "bag", marketAmount: l.bagMrpPerBag ?? null });
-      if (l.bagMaterialType) facts.push({ kind: "bagMaterial", value: l.bagMaterialType });
-      if (l.bagDimension) facts.push({ kind: "bagDimension", value: l.bagDimension });
-      break;
-    case "exhaust_fan":
-      if (l.fanPricePerPiece != null) facts.push({ kind: "price", amount: l.fanPricePerPiece, per: "piece", marketAmount: l.fanMrpPerPiece ?? null });
-      if (l.fanBrand) facts.push({ kind: "fanBrand", value: l.fanBrand, other: l.fanBrandOther ?? null });
-      if (l.fanWattage != null) facts.push({ kind: "fanWattage", watts: l.fanWattage });
-      break;
-    case "others":
-      if (l.othersProductName) facts.push({ kind: "othersProductName", value: l.othersProductName });
-      if (l.othersPrice != null) facts.push({ kind: "price", amount: l.othersPrice, per: "item", marketAmount: l.othersMrp ?? null });
-      if (l.othersBrand) facts.push({ kind: "othersBrand", value: l.othersBrand });
-      if (l.othersCondition) facts.push({ kind: "othersCondition", value: l.othersCondition });
-      break;
-  }
-  return facts;
-}
-
-function factToEnglishLabel(f: ListingDetailFact): string {
-  switch (f.kind) {
-    case "price": {
-      // "item" is the per-unit for the generic Others category — render as
-      // a bare price (no slash suffix) since the seller chose not to break
-      // it down per unit. All other categories keep their original /unit.
-      // Task #99: amounts may now have paise; render via the shared helper
-      // so whole values (₹19) drop ".00" while fractional ones keep two
-      // decimal places (₹19.80).
-      const amt = formatRupeeAmount(f.amount) ?? String(f.amount);
-      const per = f.per === "kg" ? "kg" : f.per === "quintal" ? "quintal" : f.per === "bag" ? "bag" : f.per === "piece" ? "piece" : null;
-      const base = per ? `₹${amt}/${per}` : `₹${amt}`;
-      // Task #102: when a valid MRP is set (server enforces mrp > amount),
-      // append "(MRP ₹X[/unit], NN% off)" so the OG description surfaces
-      // the discount alongside the bare price.
-      if (f.marketAmount != null && f.marketAmount > f.amount) {
-        const mrpAmt = formatRupeeAmount(f.marketAmount) ?? String(f.marketAmount);
-        const mrpStr = per ? `₹${mrpAmt}/${per}` : `₹${mrpAmt}`;
-        const off = Math.round(((f.marketAmount - f.amount) / f.marketAmount) * 100);
-        return `${base} (MRP ${mrpStr}, ${off}% off)`;
-      }
-      return base;
-    }
-    case "qtyBigha": return `${f.bigha} bigha`;
-    case "qtyBags": return `${f.bags} bags`;
-    case "availableInDays": return `available in ${f.days} days`;
-    case "onionType":
-    case "potatoVariety":
-    case "potatoBrand":
-    case "onionSeedType":
-    case "onionSeedVariety":
-    case "onionSeedBrand":
-    case "soyabeanVariety":
-    case "bagMaterial":
-    case "bagDimension":
-      return f.value;
-    case "soyabeanDuration": return `${f.value} duration`;
-    case "fanBrand": return f.value === "Other" ? (f.other || "Other") : f.value;
-    case "fanWattage": return `${f.watts}W`;
-    // Task #84: generic Others category. Render product name and brand as
-    // bare strings; map the canonical condition enum to a human label so
-    // OG descriptions read "New" / "Used" / "Refurbished" instead of the
-    // raw stored key.
-    case "othersProductName": return f.value;
-    case "othersBrand": return f.value;
-    case "othersCondition": {
-      if (f.value === "new") return "New";
-      if (f.value === "used") return "Used";
-      if (f.value === "refurbished") return "Refurbished";
-      return f.value;
-    }
-  }
-}
+// Task #107: extraction + English labelling moved to shared/listing-summary.ts
+// so the seller bill dialog (client) can reuse the same description string the
+// OG previews show. Re-exported here to keep existing internal imports stable.
+export type ListingDetailFact = SharedListingDetailFact;
+export const extractListingDetailFacts = sharedExtractFacts;
+const factToEnglishLabel = sharedFactLabel;
 
 function summarizeListing(listing: MarketplaceListing): { title: string; description: string } {
   const location = [listing.sellerVillage, listing.sellerDistrict].filter(Boolean).join(", ");

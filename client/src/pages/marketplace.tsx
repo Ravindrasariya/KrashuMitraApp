@@ -21,7 +21,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2, Package, Fan, Share2, Mail, Link2 } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2, Package, Fan, Share2, Mail, Link2, Printer } from "lucide-react";
+import { BillDialog } from "@/components/bill-dialog";
 import { SiWhatsapp } from "react-icons/si";
 import { cn } from "@/lib/utils";
 import { PhotoLightbox } from "@/components/photo-lightbox";
@@ -439,6 +440,7 @@ export default function MarketplacePage() {
   const [contactInfo, setContactInfo] = useState<{ [id: number]: { name: string; phone: string; farmerCode: string; sellerAvgRating?: number; sellerRatingCount?: number } }>({});
   const [contactLoading, setContactLoading] = useState<number | null>(null);
   const [detailListing, setDetailListing] = useState<ListingNoPhoto | null>(null);
+  const [billListing, setBillListing] = useState<ListingNoPhoto | null>(null);
   const [pendingListingId, setPendingListingId] = useState<number | null>(null);
   const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -2968,7 +2970,20 @@ export default function MarketplacePage() {
                             {t("myListing")}
                           </Badge>
                         )}
-                        <div className="ml-auto">
+                        <div className="ml-auto flex items-center gap-1">
+                          {isOwner && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => setBillListing(listing)}
+                              aria-label={t("generateBill")}
+                              data-testid="button-bill-detail"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </Button>
+                          )}
                           <ShareButton
                             shareInfo={composeShareInfo(listing)}
                             variant="detail"
@@ -3273,6 +3288,15 @@ export default function MarketplacePage() {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {billListing && (
+        <BillDialog
+          open={!!billListing}
+          onOpenChange={(open) => { if (!open) setBillListing(null); }}
+          listing={billListing as unknown as MarketplaceListing}
+          user={user}
+        />
       )}
 
       {lightboxListing && (() => {
