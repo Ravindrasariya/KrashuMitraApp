@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, type TranslationKey } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -188,7 +188,7 @@ function BuyerRow({
   onEdit: () => void;
   language: "hi" | "en";
   user: User | null | undefined;
-  t: (k: any) => string;
+  t: (k: TranslationKey) => string;
 }) {
   return (
     <>
@@ -232,7 +232,7 @@ function BuyerHistory({ buyer, language, user, t }: {
   buyer: BuyerWithDue;
   language: "hi" | "en";
   user: User | null | undefined;
-  t: (k: any) => string;
+  t: (k: TranslationKey) => string;
 }) {
   const { toast } = useToast();
   const { data: bills = [], isLoading, isError, refetch } = useQuery<Bill[]>({
@@ -398,7 +398,7 @@ async function sharePdf(
   bill: Bill,
   user: User | null | undefined,
   language: "hi" | "en",
-  t: (k: any) => string,
+  t: (k: TranslationKey) => string,
   toast: ReturnType<typeof import("@/hooks/use-toast")["useToast"]>["toast"],
 ) {
   try {
@@ -520,7 +520,7 @@ async function sharePdf(
 function EditBuyerDialog({ buyer, onClose, t, toast }: {
   buyer: BuyerWithDue;
   onClose: () => void;
-  t: (k: any) => string;
+  t: (k: TranslationKey) => string;
   toast: ReturnType<typeof import("@/hooks/use-toast")["useToast"]>["toast"];
 }) {
   const [name, setName] = useState(buyer.name ?? "");
