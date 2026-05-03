@@ -272,6 +272,16 @@ export async function renderBillPdf(data: BillPdfData): Promise<Blob> {
   host.innerHTML = buildInvoiceHtml(data);
   document.body.appendChild(host);
   try {
+    // Wait for all fonts — especially Noto Sans Devanagari — to be fully loaded
+    // and shaped before html2canvas captures the DOM. Without this, complex
+    // Devanagari conjunct consonants render with the fallback font and appear
+    // garbled (e.g. हस्ताक्षरकर्ता → हस्साक्करता).
+    await document.fonts.ready;
+    await Promise.all([
+      document.fonts.load('400 12px "Noto Sans Devanagari"'),
+      document.fonts.load('700 12px "Noto Sans Devanagari"'),
+    ]);
+
     const node = host.firstElementChild as HTMLElement;
     const canvas = await html2canvas(node, {
       scale: 2,
