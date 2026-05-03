@@ -3294,7 +3294,7 @@ export default function MarketplacePage() {
         <BillDialog
           open={!!billListing}
           onOpenChange={(open) => { if (!open) setBillListing(null); }}
-          listing={billListing as unknown as MarketplaceListing}
+          listing={billListing}
           user={user}
         />
       )}

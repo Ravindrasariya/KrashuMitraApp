@@ -10,10 +10,14 @@ import { buildListingDescription, getListingUnitPrice } from "@shared/listing-su
 import type { MarketplaceListing } from "@shared/schema";
 import type { User } from "@shared/models/auth";
 
+// Bill dialog only reads non-photo metadata, so any subset of MarketplaceListing
+// without `photoData` is acceptable (e.g. ListingNoPhoto from marketplace.tsx).
+export type BillDialogListing = Omit<MarketplaceListing, "photoData">;
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  listing: MarketplaceListing;
+  listing: BillDialogListing;
   user: User | null | undefined;
 }
 
@@ -39,14 +43,14 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
   const { toast } = useToast();
 
   const { defaultDescription, defaultUnitPrice, defaultDiscount } = useMemo(() => {
-    const desc = buildListingDescription(listing);
-    const { price, mrp } = getListingUnitPrice(listing);
-    const unit = mrp != null ? mrp : price ?? 0;
+    const desc = buildListingDescription(listing as MarketplaceListing);
+    const { price, mrp } = getListingUnitPrice(listing as MarketplaceListing);
+    const unit = mrp != null ? mrp : price != null ? price : 0;
     const disc = mrp != null && price != null && mrp > price ? mrp - price : 0;
     return {
       defaultDescription: desc,
-      defaultUnitPrice: unit ? String(unit) : "",
-      defaultDiscount: disc ? String(disc) : "",
+      defaultUnitPrice: String(unit),
+      defaultDiscount: String(disc),
     };
   }, [listing]);
 
