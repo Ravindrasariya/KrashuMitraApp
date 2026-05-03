@@ -766,7 +766,7 @@ const translations = {
   colName: { hi: "नाम", en: "Name" },
   colAddress: { hi: "पता", en: "Address" },
   colPhone: { hi: "फ़ोन", en: "Phone" },
-  colRedFlag: { hi: "लाल झंडा", en: "Red Flag" },
+  colRedFlag: { hi: "रेड फ्लैग", en: "Red Flag" },
   colTotalDue: { hi: "कुल बकाया", en: "Total Due" },
   editBuyer: { hi: "खरीदार संपादित करें", en: "Edit Buyer" },
   buyerSaved: { hi: "खरीदार सहेजा गया!", en: "Buyer saved!" },

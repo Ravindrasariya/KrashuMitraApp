@@ -108,9 +108,9 @@ export default function BillingPage() {
   return (
     <div className="max-w-5xl mx-auto p-3 md:p-4 space-y-3" data-testid="page-billing">
       <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 px-3 py-2.5 md:px-4 md:py-3">
-        <h1 className="text-xl md:text-2xl font-bold" data-testid="text-billing-title">{t("billingPageTitle")}</h1>
+        <h1 className="text-xs md:text-sm font-bold" data-testid="text-billing-title">{t("billingPageTitle")}</h1>
         <div
-          className={`text-sm md:text-base font-semibold rounded-full px-3 py-1 border ${
+          className={`text-xs md:text-sm font-semibold rounded-full px-3 py-1 border ${
             grandTotalDue > 0
               ? "bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
               : "bg-green-50 text-green-700 border-green-300 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800"
