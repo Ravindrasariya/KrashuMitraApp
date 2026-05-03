@@ -46,6 +46,11 @@ interface DraftState {
   shipping: LineState;
 }
 
+function cap2dp(raw: string): string {
+  const dot = raw.indexOf(".");
+  return dot === -1 ? raw : raw.slice(0, dot + 3);
+}
+
 function num(s: string): number {
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
@@ -436,7 +441,8 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                     type="number"
                     inputMode="decimal"
                     value={draft.product.discount}
-                    onChange={(e) => setProduct({ discount: e.target.value })}
+                    onChange={(e) => setProduct({ discount: cap2dp(e.target.value) })}
+                    step="0.01"
                     onWheel={blockWheel}
                     onKeyDown={blockArrows}
                     className={`${numCellClass} text-right`}
@@ -502,7 +508,8 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
                     type="number"
                     inputMode="decimal"
                     value={draft.shipping.discount}
-                    onChange={(e) => setShipping({ discount: e.target.value })}
+                    onChange={(e) => setShipping({ discount: cap2dp(e.target.value) })}
+                    step="0.01"
                     onWheel={blockWheel}
                     onKeyDown={blockArrows}
                     className={`${numCellClass} text-right`}
