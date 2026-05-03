@@ -281,7 +281,11 @@ function BuyerHistory({ buyer, language, user, t }: {
                         <div className="flex gap-1">
                           <Button size="sm" className="h-6 text-xs" onClick={() => markPaid.mutate({ id: b.id, paidDate: paidDateInput })} data-testid={`button-confirm-paid-${b.id}`}>OK</Button>
                           {b.paymentType === "credit" && (
-                            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => markPaid.mutate({ id: b.id, paidDate: null })} data-testid={`button-mark-unpaid-${b.id}`}>{t("markUnpaid")}</Button>
+                            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => {
+                              if (window.confirm(t("markUnpaidConfirm"))) {
+                                markPaid.mutate({ id: b.id, paidDate: null });
+                              }
+                            }} data-testid={`button-mark-unpaid-${b.id}`}>{t("markUnpaid")}</Button>
                           )}
                         </div>
                       </div>

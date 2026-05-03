@@ -2,6 +2,15 @@ import { db } from "./db";
 import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, marketplaceStockCounters, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog, bills, type Bill, type InsertBill, buyers, type Buyer } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
+// Task #112: buyer identity is normalized — case-insensitive on name with
+// internal whitespace collapsed, and phone with all whitespace stripped.
+export function normalizeBuyerName(s: string): string {
+  return String(s ?? "").trim().replace(/\s+/g, " ");
+}
+export function normalizeBuyerPhone(s: string): string {
+  return String(s ?? "").replace(/\s+/g, "");
+}
+
 export interface BuyerWithDue extends Buyer {
   totalDue: string;
   totalPaid: string;
@@ -611,8 +620,8 @@ class DatabaseStorage implements IStorage {
     // Atomically resolve / create the buyer and link the bill.
     return db.transaction(async (tx) => {
       const payload = (data.payload ?? {}) as any;
-      const name = String(payload.buyerName ?? "").trim();
-      const phone = String(payload.buyerPhone ?? "").trim();
+      const name = normalizeBuyerName(String(payload.buyerName ?? ""));
+      const phone = normalizeBuyerPhone(String(payload.buyerPhone ?? ""));
       const address = String(payload.buyerAddress ?? "").trim();
 
       // Per-seller advisory lock to serialise buyer-code allocation for this seller.
@@ -637,10 +646,13 @@ class DatabaseStorage implements IStorage {
         buyerId = existing[0].id;
       } else {
         const datePart = String(data.billDate).replace(/-/g, "");
+        // Per-seller GLOBAL counter — `{N}` increments across ALL of this
+        // seller's buyers regardless of date. Strip the `B` + 8-digit date
+        // prefix from each existing buyer_code and take MAX(trailing N) + 1.
         const seqRow = await tx.execute<{ next_n: number }>(sql`
           SELECT COALESCE(MAX(
-            CASE WHEN buyer_code ~ ${'^B' + datePart + '[0-9]+$'}
-                 THEN substring(buyer_code from ${('B' + datePart).length + 1})::int
+            CASE WHEN buyer_code ~ '^B[0-9]{8}[0-9]+$'
+                 THEN substring(buyer_code from 10)::int
                  ELSE 0 END
           ), 0) + 1 AS next_n
           FROM buyers WHERE seller_id = ${data.sellerId}
@@ -714,14 +726,16 @@ class DatabaseStorage implements IStorage {
   }
 
   async findBuyerByNamePhone(sellerId: string, name: string, phone: string): Promise<Buyer | undefined> {
+    const n = normalizeBuyerName(name);
+    const p = normalizeBuyerPhone(phone);
     const [row] = await db
       .select()
       .from(buyers)
       .where(
         and(
           eq(buyers.sellerId, sellerId),
-          sql`lower(${buyers.name}) = lower(${name})`,
-          eq(buyers.phone, phone),
+          sql`lower(${buyers.name}) = lower(${n})`,
+          eq(buyers.phone, p),
         ),
       )
       .limit(1);
@@ -733,9 +747,12 @@ class DatabaseStorage implements IStorage {
     buyerId: number,
     data: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance">>,
   ): Promise<Buyer | undefined> {
+    const patch: any = { ...data };
+    if (patch.name != null) patch.name = normalizeBuyerName(patch.name);
+    if (patch.phone != null) patch.phone = normalizeBuyerPhone(patch.phone);
     const [row] = await db
       .update(buyers)
-      .set(data)
+      .set(patch)
       .where(and(eq(buyers.sellerId, sellerId), eq(buyers.id, buyerId)))
       .returning();
     return row;

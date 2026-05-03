@@ -782,6 +782,10 @@ const translations = {
   markPaid: { hi: "भुगतान दर्ज करें", en: "Mark Paid" },
   paidOn: { hi: "भुगतान {date} को", en: "Paid on {date}" },
   markUnpaid: { hi: "बकाया करें", en: "Mark Unpaid" },
+  markUnpaidConfirm: {
+    hi: "इस बिल को फिर से बकाया करें? पहले दर्ज भुगतान हट जाएगा।",
+    en: "Mark this bill unpaid again? The previously recorded payment will be removed.",
+  },
   paidDate: { hi: "भुगतान तारीख", en: "Paid Date" },
   shareOnWhatsapp: { hi: "व्हाट्सएप पर भेजें", en: "Share on WhatsApp" },
   billDownloadedDesktop: {

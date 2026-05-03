@@ -1,6 +1,6 @@
 import type { Express, RequestHandler } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage, normalizeBuyerName, normalizeBuyerPhone } from "./storage";
 import { setupPhoneAuth, isAuthenticated } from "./auth-phone";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
@@ -318,11 +318,12 @@ export async function registerRoutes(
       const current = await storage.getBuyer(sellerId, id);
       if (!current) return res.status(404).json({ message: "Buyer not found" });
 
-      // Compute proposed new (name, phone) for collision check.
-      const newName = (parsed.name ?? current.name).trim();
-      const newPhone = (parsed.phone ?? current.phone).trim();
+      // Compute proposed new (name, phone) for collision check (normalized).
+      const newName = normalizeBuyerName(parsed.name ?? current.name);
+      const newPhone = normalizeBuyerPhone(parsed.phone ?? current.phone);
       const nameOrPhoneChanging =
-        newName.toLowerCase() !== current.name.trim().toLowerCase() || newPhone !== current.phone.trim();
+        newName.toLowerCase() !== normalizeBuyerName(current.name).toLowerCase() ||
+        newPhone !== normalizeBuyerPhone(current.phone);
 
       if (nameOrPhoneChanging) {
         const collision = await storage.findBuyerByNamePhone(sellerId, newName, newPhone);
@@ -336,21 +337,22 @@ export async function registerRoutes(
           // Merge: pick the older (lower id = lower seq) as survivor.
           const survivorId = collision.id < id ? collision.id : id;
           const deletedId = survivorId === collision.id ? id : collision.id;
-          // Apply edits to whichever survives; if survivor is `current`, also push the desired name/phone/address/etc.
           await storage.mergeBuyers(sellerId, survivorId, deletedId);
-          // After merge, update survivor with the requested edits (name/phone/address/redFlag/openingBalance) if provided.
-          const patchAfter: any = {};
+          // After merge, push the user-confirmed name / phone / address / red-flag /
+          // opening balance onto the survivor (regardless of whether the survivor
+          // is `current` or the older `collision`).
+          const patchAfter: any = {
+            name: newName,
+            phone: newPhone,
+          };
           if (parsed.address != null) patchAfter.address = parsed.address.trim();
           if (parsed.redFlag != null) patchAfter.redFlag = parsed.redFlag;
           if (parsed.openingBalance != null) {
             const ob = Number(parsed.openingBalance);
             if (!Number.isFinite(ob) || ob < 0) return res.status(400).json({ message: "Invalid opening balance" });
-            // Merge already summed balances — only override if the user explicitly typed one. Keep merged sum unless changed.
             patchAfter.openingBalance = ob.toFixed(2);
           }
-          if (Object.keys(patchAfter).length > 0) {
-            await storage.updateBuyer(sellerId, survivorId, patchAfter);
-          }
+          await storage.updateBuyer(sellerId, survivorId, patchAfter);
           const fresh = await storage.getBuyer(sellerId, survivorId);
           return res.json({ buyer: fresh, merged: true, survivorId, deletedId });
         }

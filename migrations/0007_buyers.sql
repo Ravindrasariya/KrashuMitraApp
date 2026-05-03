@@ -43,8 +43,8 @@ BEGIN
     WHERE b.buyer_id IS NULL
     ORDER BY b.id ASC
   LOOP
-    v_name := COALESCE(NULLIF(trim(r.payload->>'buyerName'), ''), '');
-    v_phone := COALESCE(NULLIF(trim(r.payload->>'buyerPhone'), ''), '');
+    v_name := COALESCE(NULLIF(regexp_replace(btrim(r.payload->>'buyerName'), '\s+', ' ', 'g'), ''), '');
+    v_phone := COALESCE(NULLIF(regexp_replace(r.payload->>'buyerPhone', '\s+', '', 'g'), ''), '');
     v_address := COALESCE(NULLIF(trim(r.payload->>'buyerAddress'), ''), '');
 
     SELECT id INTO v_buyer_id
@@ -56,9 +56,12 @@ BEGIN
 
     IF v_buyer_id IS NULL THEN
       v_date_part := to_char(r.bill_date, 'YYYYMMDD');
+      -- Per-seller GLOBAL counter — increments across ALL of this seller's
+      -- buyers, not per-date. Strip the `B` + 8-digit date prefix and read
+      -- the trailing `{N}` from any existing buyer_code for this seller.
       SELECT COALESCE(MAX(
-        CASE WHEN buyer_code ~ ('^B' || v_date_part || '[0-9]+$')
-             THEN substring(buyer_code from length('B' || v_date_part) + 1)::int
+        CASE WHEN buyer_code ~ '^B[0-9]{8}[0-9]+$'
+             THEN substring(buyer_code from 10)::int
              ELSE 0 END
       ), 0) + 1
       INTO v_seq
