@@ -334,23 +334,42 @@ export async function registerRoutes(
               conflictBuyer: collision,
             });
           }
-          // Merge: pick the older (lower id = lower seq) as survivor.
-          const survivorId = collision.id < id ? collision.id : id;
+          // Survivor = the buyer with the LOWER buyer-code sequence (older
+          // per-seller `{N}`). Buyer codes are `BYYYYMMDD{N}` with N as a
+          // per-seller global counter, so the lower N is unambiguously older.
+          const seqOf = (code: string): number => {
+            const m = /^B\d{8}(\d+)$/.exec(code);
+            return m ? Number(m[1]) : Number.MAX_SAFE_INTEGER;
+          };
+          const survivorId = seqOf(collision.buyerCode) <= seqOf(current.buyerCode) ? collision.id : id;
           const deletedId = survivorId === collision.id ? id : collision.id;
           await storage.mergeBuyers(sellerId, survivorId, deletedId);
-          // After merge, push the user-confirmed name / phone / address / red-flag /
-          // opening balance onto the survivor (regardless of whether the survivor
-          // is `current` or the older `collision`).
-          const patchAfter: any = {
-            name: newName,
-            phone: newPhone,
-          };
+
+          // Re-read the post-merge survivor — it already holds:
+          //   • SUM(openingBalance)        (must not be overwritten)
+          //   • redFlag = survivor OR loser (must not be overwritten)
+          // We push the user-confirmed name/phone/address onto it, and only
+          // override redFlag / openingBalance if the user actually changed
+          // them from `current`'s pre-merge values.
+          const merged = await storage.getBuyer(sellerId, survivorId);
+          const patchAfter: Partial<{
+            name: string; phone: string; address: string;
+            redFlag: boolean; openingBalance: string;
+          }> = { name: newName, phone: newPhone };
           if (parsed.address != null) patchAfter.address = parsed.address.trim();
-          if (parsed.redFlag != null) patchAfter.redFlag = parsed.redFlag;
+          if (parsed.redFlag != null && parsed.redFlag !== current.redFlag) {
+            // OR semantics — toggling on adds the flag; toggling off only
+            // clears it if the merged side wasn't flagged either.
+            patchAfter.redFlag = parsed.redFlag || (merged?.redFlag ?? false);
+          }
           if (parsed.openingBalance != null) {
             const ob = Number(parsed.openingBalance);
             if (!Number.isFinite(ob) || ob < 0) return res.status(400).json({ message: "Invalid opening balance" });
-            patchAfter.openingBalance = ob.toFixed(2);
+            const beforeMerge = Number(current.openingBalance);
+            if (Math.abs(ob - beforeMerge) > 0.005) {
+              // User typed a new value — honour it, overriding the merged sum.
+              patchAfter.openingBalance = ob.toFixed(2);
+            }
           }
           await storage.updateBuyer(sellerId, survivorId, patchAfter);
           const fresh = await storage.getBuyer(sellerId, survivorId);
@@ -358,9 +377,12 @@ export async function registerRoutes(
         }
       }
 
-      const patch: any = {};
-      if (parsed.name != null) patch.name = parsed.name.trim();
-      if (parsed.phone != null) patch.phone = parsed.phone.trim();
+      const patch: Partial<{
+        name: string; phone: string; address: string;
+        redFlag: boolean; openingBalance: string;
+      }> = {};
+      if (parsed.name != null) patch.name = normalizeBuyerName(parsed.name);
+      if (parsed.phone != null) patch.phone = normalizeBuyerPhone(parsed.phone);
       if (parsed.address != null) patch.address = parsed.address.trim();
       if (parsed.redFlag != null) patch.redFlag = parsed.redFlag;
       if (parsed.openingBalance != null) {

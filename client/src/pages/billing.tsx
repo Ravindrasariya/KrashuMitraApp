@@ -19,6 +19,21 @@ import type { User } from "@shared/models/auth";
 
 type BuyerWithDue = Buyer & { totalDue: string; totalPaid: string };
 
+type BillPayload = {
+  date?: string;
+  buyerName?: string;
+  buyerAddress?: string;
+  buyerPhone?: string;
+  paymentType?: string;
+  product?: { description?: string; unitPrice?: number; discount?: number; qty?: number; taxRate?: number };
+  shipping?: { description?: string; unitPrice?: number; discount?: number; taxRate?: number };
+  listingId?: number;
+};
+
+type SaveBuyerResponse =
+  | { conflict: Buyer }
+  | { buyer: BuyerWithDue; merged?: boolean; survivorId?: number; deletedId?: number };
+
 function fmtRupee(n: number | string | null | undefined): string {
   return `₹${formatRupeeAmount(n) ?? "0"}`;
 }
@@ -32,8 +47,9 @@ function todayIso(): string {
 }
 
 function billGrandTotal(b: Bill): number {
-  const p = (b.payload as any)?.product ?? {};
-  const s = (b.payload as any)?.shipping ?? {};
+  const payload = (b.payload ?? {}) as BillPayload;
+  const p = payload.product ?? {};
+  const s = payload.shipping ?? {};
   const pn = (Number(p.unitPrice ?? 0) - Number(p.discount ?? 0)) * Number(p.qty ?? 0);
   const pt = pn * (1 + Number(p.taxRate ?? 0) / 100);
   const sn = Number(s.unitPrice ?? 0) - Number(s.discount ?? 0);
@@ -257,7 +273,7 @@ function BuyerHistory({ buyer, language, user, t }: {
         </thead>
         <tbody>
           {bills.map((b) => {
-            const p = (b.payload as any)?.product ?? {};
+            const p = ((b.payload ?? {}) as BillPayload).product ?? {};
             const total = billGrandTotal(b);
             const isPaid = !!b.paidAt;
             return (
@@ -369,7 +385,7 @@ async function sharePdf(
   toast: ReturnType<typeof import("@/hooks/use-toast")["useToast"]>["toast"],
 ) {
   try {
-    const payload = (bill.payload as any) ?? {};
+    const payload = (bill.payload ?? {}) as BillPayload;
     const yyyymmdd = String(bill.billDate).replace(/-/g, "");
     const orderNumber = `ON${yyyymmdd}${bill.sequenceNo}`;
     const invoiceNumber = `IN${yyyymmdd}${bill.sequenceNo}`;
@@ -388,7 +404,7 @@ async function sharePdf(
         ];
     const p = payload.product ?? {};
     const s = payload.shipping ?? {};
-    const num = (v: any) => Number(v ?? 0);
+    const num = (v: unknown) => Number(v ?? 0);
     const productNet = (num(p.unitPrice) - num(p.discount)) * num(p.qty);
     const productTax = (productNet * num(p.taxRate)) / 100;
     const productTotal = productNet + productTax;
@@ -491,9 +507,12 @@ function EditBuyerDialog({ buyer, onClose, t, toast }: {
   const [openingBalance, setOpeningBalance] = useState<string>(String(buyer.openingBalance ?? "0"));
   const [conflict, setConflict] = useState<Buyer | null>(null);
 
-  const save = useMutation({
-    mutationFn: async (mergeWith?: number) => {
-      const body: any = { name, phone, address, redFlag, openingBalance };
+  const save = useMutation<SaveBuyerResponse, Error, number | undefined>({
+    mutationFn: async (mergeWith) => {
+      const body: {
+        name: string; phone: string; address: string;
+        redFlag: boolean; openingBalance: string; mergeWith?: number;
+      } = { name, phone, address, redFlag, openingBalance };
       if (mergeWith) body.mergeWith = mergeWith;
       const res = await fetch(`/api/buyers/${buyer.id}`, {
         method: "PATCH",
@@ -502,20 +521,20 @@ function EditBuyerDialog({ buyer, onClose, t, toast }: {
         credentials: "include",
       });
       if (res.status === 409) {
-        const data = await res.json();
-        return { conflict: data.conflictBuyer as Buyer };
+        const data = (await res.json()) as { conflictBuyer: Buyer };
+        return { conflict: data.conflictBuyer };
       }
       if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      return res.json() as Promise<SaveBuyerResponse>;
     },
-    onSuccess: (data: any) => {
-      if (data?.conflict) {
+    onSuccess: (data) => {
+      if ("conflict" in data) {
         setConflict(data.conflict);
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["/api/buyers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/buyers", buyer.id, "bills"] });
-      if (data?.merged) {
+      if (data.merged && data.survivorId != null) {
         queryClient.invalidateQueries({ queryKey: ["/api/buyers", data.survivorId, "bills"] });
         toast({ description: t("buyersMerged") });
       } else {
