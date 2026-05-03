@@ -72,7 +72,7 @@ export default function BillingPage() {
     if (!authLoading && !isAuthenticated) setLocation("/auth");
   }, [authLoading, isAuthenticated, setLocation]);
 
-  const { data: buyers = [], isLoading } = useQuery<BuyerWithDue[]>({
+  const { data: buyers = [], isLoading, isError, refetch } = useQuery<BuyerWithDue[]>({
     queryKey: ["/api/buyers"],
     enabled: isAuthenticated,
   });
@@ -115,7 +115,14 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {sorted.length === 0 ? (
+      {isError ? (
+        <Card className="p-6 text-center text-sm text-red-600 dark:text-red-400" data-testid="text-buyers-load-error">
+          {language === "hi" ? "खरीदार सूची लोड नहीं हो सकी।" : "Could not load buyers."}
+          <button type="button" className="ml-2 underline" onClick={() => refetch()} data-testid="button-retry-buyers">
+            {language === "hi" ? "पुनः प्रयास" : "Retry"}
+          </button>
+        </Card>
+      ) : sorted.length === 0 ? (
         <Card className="p-6 text-center text-muted-foreground" data-testid="text-buyers-empty">
           {t("buyersListEmpty")}
         </Card>
@@ -228,7 +235,7 @@ function BuyerHistory({ buyer, language, user, t }: {
   t: (k: any) => string;
 }) {
   const { toast } = useToast();
-  const { data: bills = [], isLoading } = useQuery<Bill[]>({
+  const { data: bills = [], isLoading, isError, refetch } = useQuery<Bill[]>({
     queryKey: ["/api/buyers", buyer.id, "bills"],
     queryFn: async () => {
       const res = await fetch(`/api/buyers/${buyer.id}/bills`, { credentials: "include" });
@@ -257,6 +264,14 @@ function BuyerHistory({ buyer, language, user, t }: {
     + Number(buyer.openingBalance);
 
   if (isLoading) return <div className="text-center py-3"><Loader2 className="w-4 h-4 inline animate-spin" /></div>;
+  if (isError) return (
+    <div className="text-center py-3 text-xs text-red-600 dark:text-red-400" data-testid="text-bills-load-error">
+      {language === "hi" ? "बिल लोड नहीं हो सके।" : "Could not load bills."}
+      <button type="button" className="ml-2 underline" onClick={() => refetch()} data-testid="button-retry-bills">
+        {language === "hi" ? "पुनः प्रयास" : "Retry"}
+      </button>
+    </div>
+  );
 
   return (
     <div className="overflow-x-auto">
