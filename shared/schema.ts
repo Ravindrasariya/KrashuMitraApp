@@ -620,7 +620,13 @@ export const buyers = pgTable("buyers", {
   mergedFromCodes: text("merged_from_codes").array().notNull().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 }, (table) => [
-  uniqueIndex("buyers_seller_name_phone_unique").on(table.sellerId, sql`lower(${table.name})`, table.phone),
+  // Mirrors migration 0008: identity is case-insensitive on name with internal
+  // whitespace collapsed, and ignores all whitespace in phone.
+  uniqueIndex("buyers_seller_name_phone_unique").on(
+    table.sellerId,
+    sql`lower(regexp_replace(btrim(${table.name}), '\\s+', ' ', 'g'))`,
+    sql`regexp_replace(${table.phone}, '\\s+', '', 'g')`,
+  ),
   uniqueIndex("buyers_seller_code_unique").on(table.sellerId, table.buyerCode),
 ]);
 

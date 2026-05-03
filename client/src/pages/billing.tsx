@@ -290,25 +290,26 @@ function BuyerHistory({ buyer, language, user, t }: {
                   </Badge>
                 </td>
                 <td className="p-2 text-center">
-                  {b.paymentType === "cash" || isPaid ? (
+                  {b.paymentType === "cash" ? (
+                    <Badge className="bg-green-600 hover:bg-green-700" data-testid={`badge-paid-${b.id}`}>
+                      {t("paid")}
+                    </Badge>
+                  ) : isPaid ? (
                     editingPaidId === b.id ? (
                       <div className="flex flex-col gap-1 items-center">
                         <Input type="date" value={paidDateInput} onChange={(e) => setPaidDateInput(e.target.value)} className="h-7 text-xs w-32" data-testid={`input-paid-date-${b.id}`} />
                         <div className="flex gap-1">
                           <Button size="sm" className="h-6 text-xs" onClick={() => markPaid.mutate({ id: b.id, paidDate: paidDateInput })} data-testid={`button-confirm-paid-${b.id}`}>OK</Button>
-                          {b.paymentType === "credit" && (
-                            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => {
-                              if (window.confirm(t("markUnpaidConfirm"))) {
-                                markPaid.mutate({ id: b.id, paidDate: null });
-                              }
-                            }} data-testid={`button-mark-unpaid-${b.id}`}>{t("markUnpaid")}</Button>
-                          )}
+                          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => {
+                            if (window.confirm(t("markUnpaidConfirm"))) {
+                              markPaid.mutate({ id: b.id, paidDate: null });
+                            }
+                          }} data-testid={`button-mark-unpaid-${b.id}`}>{t("markUnpaid")}</Button>
                         </div>
                       </div>
                     ) : (
                       <button
                         onClick={() => {
-                          if (b.paymentType === "cash") return;
                           setEditingPaidId(b.id);
                           setPaidDateInput(b.paidAt ?? todayIso());
                         }}
@@ -475,8 +476,14 @@ async function sharePdf(
           text: `${sellerName}: Bill ${invoiceNumber}, Total ${fmtRupee(grand)}`,
         });
         return;
-      } catch {
-        /* fall through */
+      } catch (err) {
+        // User-initiated cancel ⇒ do nothing (no fallback download, no toast).
+        // Only fall through on a real share failure.
+        const e = err as { name?: string; message?: string } | undefined;
+        if (e?.name === "AbortError" || /cancel|abort/i.test(e?.message ?? "")) {
+          return;
+        }
+        // Real failure — fall through to desktop download.
       }
     }
     const url = URL.createObjectURL(blob);

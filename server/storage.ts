@@ -645,7 +645,13 @@ class DatabaseStorage implements IStorage {
       if (existing[0]) {
         buyerId = existing[0].id;
       } else {
-        const datePart = String(data.billDate).replace(/-/g, "");
+        // Buyer code uses the IST CREATION date (now), not the bill date —
+        // bills can be backdated, but the buyer's identity date must reflect
+        // when this seller actually first met them.
+        const istDateRow = await tx.execute<{ ist_date: string }>(sql`
+          SELECT to_char(now() AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD') AS ist_date
+        `);
+        const datePart = String(istDateRow.rows[0]?.ist_date ?? "").replace(/-/g, "");
         // Per-seller GLOBAL counter — `{N}` increments across ALL of this
         // seller's buyers regardless of date. Strip the `B` + 8-digit date
         // prefix from each existing buyer_code and take MAX(trailing N) + 1.

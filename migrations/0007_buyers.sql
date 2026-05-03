@@ -55,7 +55,9 @@ BEGIN
     LIMIT 1;
 
     IF v_buyer_id IS NULL THEN
-      v_date_part := to_char(r.bill_date, 'YYYYMMDD');
+      -- Backfill: stamp the buyer's creation date as the IST date of the
+      -- earliest bill that introduced them (deterministic, monotonic with id).
+      v_date_part := to_char((r.bill_date::timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD');
       -- Per-seller GLOBAL counter — increments across ALL of this seller's
       -- buyers, not per-date. Strip the `B` + 8-digit date prefix and read
       -- the trailing `{N}` from any existing buyer_code for this seller.
