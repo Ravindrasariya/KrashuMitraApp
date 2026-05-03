@@ -422,7 +422,7 @@ export default function AdminPage() {
     updateMutation.mutate({ id, data: editData });
   };
 
-  const formatDate = (dateStr: string | null) => {
+  const formatDate = (dateStr: string | Date | null) => {
     if (!dateStr) return "-";
     return new Date(dateStr).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
   };

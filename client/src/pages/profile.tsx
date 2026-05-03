@@ -14,7 +14,7 @@ import type { User as UserType } from "@shared/schema";
 
 export default function ProfilePage() {
   const { t } = useTranslation();
-  const { user, isAuthenticated, authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
