@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight, Pencil, Flag, Loader2, Share2, ArrowUpDown } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Flag, Loader2, Share2, ArrowUpDown, AlertTriangle } from "lucide-react";
 import type { Bill, Buyer } from "@shared/schema";
 import { formatRupeeAmount } from "@shared/price-format";
 import type { User } from "@shared/models/auth";
@@ -108,9 +108,16 @@ export default function BillingPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-3 md:p-4 space-y-3" data-testid="page-billing">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 px-3 py-2.5 md:px-4 md:py-3">
         <h1 className="text-xl md:text-2xl font-bold" data-testid="text-billing-title">{t("billingPageTitle")}</h1>
-        <div className="text-sm font-semibold" data-testid="text-billing-grand-total">
+        <div
+          className={`text-sm md:text-base font-semibold rounded-full px-3 py-1 border ${
+            grandTotalDue > 0
+              ? "bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+              : "bg-green-50 text-green-700 border-green-300 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800"
+          }`}
+          data-testid="text-billing-grand-total"
+        >
           {t("colTotalDue")}: {fmtRupee(grandTotalDue)}
         </div>
       </div>
@@ -127,10 +134,10 @@ export default function BillingPage() {
           {t("buyersListEmpty")}
         </Card>
       ) : (
-        <Card className="overflow-x-auto">
+        <Card className="overflow-x-auto border-2 shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr className="text-left">
+            <thead className="bg-muted">
+              <tr className="text-left border-b-2 border-border">
                 <th className="p-2 w-8"></th>
                 <th className="p-2 w-8"></th>
                 <th className="p-2">
@@ -190,37 +197,59 @@ function BuyerRow({
   user: User | null | undefined;
   t: (k: TranslationKey) => string;
 }) {
+  const dueAmount = Number(buyer.totalDue || 0);
+  const hasDue = dueAmount > 0;
   return (
     <>
-      <tr className="border-t hover-elevate" data-testid={`row-buyer-${buyer.id}`}>
+      <tr
+        className={`border-t hover:bg-muted/40 transition-colors odd:bg-muted/20 ${expanded ? "bg-muted/30" : ""}`}
+        data-testid={`row-buyer-${buyer.id}`}
+      >
         <td className="p-2">
-          <button onClick={onEdit} aria-label={t("editBuyer")} className="p-1" data-testid={`button-edit-buyer-${buyer.id}`}>
+          <button onClick={onEdit} aria-label={t("editBuyer")} className="p-1 rounded-md hover:bg-primary/10 hover:text-primary transition-colors" data-testid={`button-edit-buyer-${buyer.id}`}>
             <Pencil className="w-4 h-4" />
           </button>
         </td>
         <td className="p-2">
-          <button onClick={onToggleExpand} className="p-1" data-testid={`button-expand-buyer-${buyer.id}`}>
+          <button onClick={onToggleExpand} className="p-1 rounded-md hover:bg-primary/10 hover:text-primary transition-colors" data-testid={`button-expand-buyer-${buyer.id}`}>
             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
         </td>
-        <td className="p-2 font-mono text-xs" data-testid={`text-buyer-code-${buyer.id}`}>{buyer.buyerCode}</td>
-        <td className="p-2" data-testid={`text-buyer-name-${buyer.id}`}>{buyer.name || "—"}</td>
+        <td className="p-2 font-mono text-xs text-primary font-semibold" data-testid={`text-buyer-code-${buyer.id}`}>{buyer.buyerCode}</td>
+        <td className="p-2 font-medium" data-testid={`text-buyer-name-${buyer.id}`}>{buyer.name || "—"}</td>
         <td className="p-2 hidden md:table-cell text-muted-foreground text-xs">{buyer.address || "—"}</td>
-        <td className="p-2" data-testid={`text-buyer-phone-${buyer.id}`}>{buyer.phone || "—"}</td>
+        <td className="p-2 tabular-nums" data-testid={`text-buyer-phone-${buyer.id}`}>{buyer.phone || "—"}</td>
         <td className="p-2 hidden sm:table-cell text-center">
-          {buyer.redFlag && <Flag className="w-4 h-4 text-red-600 inline" data-testid={`icon-redflag-${buyer.id}`} />}
+          {buyer.redFlag && (
+            <span
+              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 dark:bg-red-950/50 border border-red-300 dark:border-red-800"
+              data-testid={`icon-redflag-${buyer.id}`}
+            >
+              <Flag className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+            </span>
+          )}
         </td>
-        <td className="p-2 text-right font-semibold tabular-nums" data-testid={`text-buyer-due-${buyer.id}`}>
-          {fmtRupee(buyer.totalDue)}
+        <td className="p-2 text-right" data-testid={`text-buyer-due-${buyer.id}`}>
+          <span
+            className={`inline-block rounded-md px-2 py-0.5 font-bold tabular-nums ${
+              hasDue
+                ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                : "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400"
+            }`}
+          >
+            {fmtRupee(buyer.totalDue)}
+          </span>
         </td>
       </tr>
       {expanded && (
-        <tr className="bg-muted/20">
-          <td colSpan={8} className="p-3">
-            <div className="md:hidden text-xs text-muted-foreground mb-2">
-              <strong>{t("colAddress")}:</strong> {buyer.address || "—"}
+        <tr className="bg-muted/30">
+          <td colSpan={8} className={`p-0 border-l-4 ${hasDue ? "border-red-500" : "border-green-500"}`}>
+            <div className="p-3">
+              <div className="md:hidden text-xs text-muted-foreground mb-2">
+                <strong>{t("colAddress")}:</strong> {buyer.address || "—"}
+              </div>
+              <BuyerHistory buyer={buyer} language={language} user={user} t={t} />
             </div>
-            <BuyerHistory buyer={buyer} language={language} user={user} t={t} />
           </td>
         </tr>
       )}
@@ -297,7 +326,11 @@ function BuyerHistory({ buyer, language, user, t }: {
                 <td className="p-2">{fmtDate(b.billDate)}</td>
                 <td className="p-2 max-w-xs truncate">{p.description ?? "—"}</td>
                 <td className="p-2 text-right tabular-nums">{p.qty ?? "—"}</td>
-                <td className="p-2 text-right tabular-nums font-medium">{fmtRupee(total)}</td>
+                <td className={`p-2 text-right tabular-nums font-semibold ${
+                  b.paymentType === "credit" && !isPaid
+                    ? "text-red-700 dark:text-red-400"
+                    : ""
+                }`}>{fmtRupee(total)}</td>
                 <td className="p-2 text-center">
                   <Badge variant="outline" className={b.paymentType === "cash"
                     ? "bg-green-50 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300"
@@ -372,7 +405,7 @@ function BuyerHistory({ buyer, language, user, t }: {
               <td className="p-2 text-muted-foreground">—</td>
               <td className="p-2 italic">{t("openingBalance")}</td>
               <td className="p-2 text-right">—</td>
-              <td className="p-2 text-right tabular-nums font-medium">{fmtRupee(buyer.openingBalance)}</td>
+              <td className="p-2 text-right tabular-nums font-semibold text-red-700 dark:text-red-400">{fmtRupee(buyer.openingBalance)}</td>
               <td className="p-2 text-center">
                 <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300">{t("billCredit")}</Badge>
               </td>
@@ -384,9 +417,11 @@ function BuyerHistory({ buyer, language, user, t }: {
           )}
         </tbody>
         <tfoot>
-          <tr className="border-t font-semibold bg-muted/40">
-            <td className="p-2" colSpan={3}>{t("totalPaid")}: {fmtRupee(totalPaid)}</td>
-            <td className="p-2 text-right" colSpan={4}>{t("colTotalDue")}: {fmtRupee(totalDue)}</td>
+          <tr className="border-t-2 font-semibold bg-muted/60">
+            <td className="p-2 text-green-700 dark:text-green-400" colSpan={3}>{t("totalPaid")}: {fmtRupee(totalPaid)}</td>
+            <td className={`p-2 text-right ${totalDue > 0 ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}`} colSpan={4}>
+              {t("colTotalDue")}: {fmtRupee(totalDue)}
+            </td>
           </tr>
         </tfoot>
       </table>
@@ -606,10 +641,19 @@ function EditBuyerDialog({ buyer, onClose, t, toast }: {
       </Dialog>
       {conflict && (
         <Dialog open onOpenChange={(o) => { if (!o) setConflict(null); }}>
-          <DialogContent data-testid="dialog-merge-confirm">
-            <DialogHeader><DialogTitle>{t("mergeBuyersTitle")}</DialogTitle></DialogHeader>
-            <p className="text-sm">{t("mergeBuyersBody").replace("{code}", conflict.buyerCode)}</p>
-            <DialogFooter>
+          <DialogContent data-testid="dialog-merge-confirm" className="overflow-hidden p-0">
+            <div className="bg-amber-50 dark:bg-amber-950/40 border-b border-amber-300 dark:border-amber-800 px-6 py-4">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-200">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  {t("mergeBuyersTitle")}
+                </DialogTitle>
+              </DialogHeader>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm">{t("mergeBuyersBody").replace("{code}", conflict.buyerCode)}</p>
+            </div>
+            <DialogFooter className="px-6 pb-6">
               <Button variant="outline" onClick={() => setConflict(null)} data-testid="button-merge-cancel">{t("cancel")}</Button>
               <Button onClick={() => save.mutate(conflict.id)} disabled={save.isPending} data-testid="button-merge-confirm">
                 {save.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
