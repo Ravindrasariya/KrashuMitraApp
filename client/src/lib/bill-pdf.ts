@@ -2,6 +2,77 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import numberToWords from "number-to-words";
 
+// ---------------------------------------------------------------------------
+// Inline-font helper
+// ---------------------------------------------------------------------------
+// html2canvas's `foreignObjectRendering: true` mode is the only way to get
+// correct Devanagari ligature shaping (हस्ताक्षरकर्ता, प्रकार, क्र, etc.) —
+// it uses an SVG <foreignObject>, which delegates text rendering back to the
+// browser's native shaper. The catch: the resulting SVG is sandboxed and can
+// only see same-origin font files. Our Noto Sans Devanagari is loaded from
+// fonts.gstatic.com, so it is unavailable inside the SVG and the captured
+// image comes out blank.
+//
+// Fix: fetch Google's font CSS once, inline every referenced .woff2 file as
+// a base64 data: URL, and inject the rewritten @font-face block into the
+// off-screen invoice container. The font is then "same-origin" (data: URLs
+// have no origin restrictions inside foreignObject) and shaping works.
+const FONTS_CSS_URL =
+  "https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&family=Inter:wght@400;600;700&display=swap";
+
+let inlinedFontCssPromise: Promise<string> | null = null;
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(
+      null,
+      Array.from(bytes.subarray(i, i + chunk)) as unknown as number[],
+    );
+  }
+  return btoa(binary);
+}
+
+async function getInlinedFontCss(): Promise<string> {
+  if (inlinedFontCssPromise) return inlinedFontCssPromise;
+  inlinedFontCssPromise = (async () => {
+    try {
+      const cssRes = await fetch(FONTS_CSS_URL, { credentials: "omit" });
+      if (!cssRes.ok) return "";
+      let cssText = await cssRes.text();
+      // Pull every woff2 URL out of the returned CSS.
+      const urlRegex = /url\((https:\/\/[^)\s]+\.woff2)\)/g;
+      const urls = Array.from(
+        new Set(Array.from(cssText.matchAll(urlRegex), (m) => m[1])),
+      );
+      // Fetch them in parallel, convert to data: URLs, then string-replace.
+      const pairs = await Promise.all(
+        urls.map(async (u) => {
+          try {
+            const r = await fetch(u, { credentials: "omit" });
+            if (!r.ok) return null;
+            const buf = await r.arrayBuffer();
+            return [u, `data:font/woff2;base64,${arrayBufferToBase64(buf)}`] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const pair of pairs) {
+        if (!pair) continue;
+        const [orig, dataUrl] = pair;
+        cssText = cssText.split(orig).join(dataUrl);
+      }
+      return cssText;
+    } catch {
+      return "";
+    }
+  })();
+  return inlinedFontCssPromise;
+}
+
 export type BillLanguage = "hi" | "en";
 export type BillPaymentMode = "cash" | "credit";
 
@@ -269,25 +340,30 @@ export async function renderBillPdf(data: BillPdfData): Promise<Blob> {
   host.style.top = "0";
   host.style.zIndex = "-1";
   host.style.background = "#ffffff";
-  host.innerHTML = buildInvoiceHtml(data);
+  // Fetch + inline Noto Sans Devanagari (and Inter) as base64 data: URLs so
+  // the SVG foreignObject renderer below can see the font without a
+  // cross-origin fetch. Result is cached module-level — only fetched once.
+  const inlinedFontCss = await getInlinedFontCss();
+
+  host.innerHTML = `<style>${inlinedFontCss}</style>${buildInvoiceHtml(data)}`;
   document.body.appendChild(host);
   try {
-    // Wait for all fonts — especially Noto Sans Devanagari — to be fully loaded
-    // and shaped before html2canvas captures the DOM. Without this, complex
-    // Devanagari conjunct consonants render with the fallback font and appear
-    // garbled (e.g. हस्ताक्षरकर्ता → हस्साक्करता).
+    // Belt-and-braces: also wait for the page-level fonts to be ready (the
+    // inlined ones above register independently inside the host element).
     await document.fonts.ready;
     await Promise.all([
       document.fonts.load('400 12px "Noto Sans Devanagari"'),
       document.fonts.load('700 12px "Noto Sans Devanagari"'),
     ]);
 
-    const node = host.firstElementChild as HTMLElement;
+    // Pick the actual invoice div (skip the prepended <style> node).
+    const node = host.querySelector(".invoice") as HTMLElement;
     // foreignObjectRendering uses SVG <foreignObject> which preserves the
     // browser's native text shaping engine (Harfbuzz). This is required for
-    // complex Devanagari conjuncts containing half-र (e.g. हस्ताक्षरकर्ता,
+    // complex Devanagari conjuncts containing half-र (हस्ताक्षरकर्ता,
     // प्रकार, क्र) — html2canvas's default canvas renderer draws glyphs
     // one-by-one without OpenType shaping and corrupts these ligatures.
+    // The inlined data: URL @font-face above keeps the SVG from going blank.
     const canvas = await html2canvas(node, {
       scale: 2,
       backgroundColor: "#ffffff",
