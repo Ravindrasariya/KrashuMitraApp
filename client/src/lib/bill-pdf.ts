@@ -129,10 +129,10 @@ function lineRowHtml(slNo: string, line: BillPdfLine, labels: BillPdfData["label
 function buildInvoiceHtml(d: BillPdfData): string {
   const sellerLines = d.sellerAddressLines.filter((l) => l && l.trim().length > 0);
   const panRow = d.panNo && d.panNo.trim()
-    ? `<div class="row-line"><strong>${escapeHtml(d.labels.panNo)}</strong> ${escapeHtml(d.panNo.trim())}</div>`
+    ? `<div class="row-line"><strong>${escapeHtml(d.labels.panNo)}</strong>&nbsp;${escapeHtml(d.panNo.trim())}</div>`
     : "";
   const gstRow = d.gstNo && d.gstNo.trim()
-    ? `<div class="row-line"><strong>${escapeHtml(d.labels.gstNo)}</strong> ${escapeHtml(d.gstNo.trim())}</div>`
+    ? `<div class="row-line"><strong>${escapeHtml(d.labels.gstNo)}</strong>&nbsp;${escapeHtml(d.gstNo.trim())}</div>`
     : "";
 
   const buyerLines = [d.buyerName, d.buyerAddress, d.buyerPhone].filter((l) => l && l.trim().length > 0);
@@ -152,6 +152,8 @@ function buildInvoiceHtml(d: BillPdfData): string {
     font-family: 'Inter', 'Noto Sans', 'Noto Sans Devanagari', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
     font-size: 12px;
     line-height: 1.4;
+    word-spacing: 2px;
+    letter-spacing: 0.01em;
   ">
     <style>
       .invoice .td { border: 1px solid #d1d5db; padding: 6px 8px; vertical-align: top; }
@@ -181,14 +183,14 @@ function buildInvoiceHtml(d: BillPdfData): string {
         ${sellerLines.map((l) => `<div class="row-line">${escapeHtml(l)}</div>`).join("")}
         ${panRow ? `<div style="margin-top:8px;">${panRow}</div>` : ""}
         ${gstRow}
-        <div style="margin-top:12px;"><strong>${escapeHtml(d.labels.orderNumber)}</strong> ${escapeHtml(d.orderNumber)}</div>
-        <div><strong>${escapeHtml(d.labels.orderDate)}</strong> ${escapeHtml(d.orderDate)}</div>
+        <div style="margin-top:12px;"><strong>${escapeHtml(d.labels.orderNumber)}</strong>&nbsp;${escapeHtml(d.orderNumber)}</div>
+        <div><strong>${escapeHtml(d.labels.orderDate)}</strong>&nbsp;${escapeHtml(d.orderDate)}</div>
       </div>
       <div style="flex:1; text-align:right;">
         <div style="font-weight:700; margin-bottom:4px;">${escapeHtml(d.labels.billingAddress)}</div>
         ${buyerLines.map((l) => `<div class="row-line">${escapeHtml(l)}</div>`).join("")}
-        <div style="margin-top:12px;"><strong>${escapeHtml(d.labels.invoiceNumber)}</strong> ${escapeHtml(d.invoiceNumber)}</div>
-        <div><strong>${escapeHtml(d.labels.invoiceDate)}</strong> ${escapeHtml(d.invoiceDate)}</div>
+        <div style="margin-top:12px;"><strong>${escapeHtml(d.labels.invoiceNumber)}</strong>&nbsp;${escapeHtml(d.invoiceNumber)}</div>
+        <div><strong>${escapeHtml(d.labels.invoiceDate)}</strong>&nbsp;${escapeHtml(d.invoiceDate)}</div>
       </div>
     </div>
 
@@ -220,7 +222,7 @@ function buildInvoiceHtml(d: BillPdfData): string {
     </table>
 
     <!-- Amount in words + payment mode -->
-    <div style="display:flex; gap:24px; align-items:flex-start; justify-content:space-between; margin-top:14px; border:1px solid #d1d5db; padding:10px 12px; background:#f9fafb;">
+    <div style="display:flex; gap:24px; align-items:center; justify-content:space-between; margin-top:14px; border:1px solid #d1d5db; padding:10px 12px; background:#f9fafb;">
       <div style="flex:1;">
         <div class="muted" style="font-weight:600;">${escapeHtml(d.labels.amountInWords)}</div>
         <div style="font-weight:600; margin-top:2px;">${escapeHtml(d.amountInWords)}</div>
@@ -235,7 +237,7 @@ function buildInvoiceHtml(d: BillPdfData): string {
           background:${paymentBg};
           border:1px solid ${paymentBorder};
         ">
-          ${escapeHtml(d.labels.paymentMode)} ${escapeHtml(paymentLabel)}
+          ${escapeHtml(d.labels.paymentMode)}&nbsp;${escapeHtml(paymentLabel)}
         </span>
       </div>
     </div>
@@ -243,7 +245,7 @@ function buildInvoiceHtml(d: BillPdfData): string {
     <!-- Signature block -->
     <div style="display:flex; justify-content:flex-end; margin-top:28px;">
       <div style="text-align:right; min-width:260px;">
-        <div style="font-weight:700;">${escapeHtml(d.labels.forLabel)} ${escapeHtml(d.signatoryName)}:</div>
+        <div style="font-weight:700;">${escapeHtml(d.labels.forLabel)}&nbsp;${escapeHtml(d.signatoryName)}:</div>
         <div style="height:48px;"></div>
         <div style="font-weight:700;">${escapeHtml(d.labels.authorisedSignatory)}</div>
       </div>
