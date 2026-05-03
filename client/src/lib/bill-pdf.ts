@@ -212,7 +212,7 @@ function lineRowHtml(slNo: string, line: BillPdfLine, labels: BillPdfData["label
   `;
 }
 
-function buildInvoiceHtml(d: BillPdfData): string {
+function buildInvoiceHtml(d: BillPdfData, inlinedFontCss = ""): string {
   const sellerLines = d.sellerAddressLines.filter((l) => l && l.trim().length > 0);
   const panRow = d.panNo && d.panNo.trim()
     ? `<div class="row-line"><strong>${escapeHtml(d.labels.panNo)}</strong>&nbsp;${escapeHtml(d.panNo.trim())}</div>`
@@ -242,6 +242,7 @@ function buildInvoiceHtml(d: BillPdfData): string {
     letter-spacing: 0.01em;
   ">
     <style>
+      ${inlinedFontCss}
       .invoice .td { border: 1px solid #d1d5db; padding: 6px 8px; vertical-align: top; }
       .invoice .th { border: 1px solid #d1d5db; padding: 6px 8px; background: #f3f4f6; font-weight: 600; }
       .invoice .l { text-align: left; }
@@ -360,7 +361,11 @@ export async function renderBillPdf(data: BillPdfData): Promise<Blob> {
   // cross-origin fetch. Result is cached module-level — only fetched once.
   const inlinedFontCss = await getInlinedFontCss();
 
-  host.innerHTML = `<style>${inlinedFontCss}</style>${buildInvoiceHtml(data)}`;
+  // The @font-face rules MUST live INSIDE the .invoice node we capture —
+  // html2canvas's foreignObject SVG only includes descendants of the node it
+  // captures, so a sibling <style> tag would be left behind and the SVG would
+  // render blank (this is exactly what happened in Firefox in Task #120).
+  host.innerHTML = buildInvoiceHtml(data, inlinedFontCss);
   document.body.appendChild(host);
   try {
     // Belt-and-braces: also wait for the page-level fonts to be ready (the
@@ -371,7 +376,6 @@ export async function renderBillPdf(data: BillPdfData): Promise<Blob> {
       document.fonts.load('700 12px "Noto Sans Devanagari"'),
     ]);
 
-    // Pick the actual invoice div (skip the prepended <style> node).
     const node = host.querySelector(".invoice") as HTMLElement;
     // foreignObjectRendering uses SVG <foreignObject> which preserves the
     // browser's native text shaping engine (Harfbuzz). This is required for
