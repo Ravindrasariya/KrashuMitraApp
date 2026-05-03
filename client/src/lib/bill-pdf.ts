@@ -21,6 +21,7 @@ const FONTS_CSS_URL =
   "https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&family=Inter:wght@400;600;700&display=swap";
 
 let inlinedFontCssPromise: Promise<string> | null = null;
+let inlinedFontCssReady = false;
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -36,18 +37,22 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
 }
 
 async function getInlinedFontCss(): Promise<string> {
+  // Reuse a successful (non-empty) result; retry on failure so a transient
+  // network/CSP error doesn't permanently degrade PDF rendering.
+  if (inlinedFontCssReady && inlinedFontCssPromise) return inlinedFontCssPromise;
   if (inlinedFontCssPromise) return inlinedFontCssPromise;
-  inlinedFontCssPromise = (async () => {
+  const attempt = (async () => {
     try {
       const cssRes = await fetch(FONTS_CSS_URL, { credentials: "omit" });
       if (!cssRes.ok) return "";
       let cssText = await cssRes.text();
-      // Pull every woff2 URL out of the returned CSS.
-      const urlRegex = /url\((https:\/\/[^)\s]+\.woff2)\)/g;
+      // Match url(...) with optional single/double quotes and any path that
+      // contains .woff2 (handles ?query suffixes and quoted forms).
+      const urlRegex = /url\(\s*['"]?(https:\/\/[^'")\s]+\.woff2[^'")\s]*)['"]?\s*\)/g;
       const urls = Array.from(
         new Set(Array.from(cssText.matchAll(urlRegex), (m) => m[1])),
       );
-      // Fetch them in parallel, convert to data: URLs, then string-replace.
+      if (urls.length === 0) return "";
       const pairs = await Promise.all(
         urls.map(async (u) => {
           try {
@@ -60,17 +65,27 @@ async function getInlinedFontCss(): Promise<string> {
           }
         }),
       );
+      let replacedAny = false;
       for (const pair of pairs) {
         if (!pair) continue;
         const [orig, dataUrl] = pair;
         cssText = cssText.split(orig).join(dataUrl);
+        replacedAny = true;
       }
+      if (!replacedAny) return "";
+      inlinedFontCssReady = true;
       return cssText;
     } catch {
       return "";
     }
   })();
-  return inlinedFontCssPromise;
+  inlinedFontCssPromise = attempt;
+  const result = await attempt;
+  // If the attempt failed, clear the cached promise so the next caller retries.
+  if (!result) {
+    inlinedFontCssPromise = null;
+  }
+  return result;
 }
 
 export type BillLanguage = "hi" | "en";
