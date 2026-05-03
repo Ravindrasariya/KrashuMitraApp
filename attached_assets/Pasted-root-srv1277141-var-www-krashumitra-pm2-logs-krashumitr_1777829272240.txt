@@ -1,0 +1,40 @@
+root@srv1277141:/var/www/krashumitra# pm2 logs krashumitra --lines 30
+[TAILING] Tailing last 30 lines for [krashumitra] process (change the value with --lines option)
+/root/.pm2/logs/krashumitra-error.log last 30 lines:
+4|krashumi |   column: undefined,
+4|krashumi |   dataType: undefined,
+4|krashumi |   constraint: undefined,
+4|krashumi |   file: 'parse_func.c',
+4|krashumi |   line: '629',
+4|krashumi |   routine: 'ParseFuncOrColumn'
+4|krashumi | }
+4|krashumi | Error listing buyers: error: function bill_total(jsonb) does not exist
+4|krashumi |     at /var/www/krashumitra/dist/index.cjs:68:13330
+4|krashumi |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+4|krashumi |     at async E2.listBuyersForSeller (/var/www/krashumitra/dist/index.cjs:225:327)
+4|krashumi |     at async /var/www/krashumitra/dist/index.cjs:284:21552 {
+4|krashumi |   length: 211,
+4|krashumi |   severity: 'ERROR',
+4|krashumi |   code: '42883',
+4|krashumi |   detail: undefined,
+4|krashumi |   hint: 'No function matches the given name and argument types. You might need to add explicit type casts.',
+4|krashumi |   position: '150',
+4|krashumi |   internalPosition: undefined,
+4|krashumi |   internalQuery: undefined,
+4|krashumi |   where: undefined,
+4|krashumi |   schema: undefined,
+4|krashumi |   table: undefined,
+4|krashumi |   column: undefined,
+4|krashumi |   dataType: undefined,
+4|krashumi |   constraint: undefined,
+4|krashumi |   file: 'parse_func.c',
+4|krashumi |   line: '629',
+4|krashumi |   routine: 'ParseFuncOrColumn'
+4|krashumi | }
+
+/root/.pm2/logs/krashumitra-out.log last 30 lines:
+4|krashumi | ndore","state":"Madhya Pradesh","date":"2026-04-30","minPrice":"374","maxPrice":"1260","modalPrice":"1011","unit":"quintal"},{"id":75859,"cropId":2,"market":"Kanpur (Grain)","district":"Kanpur","state":"Uttar Pradesh","date":"2026-04-30","minPrice":"1200","maxPrice":"1200","modalPrice":"1200","unit":"quintal"},{"id":59013,"cropId":2,"market":"Mahuva(Station Road)","district":"Bhavnagar","state":"Gujarat","date":"2026-04-30","minPrice":"850","maxPrice":"1420","modalPrice":"1135","unit":"quintal"},{"id":62457,"cropId":2,"market":"Pimpalgaon)","district":"Nashik","state":"Maharashtra","date":"2026-04-30","minPrice":"300","maxPrice":"2102","modalPrice":"1250","unit":"quintal"},{"id":65938,"cropId":2,"market":"Solapur","district":"Sholapur","state":"Maharashtra","date":"2026-04-30","minPrice":"100","maxPrice":"1700","modalPrice":"700","unit":"quintal"},{"id":56446,"cropId":2,"market":"Azadpur","district":"Delhi","state":"NCT of Delhi","date":"2026-04-29","minPrice":"625","maxPrice":"1500","modalPrice":"1100","unit":"quintal"},{"id":71216,"cropId":2,"market":"Gudimalkapur APMC","district":"Hyderabad","state":"Telangana","date":"2026-04-29","minPrice":"400","maxPrice":"1200","modalPrice":"800","unit":"quintal"},{"id":69618,"cropId":2,"market":"Indore (F&V)","district":"Indore","state":"Madhya Pradesh","date":"2026-04-29","minPrice":"472","maxPrice":"1400","modalPrice":"1174","unit":"quintal"},{"id":75858,"cropId":2,"market":"Kanpur (Grain)","district":"Kanpur","state":"Uttar Pradesh","date":"2026-04-29","minPrice":"1200","maxPrice":"1200","modalPrice":"1200","unit":"quintal"},{"id":59012,"cropId":2,"market":"Mahuva(Station Road)","district":"Bhavnagar","state":"Gujarat","date":"2026-04-29","minPrice":"1000","maxPrice":"1500","modalPrice":"1250","unit":"quintal"},{"id":62456,"cropId":2,"market":"Pimpalgaon)","district":"Nashik","state":"Maharashtra","date":"2026-04-29","minPrice":"300","maxPrice":"2030","modalPrice":"1230","unit":"quintal"},{"id":65937,"cropId":2,"market":"Solapur","district":"Sholapur","state":"Maharashtra","date":"2026-04-29","minPrice":"100","maxPrice":"1500","modalPrice":"600","unit":"quintal"},{"id":56445,"cropId":2,"market":"Azadpur","district":"Delhi","state":"NCT of Delhi","date":"2026-04-28","minPrice":"625","maxPrice":"1500","modalPrice":"1100","unit":"quintal"},{"id":71215,"cropId":2,"market":"Gudimalkapur APMC","district":"Hyderabad","state":"Telangana","date":"2026-04-28","minPrice":"400","maxPrice":"1200","modalPrice":"700","unit":"quintal"},{"id":69617,"cropId":2,"market":"Indore (F&V)","district":"Indore","state":"Madhya Pradesh","date":"2026-04-28","minPrice":"147","maxPrice":"1269","modalPrice":"771","unit":"quintal"},{"id":75857,"cropId":2,"market":"Kanpur (Grain)","district":"Kanpur","state":"Uttar Pradesh","date":"2026-04-28","minPrice":"1000","maxPrice":"1200","modalPrice":"1155.03","unit":"quintal"},{"id":59011,"cropId":2,"market":"Mahuva(Station Road)","district":"Bhavnagar","state":"Gujarat","date":"2026-04-28","minPrice":"960","maxPrice":"1445","modalPrice":"1203","unit":"quintal"},{"id":62455,"cropId":2,"market":"Pimpalgaon)","district":"Nashik","state":"Maharashtra","date":"2026-04-28","minPrice":"300","maxPrice":"2041","modalPrice":"1200","unit":"quintal"},{"id":65936,"cropId":2,"market":"Solapur","district":"Sholapur","state":"Maharashtra","date":"2026-04-28","minPrice":"100","maxPrice":"1400","modalPrice":"600","unit":"quintal"},{"id":71214,"cropId":2,"market":"Gudimalkapur APMC","district":"Hyderabad","state":"Telangana","date":"2026-04-27","minPrice":"400","maxPrice":"1200","modalPrice":"900","unit":"quintal"},{"id":69616,"cropId":2,"market":"Indore (F&V)","district":"Indore","state":"Madhya Pradesh","date":"2026-04-27","minPrice":"352","maxPrice":"1334","modalPrice":"837","unit":"quintal"},{"id":75856,"cropId":2,"market":"Kanpur (Grain)","district":"Kanpur","state":"Uttar Pradesh","date":"2026-04-27","minPrice":"1000","maxPrice":"1000","modalPrice":"1000","unit":"quintal"},{"id":59010,"cropId":2,"market":"Mahuva(Station Road)","district":"Bhavnagar","state":"Gujarat","date":"2026-04-27","minPrice":"800","maxPrice":"1375","modalPrice":"1088","unit":"quintal"},{"id":62454,"cropId":2,"market":"Pimpalgaon)","district":"Nashik","state":"Maharashtra","date":"2026-04-27","minPrice":"300","maxPrice":"2004","modalPrice":"1150","unit":"quintal"},{"id":65935,"cropId":2,"market":"Solapur","district":"Sholapur","state":"Maharashtra","date":"2026-04-27","minPrice":"100","maxPrice":"1600","modalPrice":"600","unit":"quintal"},{"id":71213,"cropId":2,"market":"Gudimalkapur APMC","district":"Hyderabad","state":"Telangana","date":"2026-04-26","minPrice":"200","maxPrice":"1200","modalPrice":"800","unit":"quintal"},{"id":75855,"cropId":2,"market":"Kanpur (Grain)","district":"Kanpur","state":"Uttar Pradesh","date":"2026-04-26","minPrice":"1000","maxPrice":"1000","modalPrice":"1000","unit":"quintal"}]
+4|krashumi | 10:56:44 PM [express] GET /api/buyers 304 in 5ms :: [{"id":2,"sellerId":"faf675f0-babc-4c56-889e-4ba397ecbaa6","buyerCode":"B202605031","name":"Manoj Patidar","phone":"9098631186","address":"Kachnariya","redFlag":false,"openingBalance":"0.00","mergedFromCodes":[],"createdAt":"2026-05-03 13:52:36.032035","totalDue":"85.00000000000000000000","totalPaid":"0"}]
+4|krashumi | 10:56:46 PM [express] GET /api/buyers/2/bills 304 in 5ms :: [{"id":3,"sequenceNo":3,"sellerId":"faf675f0-babc-4c56-889e-4ba397ecbaa6","buyerId":2,"listingId":13,"billDate":"2026-05-03","paymentType":"credit","paidAt":null,"archived":false,"payload":{"date":"2026-05-03","product":{"qty":"1","taxRate":"0","discount":"5","unitPrice":"90","description":"प्याज की जाली (Onion Net) · ₹85 (MRP ₹90, 6% off) · National · New"},"shipping":{"qty":"","taxRate":"0","discount":"","unitPrice":"","description":"शिपिंग शुल्क"},"buyerName":"Manoj Patidar","listingId":13,"buyerPhone":"9098631186","paymentType":"credit","buyerAddress":"Kachnariya"},"createdAt":"2026-05-03T13:52:36.032Z"}]
+
+
