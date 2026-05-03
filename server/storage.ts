@@ -619,14 +619,18 @@ class DatabaseStorage implements IStorage {
   async createBill(data: InsertBill): Promise<Bill> {
     // Atomically resolve / create the buyer and link the bill.
     return db.transaction(async (tx) => {
-      const payload = (data.payload ?? {}) as any;
+      const payload = (data.payload ?? {}) as {
+        buyerName?: string; buyerPhone?: string; buyerAddress?: string;
+      };
       const name = normalizeBuyerName(String(payload.buyerName ?? ""));
       const phone = normalizeBuyerPhone(String(payload.buyerPhone ?? ""));
       const address = String(payload.buyerAddress ?? "").trim();
 
-      // Per-seller advisory lock to serialise buyer-code allocation for this seller.
-      // hashtextextended → bigint; pass as the lock key (paired with a const namespace).
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(7426112, hashtextextended(${data.sellerId}, 0))`);
+      // Per-seller advisory lock to serialise buyer-code allocation for this
+      // seller. hashtextextended returns bigint, which matches the single-arg
+      // pg_advisory_xact_lock(int8) signature exactly. (The 2-arg form takes
+      // (int4, int4) and would not accept a bigint without casting.)
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${data.sellerId}, 7426112))`);
 
       // Find existing buyer by (sellerId, lower(name), phone).
       const existing = await tx
@@ -694,14 +698,12 @@ class DatabaseStorage implements IStorage {
       SELECT b.*,
         (b.opening_balance + COALESCE(SUM(
           CASE WHEN bl.payment_type = 'credit' AND bl.paid_at IS NULL
-            THEN COALESCE(((bl.payload->'product'->>'unitPrice')::numeric - (bl.payload->'product'->>'discount')::numeric) * COALESCE((bl.payload->'product'->>'qty')::numeric, 0) * (1 + COALESCE((bl.payload->'product'->>'taxRate')::numeric, 0)/100), 0)
-              + COALESCE(((bl.payload->'shipping'->>'unitPrice')::numeric - (bl.payload->'shipping'->>'discount')::numeric) * (1 + COALESCE((bl.payload->'shipping'->>'taxRate')::numeric, 0)/100), 0)
+            THEN bill_total(bl.payload)
             ELSE 0 END
         ), 0))::text AS total_due,
         COALESCE(SUM(
           CASE WHEN bl.paid_at IS NOT NULL
-            THEN COALESCE(((bl.payload->'product'->>'unitPrice')::numeric - (bl.payload->'product'->>'discount')::numeric) * COALESCE((bl.payload->'product'->>'qty')::numeric, 0) * (1 + COALESCE((bl.payload->'product'->>'taxRate')::numeric, 0)/100), 0)
-              + COALESCE(((bl.payload->'shipping'->>'unitPrice')::numeric - (bl.payload->'shipping'->>'discount')::numeric) * (1 + COALESCE((bl.payload->'shipping'->>'taxRate')::numeric, 0)/100), 0)
+            THEN bill_total(bl.payload)
             ELSE 0 END
         ), 0)::text AS total_paid
       FROM buyers b
@@ -753,7 +755,7 @@ class DatabaseStorage implements IStorage {
     buyerId: number,
     data: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance">>,
   ): Promise<Buyer | undefined> {
-    const patch: any = { ...data };
+    const patch: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance">> = { ...data };
     if (patch.name != null) patch.name = normalizeBuyerName(patch.name);
     if (patch.phone != null) patch.phone = normalizeBuyerPhone(patch.phone);
     const [row] = await db
