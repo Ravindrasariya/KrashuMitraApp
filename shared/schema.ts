@@ -608,13 +608,41 @@ export const insertWeatherLogSchema = createInsertSchema(weatherLogs).omit({
 // can render the same PDF.
 export const billSeq = pgSequence("bill_seq");
 
+export const buyers = pgTable("buyers", {
+  id: serial("id").primaryKey(),
+  sellerId: varchar("seller_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  buyerCode: text("buyer_code").notNull(),
+  name: text("name").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  address: text("address").notNull().default(""),
+  redFlag: boolean("red_flag").notNull().default(false),
+  openingBalance: numeric("opening_balance", { precision: 12, scale: 2 }).notNull().default("0"),
+  mergedFromCodes: text("merged_from_codes").array().notNull().default(sql`ARRAY[]::text[]`),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  uniqueIndex("buyers_seller_name_phone_unique").on(table.sellerId, sql`lower(${table.name})`, table.phone),
+  uniqueIndex("buyers_seller_code_unique").on(table.sellerId, table.buyerCode),
+]);
+
+export const insertBuyerSchema = createInsertSchema(buyers).omit({
+  id: true,
+  buyerCode: true,
+  createdAt: true,
+  mergedFromCodes: true,
+});
+
+export type Buyer = typeof buyers.$inferSelect;
+export type InsertBuyer = z.infer<typeof insertBuyerSchema>;
+
 export const bills = pgTable("bills", {
   id: serial("id").primaryKey(),
   sequenceNo: integer("sequence_no").notNull().unique().default(sql`nextval('bill_seq')`),
   sellerId: varchar("seller_id").notNull().references(() => users.id),
+  buyerId: integer("buyer_id").references(() => buyers.id, { onDelete: "set null" }),
   listingId: integer("listing_id").references(() => marketplaceListings.id, { onDelete: "set null" }),
   billDate: date("bill_date").notNull(),
   paymentType: text("payment_type").notNull(),
+  paidAt: date("paid_at"),
   payload: jsonb("payload").notNull(),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });

@@ -1,6 +1,11 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, marketplaceStockCounters, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog, bills, type Bill, type InsertBill } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, marketplaceStockCounters, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog, bills, type Bill, type InsertBill, buyers, type Buyer } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
+
+export interface BuyerWithDue extends Buyer {
+  totalDue: string;
+  totalPaid: string;
+}
 
 export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
@@ -92,6 +97,13 @@ export interface IStorage {
   getTotalUniqueVisitors(): Promise<number>;
   getTodayUniqueVisitors(): Promise<number>;
   createBill(data: InsertBill): Promise<Bill>;
+  listBuyersForSeller(sellerId: string): Promise<BuyerWithDue[]>;
+  getBuyer(sellerId: string, buyerId: number): Promise<Buyer | undefined>;
+  findBuyerByNamePhone(sellerId: string, name: string, phone: string): Promise<Buyer | undefined>;
+  updateBuyer(sellerId: string, buyerId: number, data: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance">>): Promise<Buyer | undefined>;
+  mergeBuyers(sellerId: string, survivorId: number, deletedId: number): Promise<Buyer | undefined>;
+  listBillsForBuyer(sellerId: string, buyerId: number): Promise<Bill[]>;
+  markBillPaid(sellerId: string, billId: number, paidDate: string | null): Promise<Bill | undefined>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -596,9 +608,183 @@ class DatabaseStorage implements IStorage {
   }
 
   async createBill(data: InsertBill): Promise<Bill> {
-    // sequenceNo is filled by the `bill_seq` Postgres sequence default.
-    const [created] = await db.insert(bills).values(data).returning();
-    return created;
+    // Atomically resolve / create the buyer and link the bill.
+    return db.transaction(async (tx) => {
+      const payload = (data.payload ?? {}) as any;
+      const name = String(payload.buyerName ?? "").trim();
+      const phone = String(payload.buyerPhone ?? "").trim();
+      const address = String(payload.buyerAddress ?? "").trim();
+
+      // Per-seller advisory lock to serialise buyer-code allocation for this seller.
+      // hashtextextended → bigint; pass as the lock key (paired with a const namespace).
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(7426112, hashtextextended(${data.sellerId}, 0))`);
+
+      // Find existing buyer by (sellerId, lower(name), phone).
+      const existing = await tx
+        .select()
+        .from(buyers)
+        .where(
+          and(
+            eq(buyers.sellerId, data.sellerId),
+            sql`lower(${buyers.name}) = lower(${name})`,
+            eq(buyers.phone, phone),
+          ),
+        )
+        .limit(1);
+
+      let buyerId: number;
+      if (existing[0]) {
+        buyerId = existing[0].id;
+      } else {
+        const datePart = String(data.billDate).replace(/-/g, "");
+        const seqRow = await tx.execute<{ next_n: number }>(sql`
+          SELECT COALESCE(MAX(
+            CASE WHEN buyer_code ~ ${'^B' + datePart + '[0-9]+$'}
+                 THEN substring(buyer_code from ${('B' + datePart).length + 1})::int
+                 ELSE 0 END
+          ), 0) + 1 AS next_n
+          FROM buyers WHERE seller_id = ${data.sellerId}
+        `);
+        const nextN = Number(seqRow.rows[0]?.next_n ?? 1);
+        const code = `B${datePart}${nextN}`;
+        const [created] = await tx.insert(buyers).values({
+          sellerId: data.sellerId,
+          buyerCode: code,
+          name,
+          phone,
+          address,
+        }).returning();
+        buyerId = created.id;
+      }
+
+      const paidAt = data.paymentType === "cash" ? data.billDate : null;
+      const [createdBill] = await tx.insert(bills).values({
+        ...data,
+        buyerId,
+        paidAt,
+      }).returning();
+      return createdBill;
+    });
+  }
+
+  async listBuyersForSeller(sellerId: string): Promise<BuyerWithDue[]> {
+    const rows = await db.execute<{
+      id: number; seller_id: string; buyer_code: string; name: string; phone: string; address: string;
+      red_flag: boolean; opening_balance: string; merged_from_codes: string[]; created_at: Date;
+      total_due: string; total_paid: string;
+    }>(sql`
+      SELECT b.*,
+        (b.opening_balance + COALESCE(SUM(
+          CASE WHEN bl.payment_type = 'credit' AND bl.paid_at IS NULL
+            THEN COALESCE(((bl.payload->'product'->>'unitPrice')::numeric - (bl.payload->'product'->>'discount')::numeric) * COALESCE((bl.payload->'product'->>'qty')::numeric, 0) * (1 + COALESCE((bl.payload->'product'->>'taxRate')::numeric, 0)/100), 0)
+              + COALESCE(((bl.payload->'shipping'->>'unitPrice')::numeric - (bl.payload->'shipping'->>'discount')::numeric) * (1 + COALESCE((bl.payload->'shipping'->>'taxRate')::numeric, 0)/100), 0)
+            ELSE 0 END
+        ), 0))::text AS total_due,
+        COALESCE(SUM(
+          CASE WHEN bl.paid_at IS NOT NULL
+            THEN COALESCE(((bl.payload->'product'->>'unitPrice')::numeric - (bl.payload->'product'->>'discount')::numeric) * COALESCE((bl.payload->'product'->>'qty')::numeric, 0) * (1 + COALESCE((bl.payload->'product'->>'taxRate')::numeric, 0)/100), 0)
+              + COALESCE(((bl.payload->'shipping'->>'unitPrice')::numeric - (bl.payload->'shipping'->>'discount')::numeric) * (1 + COALESCE((bl.payload->'shipping'->>'taxRate')::numeric, 0)/100), 0)
+            ELSE 0 END
+        ), 0)::text AS total_paid
+      FROM buyers b
+      LEFT JOIN bills bl ON bl.buyer_id = b.id
+      WHERE b.seller_id = ${sellerId}
+      GROUP BY b.id
+      ORDER BY b.created_at DESC
+    `);
+    return rows.rows.map((r) => ({
+      id: r.id,
+      sellerId: r.seller_id,
+      buyerCode: r.buyer_code,
+      name: r.name,
+      phone: r.phone,
+      address: r.address,
+      redFlag: r.red_flag,
+      openingBalance: r.opening_balance,
+      mergedFromCodes: r.merged_from_codes ?? [],
+      createdAt: r.created_at,
+      totalDue: r.total_due,
+      totalPaid: r.total_paid,
+    }));
+  }
+
+  async getBuyer(sellerId: string, buyerId: number): Promise<Buyer | undefined> {
+    const [row] = await db.select().from(buyers).where(and(eq(buyers.sellerId, sellerId), eq(buyers.id, buyerId)));
+    return row;
+  }
+
+  async findBuyerByNamePhone(sellerId: string, name: string, phone: string): Promise<Buyer | undefined> {
+    const [row] = await db
+      .select()
+      .from(buyers)
+      .where(
+        and(
+          eq(buyers.sellerId, sellerId),
+          sql`lower(${buyers.name}) = lower(${name})`,
+          eq(buyers.phone, phone),
+        ),
+      )
+      .limit(1);
+    return row;
+  }
+
+  async updateBuyer(
+    sellerId: string,
+    buyerId: number,
+    data: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance">>,
+  ): Promise<Buyer | undefined> {
+    const [row] = await db
+      .update(buyers)
+      .set(data)
+      .where(and(eq(buyers.sellerId, sellerId), eq(buyers.id, buyerId)))
+      .returning();
+    return row;
+  }
+
+  async mergeBuyers(sellerId: string, survivorId: number, deletedId: number): Promise<Buyer | undefined> {
+    if (survivorId === deletedId) {
+      return this.getBuyer(sellerId, survivorId);
+    }
+    return db.transaction(async (tx) => {
+      const [survivor] = await tx.select().from(buyers).where(and(eq(buyers.sellerId, sellerId), eq(buyers.id, survivorId)));
+      const [deleted] = await tx.select().from(buyers).where(and(eq(buyers.sellerId, sellerId), eq(buyers.id, deletedId)));
+      if (!survivor || !deleted) {
+        throw new Error("Buyer not found for merge");
+      }
+      // Re-point bills to survivor.
+      await tx.update(bills).set({ buyerId: survivorId }).where(and(eq(bills.sellerId, sellerId), eq(bills.buyerId, deletedId)));
+      // Delete the loser FIRST so the unique index is freed before we possibly
+      // touch the survivor's name/phone in the future.
+      await tx.delete(buyers).where(and(eq(buyers.sellerId, sellerId), eq(buyers.id, deletedId)));
+      // Sum opening balances, OR red flags, append merged-from codes.
+      const newOpening = (Number(survivor.openingBalance) + Number(deleted.openingBalance)).toFixed(2);
+      const newCodes = [...(survivor.mergedFromCodes ?? []), deleted.buyerCode, ...(deleted.mergedFromCodes ?? [])];
+      const [updated] = await tx
+        .update(buyers)
+        .set({
+          openingBalance: newOpening,
+          redFlag: survivor.redFlag || deleted.redFlag,
+          mergedFromCodes: newCodes,
+        })
+        .where(and(eq(buyers.sellerId, sellerId), eq(buyers.id, survivorId)))
+        .returning();
+      return updated;
+    });
+  }
+
+  async listBillsForBuyer(sellerId: string, buyerId: number): Promise<Bill[]> {
+    return db.select().from(bills)
+      .where(and(eq(bills.sellerId, sellerId), eq(bills.buyerId, buyerId)))
+      .orderBy(desc(bills.billDate), desc(bills.id));
+  }
+
+  async markBillPaid(sellerId: string, billId: number, paidDate: string | null): Promise<Bill | undefined> {
+    const [row] = await db
+      .update(bills)
+      .set({ paidAt: paidDate })
+      .where(and(eq(bills.sellerId, sellerId), eq(bills.id, billId)))
+      .returning();
+    return row;
   }
 
   async createMarketplaceListing(data: InsertMarketplaceListing): Promise<MarketplaceListing> {

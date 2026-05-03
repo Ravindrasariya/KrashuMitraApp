@@ -17,6 +17,7 @@ import AdminPage from "@/pages/admin-page";
 import FarmKhataPage from "@/pages/farm-khata";
 import DigitalClinicPage from "@/pages/digital-clinic";
 import ProfilePage from "@/pages/profile";
+import BillingPage from "@/pages/billing";
 import { useState, useEffect, useCallback } from "react";
 import logoPath from "@assets/Gemini_Generated_Image_lu75dlu75dlu75dl(1)_1772735328079.png";
 
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/marketplace" component={MarketplacePage} />
       <Route path="/farm-khata" component={FarmKhataPage} />
       <Route path="/profile" component={ProfilePage} />
+      <Route path="/billing" component={BillingPage} />
       <Route path="/admin" component={AdminPage} />
       <Route component={NotFound} />
     </Switch>

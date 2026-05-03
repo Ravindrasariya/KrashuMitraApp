@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatRupeeAmount } from "@shared/price-format";
 import { buildListingDescription, getListingUnitPrice } from "@shared/listing-summary";
 import type { MarketplaceListing } from "@shared/schema";
@@ -313,6 +313,9 @@ export function BillDialog({ open, onOpenChange, listing, user }: Props) {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       }
+
+      // Refresh the buyer ledger so the new bill / buyer appears immediately.
+      queryClient.invalidateQueries({ queryKey: ["/api/buyers"] });
 
       clearDraftAndClose();
     } catch (err) {

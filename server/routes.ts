@@ -275,6 +275,129 @@ export async function registerRoutes(
     }
   });
 
+  // ---- Buyer ledger (Task #112) ----
+  app.get("/api/buyers", isAuthenticated, async (req: any, res) => {
+    try {
+      const list = await storage.listBuyersForSeller(req.session.userId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error listing buyers:", error);
+      res.status(500).json({ message: "Failed to list buyers" });
+    }
+  });
+
+  app.get("/api/buyers/:id/bills", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid id" });
+      const buyer = await storage.getBuyer(req.session.userId, id);
+      if (!buyer) return res.status(404).json({ message: "Buyer not found" });
+      const list = await storage.listBillsForBuyer(req.session.userId, id);
+      res.json(list);
+    } catch (error) {
+      console.error("Error listing bills for buyer:", error);
+      res.status(500).json({ message: "Failed to list bills" });
+    }
+  });
+
+  const buyerPatchSchema = z.object({
+    name: z.string().trim().max(200).optional(),
+    phone: z.string().trim().max(20).optional(),
+    address: z.string().trim().max(1000).optional(),
+    redFlag: z.boolean().optional(),
+    openingBalance: z.union([z.string(), z.number()]).optional(),
+    mergeWith: z.number().int().positive().optional(),
+  });
+
+  app.patch("/api/buyers/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid id" });
+      const parsed = buyerPatchSchema.parse(req.body);
+      const sellerId = req.session.userId;
+      const current = await storage.getBuyer(sellerId, id);
+      if (!current) return res.status(404).json({ message: "Buyer not found" });
+
+      // Compute proposed new (name, phone) for collision check.
+      const newName = (parsed.name ?? current.name).trim();
+      const newPhone = (parsed.phone ?? current.phone).trim();
+      const nameOrPhoneChanging =
+        newName.toLowerCase() !== current.name.trim().toLowerCase() || newPhone !== current.phone.trim();
+
+      if (nameOrPhoneChanging) {
+        const collision = await storage.findBuyerByNamePhone(sellerId, newName, newPhone);
+        if (collision && collision.id !== id) {
+          if (parsed.mergeWith !== collision.id) {
+            return res.status(409).json({
+              message: "buyer_collision",
+              conflictBuyer: collision,
+            });
+          }
+          // Merge: pick the older (lower id = lower seq) as survivor.
+          const survivorId = collision.id < id ? collision.id : id;
+          const deletedId = survivorId === collision.id ? id : collision.id;
+          // Apply edits to whichever survives; if survivor is `current`, also push the desired name/phone/address/etc.
+          await storage.mergeBuyers(sellerId, survivorId, deletedId);
+          // After merge, update survivor with the requested edits (name/phone/address/redFlag/openingBalance) if provided.
+          const patchAfter: any = {};
+          if (parsed.address != null) patchAfter.address = parsed.address.trim();
+          if (parsed.redFlag != null) patchAfter.redFlag = parsed.redFlag;
+          if (parsed.openingBalance != null) {
+            const ob = Number(parsed.openingBalance);
+            if (!Number.isFinite(ob) || ob < 0) return res.status(400).json({ message: "Invalid opening balance" });
+            // Merge already summed balances — only override if the user explicitly typed one. Keep merged sum unless changed.
+            patchAfter.openingBalance = ob.toFixed(2);
+          }
+          if (Object.keys(patchAfter).length > 0) {
+            await storage.updateBuyer(sellerId, survivorId, patchAfter);
+          }
+          const fresh = await storage.getBuyer(sellerId, survivorId);
+          return res.json({ buyer: fresh, merged: true, survivorId, deletedId });
+        }
+      }
+
+      const patch: any = {};
+      if (parsed.name != null) patch.name = parsed.name.trim();
+      if (parsed.phone != null) patch.phone = parsed.phone.trim();
+      if (parsed.address != null) patch.address = parsed.address.trim();
+      if (parsed.redFlag != null) patch.redFlag = parsed.redFlag;
+      if (parsed.openingBalance != null) {
+        const ob = Number(parsed.openingBalance);
+        if (!Number.isFinite(ob) || ob < 0) return res.status(400).json({ message: "Invalid opening balance" });
+        patch.openingBalance = ob.toFixed(2);
+      }
+      const updated = await storage.updateBuyer(sellerId, id, patch);
+      res.json({ buyer: updated });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid buyer data", errors: error.errors });
+      }
+      console.error("Error updating buyer:", error);
+      res.status(500).json({ message: "Failed to update buyer" });
+    }
+  });
+
+  const markPaidSchema = z.object({
+    paidDate: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.null()]).optional(),
+  });
+  app.post("/api/bills/:id/mark-paid", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid id" });
+      const parsed = markPaidSchema.parse(req.body ?? {});
+      const date = parsed.paidDate === undefined ? new Date().toISOString().slice(0, 10) : parsed.paidDate;
+      const updated = await storage.markBillPaid(req.session.userId, id, date);
+      if (!updated) return res.status(404).json({ message: "Bill not found" });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Error marking bill paid:", error);
+      res.status(500).json({ message: "Failed to mark bill paid" });
+    }
+  });
+
   app.post("/api/geocode/reverse", isAuthenticated, async (req: any, res) => {
     try {
       const { lat, lng } = req.body;
