@@ -202,18 +202,37 @@ function BuyerRow({
   return (
     <>
       <tr
-        className={`border-t hover:bg-muted/40 transition-colors odd:bg-muted/20 ${expanded ? "bg-muted/30" : ""}`}
+        className={`border-t cursor-pointer hover:bg-muted/40 transition-colors odd:bg-muted/20 ${expanded ? "bg-muted/30" : ""}`}
         data-testid={`row-buyer-${buyer.id}`}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={onToggleExpand}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggleExpand();
+          }
+        }}
       >
         <td className="p-2">
-          <button onClick={onEdit} aria-label={t("editBuyer")} className="p-1 rounded-md hover:bg-primary/10 hover:text-primary transition-colors" data-testid={`button-edit-buyer-${buyer.id}`}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            aria-label={t("editBuyer")}
+            className="p-1 rounded-md hover:bg-primary/10 hover:text-primary transition-colors"
+            data-testid={`button-edit-buyer-${buyer.id}`}
+          >
             <Pencil className="w-4 h-4" />
           </button>
         </td>
         <td className="p-2">
-          <button onClick={onToggleExpand} className="p-1 rounded-md hover:bg-primary/10 hover:text-primary transition-colors" data-testid={`button-expand-buyer-${buyer.id}`}>
+          <span
+            className="inline-flex p-1 rounded-md text-muted-foreground"
+            aria-hidden="true"
+            data-testid={`button-expand-buyer-${buyer.id}`}
+          >
             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          </button>
+          </span>
         </td>
         <td className="p-2 font-mono text-xs text-primary font-semibold" data-testid={`text-buyer-code-${buyer.id}`}>{buyer.buyerCode}</td>
         <td className="p-2 font-medium" data-testid={`text-buyer-name-${buyer.id}`}>{buyer.name || "—"}</td>
