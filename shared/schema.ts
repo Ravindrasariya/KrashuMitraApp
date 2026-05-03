@@ -617,7 +617,6 @@ export const buyers = pgTable("buyers", {
   address: text("address").notNull().default(""),
   redFlag: boolean("red_flag").notNull().default(false),
   openingBalance: numeric("opening_balance", { precision: 12, scale: 2 }).notNull().default("0"),
-  archived: boolean("archived").notNull().default(false),
   mergedFromCodes: text("merged_from_codes").array().notNull().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 }, (table) => [
@@ -650,6 +649,7 @@ export const bills = pgTable("bills", {
   billDate: date("bill_date").notNull(),
   paymentType: text("payment_type").notNull(),
   paidAt: date("paid_at"),
+  archived: boolean("archived").notNull().default(false),
   payload: jsonb("payload").notNull(),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });

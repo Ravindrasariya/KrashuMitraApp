@@ -17,7 +17,7 @@ import type { Bill, Buyer } from "@shared/schema";
 import { formatRupeeAmount } from "@shared/price-format";
 import type { User } from "@shared/models/auth";
 
-type BuyerWithDue = Buyer & { totalDue: string; totalPaid: string; archived: boolean };
+type BuyerWithDue = Buyer & { totalDue: string; totalPaid: string };
 
 type BillPayload = {
   date?: string;
@@ -67,8 +67,6 @@ export default function BillingPage() {
   const [editing, setEditing] = useState<BuyerWithDue | null>(null);
   const [sortBy, setSortBy] = useState<"due" | "code">("due");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [showArchived, setShowArchived] = useState<boolean>(false);
-
   useEffect(() => {
     if (!authLoading && !isAuthenticated) setLocation("/auth");
   }, [authLoading, isAuthenticated, setLocation]);
@@ -79,21 +77,18 @@ export default function BillingPage() {
   });
 
   const sorted = useMemo(() => {
-    const visible = showArchived ? buyers : buyers.filter((b) => !b.archived);
-    const arr = [...visible];
+    const arr = [...buyers];
     arr.sort((a, b) => {
-      // Active first, archived after — within each group keep the chosen sort.
-      if (!!a.archived !== !!b.archived) return a.archived ? 1 : -1;
       let cmp = 0;
       if (sortBy === "due") cmp = Number(a.totalDue) - Number(b.totalDue);
       else cmp = a.buyerCode.localeCompare(b.buyerCode);
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [buyers, sortBy, sortDir, showArchived]);
+  }, [buyers, sortBy, sortDir]);
 
   const grandTotalDue = useMemo(
-    () => buyers.filter((b) => !b.archived).reduce((sum, b) => sum + Number(b.totalDue || 0), 0),
+    () => buyers.reduce((sum, b) => sum + Number(b.totalDue || 0), 0),
     [buyers],
   );
 
@@ -112,27 +107,17 @@ export default function BillingPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-3 md:p-4 space-y-3" data-testid="page-billing">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 px-3 py-2.5 md:px-4 md:py-3">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 px-3 py-2.5 md:px-4 md:py-3">
         <h1 className="text-xl md:text-2xl font-bold" data-testid="text-billing-title">{t("billingPageTitle")}</h1>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground">
-            <Switch
-              checked={showArchived}
-              onCheckedChange={setShowArchived}
-              data-testid="switch-show-archived-buyers"
-            />
-            {t("showArchived")}
-          </label>
-          <div
-            className={`text-sm md:text-base font-semibold rounded-full px-3 py-1 border ${
-              grandTotalDue > 0
-                ? "bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
-                : "bg-green-50 text-green-700 border-green-300 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800"
-            }`}
-            data-testid="text-billing-grand-total"
-          >
-            {t("colTotalDue")}: {fmtRupee(grandTotalDue)}
-          </div>
+        <div
+          className={`text-sm md:text-base font-semibold rounded-full px-3 py-1 border ${
+            grandTotalDue > 0
+              ? "bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+              : "bg-green-50 text-green-700 border-green-300 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800"
+          }`}
+          data-testid="text-billing-grand-total"
+        >
+          {t("colTotalDue")}: {fmtRupee(grandTotalDue)}
         </div>
       </div>
 
@@ -152,7 +137,6 @@ export default function BillingPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted">
               <tr className="text-left border-b-2 border-border">
-                <th className="p-2 w-8"></th>
                 <th className="p-2 w-8"></th>
                 <th className="p-2 w-8"></th>
                 <th className="p-2">
@@ -182,7 +166,6 @@ export default function BillingPage() {
                   language={language}
                   user={user}
                   t={t}
-                  toast={toast}
                 />
               ))}
             </tbody>
@@ -203,7 +186,7 @@ export default function BillingPage() {
 }
 
 function BuyerRow({
-  buyer, expanded, onToggleExpand, onEdit, language, user, t, toast,
+  buyer, expanded, onToggleExpand, onEdit, language, user, t,
 }: {
   buyer: BuyerWithDue;
   expanded: boolean;
@@ -212,28 +195,13 @@ function BuyerRow({
   language: "hi" | "en";
   user: User | null | undefined;
   t: (k: TranslationKey) => string;
-  toast: ReturnType<typeof import("@/hooks/use-toast")["useToast"]>["toast"];
 }) {
   const dueAmount = Number(buyer.totalDue || 0);
   const hasDue = dueAmount > 0;
-  const isArchived = !!buyer.archived;
-
-  const toggleArchive = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("PATCH", `/api/buyers/${buyer.id}`, { archived: !isArchived });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/buyers"] });
-      toast({ description: isArchived ? t("buyerRestored") : t("buyerArchived") });
-    },
-    onError: () => toast({ description: t("buyerSaveFailed"), variant: "destructive" }),
-  });
-
   return (
     <>
       <tr
-        className={`border-t cursor-pointer hover:bg-muted/40 transition-colors odd:bg-muted/20 ${expanded ? "bg-muted/30" : ""} ${isArchived ? "opacity-60" : ""}`}
+        className={`border-t cursor-pointer hover:bg-muted/40 transition-colors odd:bg-muted/20 ${expanded ? "bg-muted/30" : ""}`}
         data-testid={`row-buyer-${buyer.id}`}
         role="button"
         tabIndex={0}
@@ -259,19 +227,6 @@ function BuyerRow({
           </button>
         </td>
         <td className="p-2">
-          <button
-            onClick={(e) => { e.stopPropagation(); toggleArchive.mutate(); }}
-            onKeyDown={(e) => e.stopPropagation()}
-            disabled={toggleArchive.isPending}
-            aria-label={isArchived ? t("restore") : t("archive")}
-            title={isArchived ? t("restore") : t("archive")}
-            className="p-1 rounded-md hover:bg-primary/10 hover:text-primary transition-colors disabled:opacity-50"
-            data-testid={`button-archive-buyer-${buyer.id}`}
-          >
-            {isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-          </button>
-        </td>
-        <td className="p-2">
           <span
             className="inline-flex p-1 rounded-md text-muted-foreground"
             aria-hidden="true"
@@ -280,19 +235,7 @@ function BuyerRow({
             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </span>
         </td>
-        <td className="p-2 font-mono text-xs text-primary font-semibold" data-testid={`text-buyer-code-${buyer.id}`}>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span>{buyer.buyerCode}</span>
-            {isArchived && (
-              <span
-                className="inline-flex items-center rounded-sm bg-muted text-muted-foreground border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-                data-testid={`badge-archived-${buyer.id}`}
-              >
-                {t("archivedBadge")}
-              </span>
-            )}
-          </div>
-        </td>
+        <td className="p-2 font-mono text-xs text-primary font-semibold" data-testid={`text-buyer-code-${buyer.id}`}>{buyer.buyerCode}</td>
         <td className="p-2 font-medium" data-testid={`text-buyer-name-${buyer.id}`}>{buyer.name || "—"}</td>
         <td className="p-2 hidden md:table-cell text-muted-foreground text-xs">{buyer.address || "—"}</td>
         <td className="p-2 tabular-nums" data-testid={`text-buyer-phone-${buyer.id}`}>{buyer.phone || "—"}</td>
@@ -320,7 +263,7 @@ function BuyerRow({
       </tr>
       {expanded && (
         <tr className="bg-muted/30">
-          <td colSpan={9} className={`p-0 border-l-4 ${hasDue ? "border-red-500" : "border-green-500"}`}>
+          <td colSpan={8} className={`p-0 border-l-4 ${hasDue ? "border-red-500" : "border-green-500"}`}>
             <div className="p-3">
               <div className="md:hidden text-xs text-muted-foreground mb-2">
                 <strong>{t("colAddress")}:</strong> {buyer.address || "—"}
@@ -352,6 +295,7 @@ function BuyerHistory({ buyer, language, user, t }: {
 
   const [editingPaidId, setEditingPaidId] = useState<number | null>(null);
   const [paidDateInput, setPaidDateInput] = useState<string>(todayIso());
+  const [showArchivedBills, setShowArchivedBills] = useState<boolean>(false);
 
   const markPaid = useMutation({
     mutationFn: async ({ id, paidDate }: { id: number; paidDate: string | null }) => {
@@ -365,9 +309,27 @@ function BuyerHistory({ buyer, language, user, t }: {
     },
   });
 
-  const totalPaid = bills.reduce((s, b) => s + (b.paidAt ? billGrandTotal(b) : 0), 0);
-  const totalDue = bills.reduce((s, b) => s + (b.paymentType === "credit" && !b.paidAt ? billGrandTotal(b) : 0), 0)
+  const toggleArchive = useMutation({
+    mutationFn: async ({ id, archived }: { id: number; archived: boolean }) => {
+      const res = await apiRequest("POST", `/api/bills/${id}/archive`, { archived });
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/buyers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/buyers", buyer.id, "bills"] });
+      toast({ description: vars.archived ? t("billArchived") : t("billRestored") });
+    },
+  });
+
+  // Totals always exclude archived bills regardless of toggle.
+  const activeBills = bills.filter((b) => !b.archived);
+  const totalPaid = activeBills.reduce((s, b) => s + (b.paidAt ? billGrandTotal(b) : 0), 0);
+  const totalDue = activeBills.reduce((s, b) => s + (b.paymentType === "credit" && !b.paidAt ? billGrandTotal(b) : 0), 0)
     + Number(buyer.openingBalance);
+  const visibleBills = showArchivedBills
+    ? [...activeBills, ...bills.filter((b) => b.archived)]
+    : activeBills;
+  const archivedCount = bills.length - activeBills.length;
 
   if (isLoading) return <div className="text-center py-3"><Loader2 className="w-4 h-4 inline animate-spin" /></div>;
   if (isError) return (
@@ -381,6 +343,16 @@ function BuyerHistory({ buyer, language, user, t }: {
 
   return (
     <div className="overflow-x-auto">
+      {archivedCount > 0 && (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+          <Switch
+            checked={showArchivedBills}
+            onCheckedChange={setShowArchivedBills}
+            data-testid={`switch-show-archived-bills-${buyer.id}`}
+          />
+          {t("showArchivedBills")} ({archivedCount})
+        </label>
+      )}
       <table className="w-full text-xs border-collapse">
         <thead>
           <tr className="bg-muted">
@@ -394,14 +366,25 @@ function BuyerHistory({ buyer, language, user, t }: {
           </tr>
         </thead>
         <tbody>
-          {bills.map((b) => {
+          {visibleBills.map((b) => {
             const p = ((b.payload ?? {}) as BillPayload).product ?? {};
             const total = billGrandTotal(b);
             const isPaid = !!b.paidAt;
+            const isArchived = !!b.archived;
             return (
-              <tr key={b.id} className="border-t" data-testid={`row-bill-${b.id}`}>
+              <tr key={b.id} className={`border-t ${isArchived ? "opacity-60" : ""}`} data-testid={`row-bill-${b.id}`}>
                 <td className="p-2">{fmtDate(b.billDate)}</td>
-                <td className="p-2 max-w-xs truncate">{p.description ?? "—"}</td>
+                <td className="p-2 max-w-xs truncate">
+                  <span>{p.description ?? "—"}</span>
+                  {isArchived && (
+                    <span
+                      className="ml-1.5 inline-flex items-center rounded-sm bg-muted text-muted-foreground border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                      data-testid={`badge-archived-bill-${b.id}`}
+                    >
+                      {t("archivedBadge")}
+                    </span>
+                  )}
+                </td>
                 <td className="p-2 text-right tabular-nums">{p.qty ?? "—"}</td>
                 <td className={`p-2 text-right tabular-nums font-semibold ${
                   b.paymentType === "credit" && !isPaid
@@ -464,15 +447,27 @@ function BuyerHistory({ buyer, language, user, t }: {
                   )}
                 </td>
                 <td className="p-2">
-                  <button
-                    onClick={() => sharePdf(b, user, language, t, toast)}
-                    title={t("shareOnWhatsapp")}
-                    aria-label={t("shareOnWhatsapp")}
-                    className="p-1 text-green-600 hover:text-green-700"
-                    data-testid={`button-share-bill-${b.id}`}
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => sharePdf(b, user, language, t, toast)}
+                      title={t("shareOnWhatsapp")}
+                      aria-label={t("shareOnWhatsapp")}
+                      className="p-1 text-green-600 hover:text-green-700"
+                      data-testid={`button-share-bill-${b.id}`}
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => toggleArchive.mutate({ id: b.id, archived: !isArchived })}
+                      disabled={toggleArchive.isPending}
+                      title={isArchived ? t("restore") : t("archive")}
+                      aria-label={isArchived ? t("restore") : t("archive")}
+                      className="p-1 text-muted-foreground hover:text-primary disabled:opacity-50"
+                      data-testid={`button-archive-bill-${b.id}`}
+                    >
+                      {isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </td>
               </tr>
             );

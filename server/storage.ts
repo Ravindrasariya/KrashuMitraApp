@@ -14,7 +14,6 @@ export function normalizeBuyerPhone(s: string): string {
 export interface BuyerWithDue extends Buyer {
   totalDue: string;
   totalPaid: string;
-  archived: boolean;
 }
 
 export interface IStorage {
@@ -110,11 +109,12 @@ export interface IStorage {
   listBuyersForSeller(sellerId: string): Promise<BuyerWithDue[]>;
   getBuyer(sellerId: string, buyerId: number): Promise<Buyer | undefined>;
   findBuyerByNamePhone(sellerId: string, name: string, phone: string): Promise<Buyer | undefined>;
-  updateBuyer(sellerId: string, buyerId: number, data: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance" | "archived">>): Promise<Buyer | undefined>;
+  updateBuyer(sellerId: string, buyerId: number, data: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance">>): Promise<Buyer | undefined>;
   mergeBuyers(sellerId: string, survivorId: number, deletedId: number): Promise<Buyer | undefined>;
   getBill(sellerId: string, billId: number): Promise<Bill | undefined>;
   listBillsForBuyer(sellerId: string, buyerId: number): Promise<Bill[]>;
   markBillPaid(sellerId: string, billId: number, paidDate: string | null): Promise<Bill | undefined>;
+  setBillArchived(sellerId: string, billId: number, archived: boolean): Promise<Bill | undefined>;
 }
 
 class DatabaseStorage implements IStorage {
@@ -694,7 +694,7 @@ class DatabaseStorage implements IStorage {
   async listBuyersForSeller(sellerId: string): Promise<BuyerWithDue[]> {
     const rows = await db.execute<{
       id: number; seller_id: string; buyer_code: string; name: string; phone: string; address: string;
-      red_flag: boolean; opening_balance: string; archived: boolean; merged_from_codes: string[]; created_at: Date;
+      red_flag: boolean; opening_balance: string; merged_from_codes: string[]; created_at: Date;
       total_due: string; total_paid: string;
     }>(sql`
       SELECT b.*,
@@ -709,7 +709,7 @@ class DatabaseStorage implements IStorage {
             ELSE 0 END
         ), 0)::text AS total_paid
       FROM buyers b
-      LEFT JOIN bills bl ON bl.buyer_id = b.id
+      LEFT JOIN bills bl ON bl.buyer_id = b.id AND bl.archived = false
       WHERE b.seller_id = ${sellerId}
       GROUP BY b.id
       ORDER BY b.created_at DESC
@@ -723,7 +723,6 @@ class DatabaseStorage implements IStorage {
       address: r.address,
       redFlag: r.red_flag,
       openingBalance: r.opening_balance,
-      archived: r.archived,
       mergedFromCodes: r.merged_from_codes ?? [],
       createdAt: r.created_at,
       totalDue: r.total_due,
@@ -756,9 +755,9 @@ class DatabaseStorage implements IStorage {
   async updateBuyer(
     sellerId: string,
     buyerId: number,
-    data: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance" | "archived">>,
+    data: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance">>,
   ): Promise<Buyer | undefined> {
-    const patch: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance" | "archived">> = { ...data };
+    const patch: Partial<Pick<Buyer, "name" | "phone" | "address" | "redFlag" | "openingBalance">> = { ...data };
     if (patch.name != null) patch.name = normalizeBuyerName(patch.name);
     if (patch.phone != null) patch.phone = normalizeBuyerPhone(patch.phone);
     const [row] = await db
@@ -817,6 +816,15 @@ class DatabaseStorage implements IStorage {
     const [row] = await db
       .update(bills)
       .set({ paidAt: paidDate })
+      .where(and(eq(bills.sellerId, sellerId), eq(bills.id, billId)))
+      .returning();
+    return row;
+  }
+
+  async setBillArchived(sellerId: string, billId: number, archived: boolean): Promise<Bill | undefined> {
+    const [row] = await db
+      .update(bills)
+      .set({ archived })
       .where(and(eq(bills.sellerId, sellerId), eq(bills.id, billId)))
       .returning();
     return row;

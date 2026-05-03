@@ -306,7 +306,6 @@ export async function registerRoutes(
     address: z.string().trim().max(1000).optional(),
     redFlag: z.boolean().optional(),
     openingBalance: z.union([z.string(), z.number()]).optional(),
-    archived: z.boolean().optional(),
     mergeWith: z.number().int().positive().optional(),
   });
 
@@ -380,13 +379,12 @@ export async function registerRoutes(
 
       const patch: Partial<{
         name: string; phone: string; address: string;
-        redFlag: boolean; openingBalance: string; archived: boolean;
+        redFlag: boolean; openingBalance: string;
       }> = {};
       if (parsed.name != null) patch.name = normalizeBuyerName(parsed.name);
       if (parsed.phone != null) patch.phone = normalizeBuyerPhone(parsed.phone);
       if (parsed.address != null) patch.address = parsed.address.trim();
       if (parsed.redFlag != null) patch.redFlag = parsed.redFlag;
-      if (parsed.archived != null) patch.archived = parsed.archived;
       if (parsed.openingBalance != null) {
         const ob = Number(parsed.openingBalance);
         if (!Number.isFinite(ob) || ob < 0) return res.status(400).json({ message: "Invalid opening balance" });
@@ -430,6 +428,27 @@ export async function registerRoutes(
       }
       console.error("Error marking bill paid:", error);
       res.status(500).json({ message: "Failed to mark bill paid" });
+    }
+  });
+
+  // Task #117: archive / restore an individual bill row.
+  const archiveBillSchema = z.object({ archived: z.boolean() });
+  app.post("/api/bills/:id/archive", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid id" });
+      const { archived } = archiveBillSchema.parse(req.body ?? {});
+      const existing = await storage.getBill(req.session.userId, id);
+      if (!existing) return res.status(404).json({ message: "Bill not found" });
+      const updated = await storage.setBillArchived(req.session.userId, id, archived);
+      if (!updated) return res.status(404).json({ message: "Bill not found" });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Error archiving bill:", error);
+      res.status(500).json({ message: "Failed to archive bill" });
     }
   });
 
