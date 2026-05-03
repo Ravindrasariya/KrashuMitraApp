@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Home, Stethoscope, ShoppingBag, Sprout, BookOpen, Globe, LogOut, User, Shield, ChevronDown } from "lucide-react";
+import { Home, Stethoscope, ShoppingBag, Sprout, BookOpen, Globe, LogOut, User, Shield, ChevronDown, Receipt } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
@@ -127,6 +127,12 @@ export function SidebarNav() {
                       {user?.phoneNumber && (
                         <p className="text-[11px] text-muted-foreground">+91 {user.phoneNumber}</p>
                       )}
+                    </div>
+                  </Link>
+                  <Link href="/billing" onClick={() => setProfileOpen(false)}>
+                    <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted cursor-pointer" data-testid="dropdown-billing-link">
+                      <Receipt className="w-4 h-4" />
+                      <span>{t("billing")}</span>
                     </div>
                   </Link>
                   {user?.isAdmin && (
