@@ -2138,7 +2138,7 @@ Respond in this structure:
       const user = await storage.getUserById(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, onionSeedMrpPerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, soyabeanSeedMrpPerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, bagMrpPerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, fanMrpPerPiece, othersProductName, othersBrand, othersPrice, othersMrp, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5 } = req.body || {};
+      const { category, photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, onionSeedMrpPerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, soyabeanSeedMrpPerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, bagMrpPerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, fanMrpPerPiece, othersProductName, othersBrand, othersPrice, othersMrp, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5, additionalNotes } = req.body || {};
       if (!category || !["onion_seedling", "potato_seed", "onion_seed", "soyabean_seed", "bardan_bag", "exhaust_fan", "others"].includes(category)) {
         return res.status(400).json({ message: "Invalid category" });
       }
@@ -2556,6 +2556,15 @@ Respond in this structure:
         othersExtra3: category === "others" ? parsedOthersExtras[2] : null,
         othersExtra4: category === "others" ? parsedOthersExtras[3] : null,
         othersExtra5: category === "others" ? parsedOthersExtras[4] : null,
+        // Task #124: optional 50-char freehand notes — applies to every
+        // category. Trim, cap, and coerce empty/whitespace -> null so the
+        // detail popup's truthy check (`listing.additionalNotes && ...`)
+        // never renders an empty bar.
+        additionalNotes: (() => {
+          if (additionalNotes === undefined || additionalNotes === null) return null;
+          const s = String(additionalNotes).trim().slice(0, 50);
+          return s || null;
+        })(),
         sellerVillage: user.village || null,
         sellerTehsil: user.tehsil || null,
         sellerDistrict: user.district || null,
@@ -2608,7 +2617,7 @@ Respond in this structure:
       }
 
       const category = existing.category;
-      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, onionSeedMrpPerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, soyabeanSeedMrpPerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, bagMrpPerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, fanMrpPerPiece, othersProductName, othersBrand, othersPrice, othersMrp, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5 } = req.body || {};
+      const { photos, photoData, photoMime, quantityBigha, availableAfterDays, onionType, quantityBags, potatoVariety, potatoBrand, onionSeedType, onionSeedVariety, onionSeedBrand, onionSeedPricePerKg, onionSeedMrpPerKg, soyabeanSeedDuration, soyabeanSeedVariety, soyabeanSeedPricePerQuintal, soyabeanSeedMrpPerQuintal, bagCommodityType, bagCommodityOther, bagMaterialType, bagDimension, bagGsm, bagColor, bagMinQuantity, bagPricePerBag, bagMrpPerBag, fanBrand, fanBrandOther, fanColor, fanColorOther, fanWattage, fanVoltage, fanAirflowCmh, fanBladeLengthMm, fanSpeedRpm, fanBladeMaterial, fanBladeCount, fanCountryOfOrigin, fanWarrantyYears, fanDimensions, fanPricePerPiece, fanMrpPerPiece, othersProductName, othersBrand, othersPrice, othersMrp, othersMaterials, othersCondition, othersWarrantyYears, othersDimensions, othersReturnPolicy, othersExtra1, othersExtra2, othersExtra3, othersExtra4, othersExtra5, additionalNotes } = req.body || {};
 
       // Task #84: Others-category PATCH guards. othersProductName must
       // never be cleared (≥1 char remains required throughout the
@@ -3125,6 +3134,20 @@ Respond in this structure:
         if (parsedFanDimensionsPatch !== undefined) updates.fanDimensions = parsedFanDimensionsPatch;
         if (parsedFanPricePerPiecePatch !== undefined) updates.fanPricePerPiece = parsedFanPricePerPiecePatch;
         if (parsedFanMrpPatch !== undefined) updates.fanMrpPerPiece = parsedFanMrpPatch;
+      }
+
+      // Task #124: freehand notes apply to every category, so handle them
+      // outside the per-category branches above. `undefined` (field omitted
+      // from PATCH body) leaves the existing value untouched; `null` or
+      // empty/whitespace string clears the field; otherwise trim + cap to
+      // 50 chars before persisting.
+      if (additionalNotes !== undefined) {
+        if (additionalNotes === null) {
+          updates.additionalNotes = null;
+        } else {
+          const s = String(additionalNotes).trim().slice(0, 50);
+          updates.additionalNotes = s || null;
+        }
       }
 
       if (Object.keys(updates).length > 0) {
