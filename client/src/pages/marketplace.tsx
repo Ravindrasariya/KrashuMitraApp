@@ -3185,7 +3185,6 @@ export default function MarketplacePage() {
                           className="text-sm font-medium bg-muted/40 border border-muted rounded-md px-3 py-2 break-words"
                           data-testid={`text-detail-notes-${listing.id}`}
                         >
-                          <span className="text-muted-foreground">{t("additionalNotesLabel")}: </span>
                           {listing.additionalNotes}
                         </div>
                       )}
