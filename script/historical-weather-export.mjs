@@ -96,24 +96,20 @@ function listChunks(startISO, endISO, yearsPerChunk = 4) {
   return out;
 }
 
-function avgPerDay(hourlyTimes, hourlyValues) {
-  // Returns Map<date YYYY-MM-DD, null-tolerant daily mean rounded to 2 decimals
-  // or null when all hours that day are null>. Mirrors the averaging in
-  // server/storage.ts fetchAndLogWeather().
-  const buckets = new Map();
+function pickMorningPerDay(hourlyTimes, hourlyValues) {
+  // SHIPPED CONTRACT: hourly fields ride along as the single 06:00 IST reading
+  // per day (NOT a 24-hour mean). User opted for this mid-task because re-
+  // fetching all 16 cities with mean aggregation was blocked for hours by
+  // Open-Meteo's free-tier rate limit on the shared Replit IP. Column suffix
+  // is `_06ist`. Open-Meteo returns local-tz timestamps "YYYY-MM-DDTHH:MM"
+  // when timezone=Asia/Kolkata, so we match "T06:00".
+  const out = new Map();
   for (let i = 0; i < hourlyTimes.length; i++) {
     const t = hourlyTimes[i];
-    if (!t) continue;
+    if (!t || !t.endsWith("T06:00")) continue;
     const day = t.slice(0, 10);
     const v = hourlyValues[i];
-    if (v == null || Number.isNaN(v)) continue;
-    let b = buckets.get(day);
-    if (!b) { b = { sum: 0, n: 0 }; buckets.set(day, b); }
-    b.sum += v; b.n += 1;
-  }
-  const out = new Map();
-  for (const [day, b] of buckets) {
-    out.set(day, b.n ? Math.round((b.sum / b.n) * 100) / 100 : null);
+    out.set(day, v == null || Number.isNaN(v) ? null : Math.round(v * 100) / 100);
   }
   return out;
 }
@@ -157,7 +153,7 @@ async function fetchCity(city) {
     console.log(`[${city.name}] fetching hourly ${chunk.start}…${chunk.end}`);
     const hourly = await fetchWithRetry(hourlyUrl, `${city.name}/hourly/${chunk.start.slice(0, 4)}`);
     for (const f of HOURLY_FIELDS) {
-      const partial = avgPerDay(hourly.hourly.time, hourly.hourly[f]);
+      const partial = pickMorningPerDay(hourly.hourly.time, hourly.hourly[f]);
       for (const [k, v] of partial) progress.dayMeans[f][k] = v;
     }
     progress.doneChunks.push(chunkKey);
@@ -190,15 +186,15 @@ async function fetchCity(city) {
       weather_code: get("weather_code"),
       wind_speed_max: get("wind_speed_10m_max"),
       wind_gusts_max: get("wind_gusts_10m_max"),
-      humidity_mean: dayMeans.relative_humidity_2m.get(date) ?? null,
-      dew_point_mean: dayMeans.dew_point_2m.get(date) ?? null,
-      pressure_mean: dayMeans.pressure_msl.get(date) ?? null,
-      soil_temp_0_7cm_mean:    dayMeans.soil_temperature_0_to_7cm.get(date) ?? null,
-      soil_temp_7_28cm_mean:   dayMeans.soil_temperature_7_to_28cm.get(date) ?? null,
-      soil_temp_28_100cm_mean: dayMeans.soil_temperature_28_to_100cm.get(date) ?? null,
-      soil_moisture_0_7cm_mean:    dayMeans.soil_moisture_0_to_7cm.get(date) ?? null,
-      soil_moisture_7_28cm_mean:   dayMeans.soil_moisture_7_to_28cm.get(date) ?? null,
-      soil_moisture_28_100cm_mean: dayMeans.soil_moisture_28_to_100cm.get(date) ?? null,
+      humidity_06ist: dayMeans.relative_humidity_2m.get(date) ?? null,
+      dew_point_06ist: dayMeans.dew_point_2m.get(date) ?? null,
+      pressure_06ist: dayMeans.pressure_msl.get(date) ?? null,
+      soil_temp_0_7cm_06ist:    dayMeans.soil_temperature_0_to_7cm.get(date) ?? null,
+      soil_temp_7_28cm_06ist:   dayMeans.soil_temperature_7_to_28cm.get(date) ?? null,
+      soil_temp_28_100cm_06ist: dayMeans.soil_temperature_28_to_100cm.get(date) ?? null,
+      soil_moisture_0_7cm_06ist:    dayMeans.soil_moisture_0_to_7cm.get(date) ?? null,
+      soil_moisture_7_28cm_06ist:   dayMeans.soil_moisture_7_to_28cm.get(date) ?? null,
+      soil_moisture_28_100cm_06ist: dayMeans.soil_moisture_28_to_100cm.get(date) ?? null,
       et0: get("et0_fao_evapotranspiration"),
       uv_index_max: get("uv_index_max"),
       sunrise: get("sunrise"),
