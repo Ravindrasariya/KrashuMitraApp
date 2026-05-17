@@ -48,33 +48,43 @@ const HOURLY_FIELDS = [
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchWithRetry(url, label) {
-  // Open-Meteo's archive returns 429 both for per-minute throttling AND for
-  // single requests whose payload exceeds the soft compute budget (the 16-yr
-  // × 9-hourly-var single call we tried first triggered this even on a fresh
-  // IP). We back off aggressively (30s → 60s → 120s → 240s) so a brief throttle
-  // ban gets a chance to lift.
-  // Unbounded retry with capped exponential backoff. Open-Meteo's free tier
-  // is shared across the Replit container's IP, so 429 storms can last hours.
-  // Per-chunk checkpointing means resuming is cheap; just keep waiting.
+  // Retry policy: only retry transient errors — HTTP 429 (rate limit), 5xx
+  // (server), and network-level failures (fetch throws). Hard 4xx (400, 401,
+  // 403, 404, schema problems) fail fast with no retry. Capped exponential
+  // backoff (30s → 60s → 120s → 240s → 480s → 900s) with a hard ceiling on
+  // total elapsed wait so a permanent block surfaces instead of hanging.
   const backoffs = [30000, 60000, 120000, 240000, 480000, 900000];
+  const MAX_TOTAL_WAIT_MS = 60 * 60 * 1000; // 1h hard cap per request
+  let waited = 0;
   for (let attempt = 0; ; attempt++) {
+    let transient = false;
+    let reason = "";
     try {
       const res = await fetch(url);
       if (res.status === 429 || res.status >= 500) {
-        const wait = backoffs[Math.min(attempt, backoffs.length - 1)];
-        console.warn(`  ${label}: HTTP ${res.status}, retry ${attempt + 1} after ${wait / 1000}s`);
-        await sleep(wait);
-        continue;
-      }
-      if (!res.ok) {
+        transient = true;
+        reason = `HTTP ${res.status}`;
+      } else if (!res.ok) {
         const body = await res.text();
-        throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+        throw new Error(`HTTP ${res.status} (non-retryable): ${body.slice(0, 200)}`);
+      } else {
+        return await res.json();
       }
-      return await res.json();
     } catch (err) {
+      // fetch() itself threw (DNS / socket / TLS) — treat as transient.
+      // Errors we threw above with "(non-retryable)" must NOT be swallowed.
+      if (err.message && err.message.includes("(non-retryable)")) throw err;
+      transient = true;
+      reason = err.message;
+    }
+    if (transient) {
       const wait = backoffs[Math.min(attempt, backoffs.length - 1)];
-      console.warn(`  ${label}: ${err.message}, retry ${attempt + 1} after ${wait / 1000}s`);
+      if (waited + wait > MAX_TOTAL_WAIT_MS) {
+        throw new Error(`${label}: giving up after ${Math.round(waited / 1000)}s of transient failures (last: ${reason})`);
+      }
+      console.warn(`  ${label}: ${reason}, retry ${attempt + 1} after ${wait / 1000}s`);
       await sleep(wait);
+      waited += wait;
     }
   }
 }
