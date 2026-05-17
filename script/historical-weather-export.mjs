@@ -53,17 +53,16 @@ async function fetchWithRetry(url, label) {
   // × 9-hourly-var single call we tried first triggered this even on a fresh
   // IP). We back off aggressively (30s → 60s → 120s → 240s) so a brief throttle
   // ban gets a chance to lift.
-  const backoffs = [30000, 60000, 120000, 240000, 480000, 900000, 900000];
-  for (let attempt = 0; attempt <= backoffs.length; attempt++) {
+  // Unbounded retry with capped exponential backoff. Open-Meteo's free tier
+  // is shared across the Replit container's IP, so 429 storms can last hours.
+  // Per-chunk checkpointing means resuming is cheap; just keep waiting.
+  const backoffs = [30000, 60000, 120000, 240000, 480000, 900000];
+  for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetch(url);
       if (res.status === 429 || res.status >= 500) {
-        if (attempt === backoffs.length) {
-          const body = await res.text();
-          throw new Error(`HTTP ${res.status} after ${backoffs.length + 1} attempts: ${body.slice(0, 200)}`);
-        }
-        const wait = backoffs[attempt];
-        console.warn(`  ${label}: HTTP ${res.status}, retry ${attempt + 1}/${backoffs.length} after ${wait / 1000}s`);
+        const wait = backoffs[Math.min(attempt, backoffs.length - 1)];
+        console.warn(`  ${label}: HTTP ${res.status}, retry ${attempt + 1} after ${wait / 1000}s`);
         await sleep(wait);
         continue;
       }
@@ -73,13 +72,11 @@ async function fetchWithRetry(url, label) {
       }
       return await res.json();
     } catch (err) {
-      if (attempt === backoffs.length) throw err;
-      const wait = backoffs[attempt];
-      console.warn(`  ${label}: ${err.message}, retry ${attempt + 1}/${backoffs.length} after ${wait / 1000}s`);
+      const wait = backoffs[Math.min(attempt, backoffs.length - 1)];
+      console.warn(`  ${label}: ${err.message}, retry ${attempt + 1} after ${wait / 1000}s`);
       await sleep(wait);
     }
   }
-  throw new Error("unreachable");
 }
 
 function listChunks(startISO, endISO, yearsPerChunk = 4) {
@@ -99,17 +96,24 @@ function listChunks(startISO, endISO, yearsPerChunk = 4) {
   return out;
 }
 
-function pickMorningPerDay(hourlyTimes, hourlyValues) {
-  // Returns Map<date YYYY-MM-DD, value at 06:00 IST, rounded to 2 decimals or null>.
-  // Open-Meteo's archive returns timestamps in the requested timezone
-  // (Asia/Kolkata) as "YYYY-MM-DDTHH:MM", so we just match "T06:00".
-  const out = new Map();
+function avgPerDay(hourlyTimes, hourlyValues) {
+  // Returns Map<date YYYY-MM-DD, null-tolerant daily mean rounded to 2 decimals
+  // or null when all hours that day are null>. Mirrors the averaging in
+  // server/storage.ts fetchAndLogWeather().
+  const buckets = new Map();
   for (let i = 0; i < hourlyTimes.length; i++) {
     const t = hourlyTimes[i];
-    if (!t || !t.endsWith("T06:00")) continue;
+    if (!t) continue;
     const day = t.slice(0, 10);
     const v = hourlyValues[i];
-    out.set(day, v == null || Number.isNaN(v) ? null : Math.round(v * 100) / 100);
+    if (v == null || Number.isNaN(v)) continue;
+    let b = buckets.get(day);
+    if (!b) { b = { sum: 0, n: 0 }; buckets.set(day, b); }
+    b.sum += v; b.n += 1;
+  }
+  const out = new Map();
+  for (const [day, b] of buckets) {
+    out.set(day, b.n ? Math.round((b.sum / b.n) * 100) / 100 : null);
   }
   return out;
 }
@@ -118,25 +122,52 @@ async function fetchCity(city) {
   const baseRoot = `https://archive-api.open-meteo.com/v1/archive?latitude=${city.latitude}&longitude=${city.longitude}&timezone=Asia%2FKolkata`;
   const dailyUrl = `${baseRoot}&start_date=${START_DATE}&end_date=${END_DATE}&daily=${DAILY_FIELDS.join(",")}`;
 
-  console.log(`[${city.name}] fetching daily (full range)…`);
-  const daily = await fetchWithRetry(dailyUrl, `${city.name}/daily`);
-  await sleep(1200);
+  // Per-city progress checkpoint so a mid-city crash (long 429 storms eventually
+  // exhaust the retry budget) doesn't waste already-fetched chunks.
+  mkdirSync(CACHE_DIR, { recursive: true });
+  const progressPath = resolve(CACHE_DIR, `${city.name}__progress.json`);
+  let progress = { daily: null, doneChunks: [], dayMeans: {} };
+  if (existsSync(progressPath)) {
+    progress = JSON.parse(readFileSync(progressPath, "utf8"));
+    console.log(`[${city.name}] resumed: daily=${!!progress.daily}, chunks done=${progress.doneChunks.length}`);
+  }
+  const saveProgress = () => writeFileSync(progressPath, JSON.stringify(progress));
 
-  // Hourly: chunk by year to stay under Open-Meteo's per-request soft limit.
-  // 1 year × 9 vars × 8760 h ≈ 80k values per call, comfortably under cap.
-  const dayMeans = {};
-  for (const f of HOURLY_FIELDS) dayMeans[f] = new Map();
+  let daily = progress.daily;
+  if (!daily) {
+    console.log(`[${city.name}] fetching daily (full range)…`);
+    daily = await fetchWithRetry(dailyUrl, `${city.name}/daily`);
+    progress.daily = daily;
+    saveProgress();
+    await sleep(1200);
+  }
+
+  // Hourly: chunk by 4-year windows. Each successful chunk is persisted
+  // immediately to `progress.dayMeans` keyed by field → date → value.
+  for (const f of HOURLY_FIELDS) if (!progress.dayMeans[f]) progress.dayMeans[f] = {};
 
   const yearChunks = listChunks(START_DATE, END_DATE, 4);
   for (const chunk of yearChunks) {
+    const chunkKey = `${chunk.start}_${chunk.end}`;
+    if (progress.doneChunks.includes(chunkKey)) {
+      console.log(`[${city.name}] hourly ${chunk.start}…${chunk.end} (cached)`);
+      continue;
+    }
     const hourlyUrl = `${baseRoot}&start_date=${chunk.start}&end_date=${chunk.end}&hourly=${HOURLY_FIELDS.join(",")}`;
     console.log(`[${city.name}] fetching hourly ${chunk.start}…${chunk.end}`);
     const hourly = await fetchWithRetry(hourlyUrl, `${city.name}/hourly/${chunk.start.slice(0, 4)}`);
     for (const f of HOURLY_FIELDS) {
-      const partial = pickMorningPerDay(hourly.hourly.time, hourly.hourly[f]);
-      for (const [k, v] of partial) dayMeans[f].set(k, v);
+      const partial = avgPerDay(hourly.hourly.time, hourly.hourly[f]);
+      for (const [k, v] of partial) progress.dayMeans[f][k] = v;
     }
+    progress.doneChunks.push(chunkKey);
+    saveProgress();
     await sleep(1200);
+  }
+
+  const dayMeans = {};
+  for (const f of HOURLY_FIELDS) {
+    dayMeans[f] = new Map(Object.entries(progress.dayMeans[f] || {}));
   }
 
   const dates = daily.daily.time;
@@ -159,15 +190,15 @@ async function fetchCity(city) {
       weather_code: get("weather_code"),
       wind_speed_max: get("wind_speed_10m_max"),
       wind_gusts_max: get("wind_gusts_10m_max"),
-      humidity_06ist: dayMeans.relative_humidity_2m.get(date) ?? null,
-      dew_point_06ist: dayMeans.dew_point_2m.get(date) ?? null,
-      pressure_06ist: dayMeans.pressure_msl.get(date) ?? null,
-      soil_temp_0_7cm_06ist:    dayMeans.soil_temperature_0_to_7cm.get(date) ?? null,
-      soil_temp_7_28cm_06ist:   dayMeans.soil_temperature_7_to_28cm.get(date) ?? null,
-      soil_temp_28_100cm_06ist: dayMeans.soil_temperature_28_to_100cm.get(date) ?? null,
-      soil_moisture_0_7cm_06ist:    dayMeans.soil_moisture_0_to_7cm.get(date) ?? null,
-      soil_moisture_7_28cm_06ist:   dayMeans.soil_moisture_7_to_28cm.get(date) ?? null,
-      soil_moisture_28_100cm_06ist: dayMeans.soil_moisture_28_to_100cm.get(date) ?? null,
+      humidity_mean: dayMeans.relative_humidity_2m.get(date) ?? null,
+      dew_point_mean: dayMeans.dew_point_2m.get(date) ?? null,
+      pressure_mean: dayMeans.pressure_msl.get(date) ?? null,
+      soil_temp_0_7cm_mean:    dayMeans.soil_temperature_0_to_7cm.get(date) ?? null,
+      soil_temp_7_28cm_mean:   dayMeans.soil_temperature_7_to_28cm.get(date) ?? null,
+      soil_temp_28_100cm_mean: dayMeans.soil_temperature_28_to_100cm.get(date) ?? null,
+      soil_moisture_0_7cm_mean:    dayMeans.soil_moisture_0_to_7cm.get(date) ?? null,
+      soil_moisture_7_28cm_mean:   dayMeans.soil_moisture_7_to_28cm.get(date) ?? null,
+      soil_moisture_28_100cm_mean: dayMeans.soil_moisture_28_to_100cm.get(date) ?? null,
       et0: get("et0_fao_evapotranspiration"),
       uv_index_max: get("uv_index_max"),
       sunrise: get("sunrise"),
@@ -236,7 +267,8 @@ async function main() {
 
   const ws = XLSX.utils.json_to_sheet(allRows);
 
-  // Freeze top row + sensible column widths.
+  // Freeze top row (xlsx uses sheet views; !freeze alone isn't honored by readers).
+  ws["!views"] = [{ state: "frozen", ySplit: 1, xSplit: 0, topLeftCell: "A2", activePane: "bottomLeft" }];
   ws["!freeze"] = { xSplit: 0, ySplit: 1 };
   ws["!cols"] = [
     { wch: 12 }, { wch: 9 }, { wch: 9 }, { wch: 11 },
