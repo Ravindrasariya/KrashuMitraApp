@@ -12,3 +12,9 @@ id = "MEDgUBtSKp-YvPODuuGCC"
 uri = "file://exports/historical_weather_rajasthan_gujarat_2010_to_today.xlsx"
 type = "table"
 title = "Historical Weather 2010 → 2026-05-16 (5 Rajasthan/Gujarat cities)"
+
+[[outputs]]
+id = "Gq9ZuTIFIS0aDpI6vDjA2"
+uri = "file://exports/historical_weather_madhya_pradesh_2010_to_today.xlsx"
+type = "table"
+title = "Historical Weather 2010 → 2026-05-16 (Neemuch + Mandsaur, MP)"
