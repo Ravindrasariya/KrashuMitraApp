@@ -45,6 +45,10 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Weather Export Districts"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -56,6 +60,17 @@ waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow]]
+name = "Weather Export Districts"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node script/historical-weather-export-districts.mjs"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_gemini_ai_integrations:2.0.0"]

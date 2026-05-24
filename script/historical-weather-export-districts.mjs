@@ -8,11 +8,11 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as XLSX from "xlsx";
 
-const API_KEY = process.env.OPEN_METEO_API_KEY;
-if (!API_KEY) {
-  console.error("FATAL: OPEN_METEO_API_KEY env var is not set. This script targets the commercial Open-Meteo tier and refuses to fall back to the free tier (which gets throttled on the shared Replit IP).");
-  process.exit(1);
-}
+// Free archive endpoint (no key). Subscription tier purchased didn't cover the
+// historical archive, so we revert to the free tier and resume across multiple
+// days as quota allows. Per-chunk progress is checkpointed to disk, so each
+// resumed run picks up exactly where the previous one stopped.
+const API_KEY = "";
 
 const CITIES = [
   { name: "Indore",            latitude: 22.72, longitude: 75.86 },
@@ -101,23 +101,28 @@ const HOURLY_FIELDS = [
 
 const CACHE_DIR = resolve(process.cwd(), "exports/_cache_full");
 const OUT_PATH  = resolve(process.cwd(), "exports/historical_weather_district_subset_2010_to_today.xlsx");
-// Commercial endpoint — per-key rate limit, no shared-IP throttling.
-const API_BASE = "https://customer-archive-api.open-meteo.com/v1/archive";
+// Free public archive endpoint (shared per-IP daily quota).
+const API_BASE = "https://archive-api.open-meteo.com/v1/archive";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchWithRetry(url, label) {
-  // With the paid key we don't expect 429s, but keep transient retry as a
-  // safety net for 5xx / network blips.
-  const backoffs = [5000, 15000, 30000, 60000, 120000];
-  const MAX_TOTAL_WAIT_MS = 10 * 60 * 1000;
-  let waited = 0;
-  for (let attempt = 0; ; attempt++) {
+  // Free-tier policy per user instruction: on 429 (hourly OR daily quota),
+  // STOP the whole script cleanly so we can resume on the next run. Only
+  // retry on 5xx / network blips (one short backoff each, up to 3 tries).
+  const backoffs = [5000, 15000, 30000];
+  for (let attempt = 0; attempt <= backoffs.length; attempt++) {
     let transient = false;
     let reason = "";
     try {
       const res = await fetch(url);
-      if (res.status === 429 || res.status >= 500) {
+      if (res.status === 429) {
+        console.log(`\n=== RATE LIMIT HIT (HTTP 429) on ${label} ===`);
+        console.log("Open-Meteo free-tier quota exhausted. Stopping cleanly.");
+        console.log("Progress is checkpointed on disk — resume by running the script again later.");
+        process.exit(0);
+      }
+      if (res.status >= 500) {
         transient = true;
         reason = `HTTP ${res.status}`;
       } else if (!res.ok) {
@@ -132,13 +137,12 @@ async function fetchWithRetry(url, label) {
       reason = err.message;
     }
     if (transient) {
-      const wait = backoffs[Math.min(attempt, backoffs.length - 1)];
-      if (waited + wait > MAX_TOTAL_WAIT_MS) {
-        throw new Error(`${label}: giving up after ${Math.round(waited / 1000)}s of transient failures (last: ${reason})`);
+      if (attempt === backoffs.length) {
+        throw new Error(`${label}: gave up after ${backoffs.length + 1} transient failures (last: ${reason})`);
       }
+      const wait = backoffs[attempt];
       console.warn(`  ${label}: ${reason}, retry ${attempt + 1} after ${wait / 1000}s`);
       await sleep(wait);
-      waited += wait;
     }
   }
 }
@@ -185,7 +189,8 @@ function aggregatePerDay(hourlyTimes, hourlyValues) {
 }
 
 async function fetchCity(city) {
-  const baseRoot = `${API_BASE}?apikey=${API_KEY}&latitude=${city.latitude}&longitude=${city.longitude}&timezone=Asia%2FKolkata`;
+  const keyParam = API_KEY ? `apikey=${API_KEY}&` : "";
+  const baseRoot = `${API_BASE}?${keyParam}latitude=${city.latitude}&longitude=${city.longitude}&timezone=Asia%2FKolkata`;
   const dailyUrl = `${baseRoot}&start_date=${START_DATE}&end_date=${END_DATE}&daily=${DAILY_FIELDS.join(",")}`;
 
   mkdirSync(CACHE_DIR, { recursive: true });
