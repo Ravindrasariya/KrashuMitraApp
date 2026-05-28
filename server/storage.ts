@@ -115,6 +115,15 @@ export interface IStorage {
   listBillsForBuyer(sellerId: string, buyerId: number): Promise<Bill[]>;
   markBillPaid(sellerId: string, billId: number, paidDate: string | null): Promise<Bill | undefined>;
   setBillArchived(sellerId: string, billId: number, archived: boolean): Promise<Bill | undefined>;
+  getRecentBuyerGroupsForListing(listingId: number, days?: number): Promise<RecentBuyerGroup[]>;
+}
+
+// Task #128: anonymized "recent buyers" aggregate for the marketplace card
+// badge. Buyer identity is never exposed — only village, count, unit-price.
+export interface RecentBuyerGroup {
+  village: string;     // display village (raw form most frequently entered); "" when unknown
+  buyerCount: number;
+  unitPrice: number;
 }
 
 class DatabaseStorage implements IStorage {
@@ -828,6 +837,101 @@ class DatabaseStorage implements IStorage {
       .where(and(eq(bills.sellerId, sellerId), eq(bills.id, billId)))
       .returning();
     return row;
+  }
+
+  // Task #128: anonymized recent-buyer groups for a listing.
+  // Window: last `days` days of non-archived bills linked to this listing.
+  // Groups by (normalizedVillage, roundedUnitPrice). Returns no buyer identity.
+  async getRecentBuyerGroupsForListing(listingId: number, days: number = 30): Promise<RecentBuyerGroup[]> {
+    if (!Number.isInteger(listingId) || listingId <= 0) return [];
+    const rows = await db
+      .select({
+        buyerId: bills.buyerId,
+        payload: bills.payload,
+      })
+      .from(bills)
+      .where(and(
+        eq(bills.listingId, listingId),
+        eq(bills.archived, false),
+        sql`${bills.billDate} >= (current_date - (${days}::int * interval '1 day'))`,
+      ));
+
+    type GroupAcc = {
+      village: string;             // sanitized village display (truncated, no PII tokens)
+      displayCounts: Map<string, number>;
+      unitPrice: number;
+      buyerKeys: Set<string>;      // distinct buyer identity tokens
+    };
+    const groups = new Map<string, GroupAcc>();
+
+    // Task #128: extract a privacy-safe "village" token from the freehand
+    // buyer address. Buyers may type their full address ("Plot 12,
+    // Krishna Nagar, near 9876543210, Ujjain") so we (a) take only the
+    // first comma-separated segment, (b) drop any segment that looks
+    // like a phone number / house number, (c) strip stray digits from
+    // the chosen token, and (d) cap to 40 chars. Result is never the
+    // raw buyer-typed string.
+    const extractVillage = (raw: string): { display: string; norm: string } => {
+      const cleaned = String(raw ?? "").replace(/\s+/g, " ").trim();
+      if (!cleaned) return { display: "", norm: "" };
+      const segments = cleaned.split(",").map(s => s.trim()).filter(Boolean);
+      let pick = "";
+      for (let i = segments.length - 1; i >= 0; i--) {
+        const seg = segments[i];
+        const digits = (seg.match(/\d/g) ?? []).length;
+        if (digits >= 4) continue;            // looks like a phone / pincode
+        if (/^\d+$/.test(seg)) continue;      // pure number (house no.)
+        pick = seg;
+        break;
+      }
+      if (!pick) pick = segments[segments.length - 1] ?? cleaned;
+      pick = pick.replace(/\d+/g, "").replace(/\s+/g, " ").trim();
+      if (pick.length > 40) pick = pick.slice(0, 40).trim();
+      return { display: pick, norm: pick.toLowerCase() };
+    };
+
+    for (const row of rows) {
+      const payload = (row.payload ?? {}) as {
+        product?: { unitPrice?: string; qty?: string };
+        buyerAddress?: string;
+        buyerName?: string;
+        buyerPhone?: string;
+      };
+      const unitPriceRaw = Number(String(payload.product?.unitPrice ?? "").trim());
+      if (!Number.isFinite(unitPriceRaw) || unitPriceRaw <= 0) continue;
+      const unitPrice = Math.round(unitPriceRaw * 100) / 100;
+      const { display: villageDisplay, norm: villageNorm } = extractVillage(String(payload.buyerAddress ?? ""));
+      const key = `${villageNorm}|${unitPrice}`;
+      let g = groups.get(key);
+      if (!g) {
+        g = { village: villageDisplay, displayCounts: new Map(), unitPrice, buyerKeys: new Set() };
+        groups.set(key, g);
+      }
+      if (villageDisplay) {
+        g.displayCounts.set(villageDisplay, (g.displayCounts.get(villageDisplay) ?? 0) + 1);
+      }
+      const buyerKey = row.buyerId != null
+        ? `id:${row.buyerId}`
+        : `np:${normalizeBuyerName(String(payload.buyerName ?? ""))}|${normalizeBuyerPhone(String(payload.buyerPhone ?? ""))}`;
+      g.buyerKeys.add(buyerKey);
+    }
+
+    const result: RecentBuyerGroup[] = [];
+    for (const g of groups.values()) {
+      let display = "";
+      let best = 0;
+      for (const [d, c] of g.displayCounts) {
+        if (c > best) { best = c; display = d; }
+      }
+      result.push({
+        village: display,
+        buyerCount: g.buyerKeys.size,
+        unitPrice: g.unitPrice,
+      });
+    }
+    // Most buyers first, then highest unit-price as a tiebreak.
+    result.sort((a, b) => (b.buyerCount - a.buyerCount) || (b.unitPrice - a.unitPrice));
+    return result;
   }
 
   async createMarketplaceListing(data: InsertMarketplaceListing): Promise<MarketplaceListing> {

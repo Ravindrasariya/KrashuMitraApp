@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, type TranslationKey } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -21,7 +21,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2, Package, Fan, Share2, Mail, Link2, Printer } from "lucide-react";
+import { Plus, MapPin, Phone, Loader2, ShoppingBag, Camera, Trash2, ArrowUpDown, X, Sprout, Leaf, ChevronLeft, ChevronRight, ImageIcon, Star, Check, ChevronsUpDown, Pencil, Maximize2, Package, Fan, Share2, Mail, Link2, Printer, Sparkles } from "lucide-react";
 import { BillDialog } from "@/components/bill-dialog";
 import { SiWhatsapp } from "react-icons/si";
 import { cn } from "@/lib/utils";
@@ -177,6 +177,65 @@ function StarDisplay({ avg, count, size = "sm" }: { avg: number; count: number; 
         />
       ))}
       {count > 0 && <span className={`${textClass} text-muted-foreground ml-0.5`}>({count})</span>}
+    </div>
+  );
+}
+
+// Task #128: animated emerald→amber pill that rotates through the
+// anonymized (village, unit-price) groups. Buyer names / phones / totals
+// / qty are never fetched or shown — the endpoint only returns
+// { village, buyerCount, unitPrice } per group.
+type RecentBuyerGroup = { village: string; buyerCount: number; unitPrice: number };
+const RECENT_BUYERS_UNIT_KEY: Record<string, TranslationKey> = {
+  onion_seedling: "recentBuyersUnitBundle",
+  potato_seed: "recentBuyersUnitBag",
+  bardan_bag: "recentBuyersUnitBag",
+  onion_seed: "recentBuyersUnitKg",
+  soyabean_seed: "recentBuyersUnitQuintal",
+  exhaust_fan: "recentBuyersUnitPiece",
+  others: "recentBuyersUnitGeneric",
+};
+function formatRecentBuyerPrice(n: number): string {
+  const rounded = Math.round(n * 100) / 100;
+  return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(2);
+}
+function RecentBuyersBadge({ listingId, category, size = "sm" }: { listingId: number; category: string; size?: "sm" | "md" }) {
+  const { t, language } = useTranslation();
+  const { data } = useQuery<{ groups: RecentBuyerGroup[] }>({
+    queryKey: ["/api/marketplace", listingId, "recent-buyers"],
+    queryFn: async () => {
+      const res = await fetch(`/api/marketplace/${listingId}/recent-buyers`);
+      if (!res.ok) return { groups: [] };
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const groups = data?.groups ?? [];
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (groups.length <= 1) return;
+    const id = setInterval(() => setIdx(i => (i + 1) % groups.length), 4000);
+    return () => clearInterval(id);
+  }, [groups.length]);
+  if (groups.length === 0) return null;
+  const g = groups[idx % groups.length];
+  const village = g.village && g.village.trim().length > 0 ? g.village : t("recentBuyersUnknownVillage");
+  const unitKey = RECENT_BUYERS_UNIT_KEY[category] ?? "recentBuyersUnitGeneric";
+  const unitLabel = t(unitKey);
+  const priceText = `₹${formatRecentBuyerPrice(g.unitPrice)}/${unitLabel}`;
+  const sep = language === "hi" ? " — " : " — ";
+  const label = `${t("recentBuyersPrefix")}: ${village}${sep}${g.buyerCount} ${t("recentBuyersWord")}${sep}${priceText}`;
+  const padding = size === "sm" ? "px-2 py-0.5" : "px-2.5 py-1";
+  const textSize = size === "sm" ? "text-[10px]" : "text-xs";
+  const iconSize = size === "sm" ? "w-3 h-3" : "w-3.5 h-3.5";
+  return (
+    <div
+      className={`recent-buyers-pill inline-flex items-center gap-1 rounded-full ${padding} ${textSize} font-semibold text-emerald-900 dark:text-amber-100 shadow-sm whitespace-nowrap max-w-full overflow-hidden`}
+      data-testid={`recent-buyers-badge-${listingId}`}
+      title={label}
+    >
+      <Sparkles className={`${iconSize} shrink-0 text-amber-600 dark:text-amber-300`} />
+      <span className="truncate">{label}</span>
     </div>
   );
 }
@@ -1974,9 +2033,12 @@ export default function MarketplacePage() {
                     )}
                   </div>
 
-                  {(listing.ratingCount > 0) && (
-                    <StarDisplay avg={listing.avgRating} count={listing.ratingCount} />
-                  )}
+                  <div className="flex items-center justify-between gap-1 min-h-[16px]">
+                    {(listing.ratingCount > 0) ? (
+                      <StarDisplay avg={listing.avgRating} count={listing.ratingCount} />
+                    ) : <span />}
+                    <RecentBuyersBadge listingId={listing.id} category={listing.category} />
+                  </div>
 
                   <div className="flex items-center gap-0.5 pt-1 border-t border-border/40">
                     {isAuthenticated && !contactInfo[listing.id] && (
@@ -3188,6 +3250,8 @@ export default function MarketplacePage() {
                           {listing.additionalNotes}
                         </div>
                       )}
+
+                      <RecentBuyersBadge listingId={listing.id} category={listing.category} size="md" />
 
                       {detailRatingQuery.data && (
                         <div className="space-y-2">

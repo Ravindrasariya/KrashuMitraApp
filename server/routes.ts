@@ -169,6 +169,17 @@ const ai = new GoogleGenAI({
   } : {}),
 });
 
+// Task #128: in-memory 5-min cache for the public recent-buyers endpoint.
+// Keyed by listingId. Invalidated when a bill is created / mark-paid /
+// archive-toggled for the listing, so the next render reflects the change
+// within seconds.
+const RECENT_BUYERS_TTL_MS = 5 * 60 * 1000;
+type RecentBuyersCacheEntry = { ts: number; data: { groups: unknown[] } };
+const recentBuyersCache = new Map<number, RecentBuyersCacheEntry>();
+function invalidateRecentBuyersCache(listingId: number): void {
+  recentBuyersCache.delete(listingId);
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -259,6 +270,7 @@ export async function registerRoutes(
         paymentType: parsed.paymentType,
         payload: parsed,
       });
+      if (safeListingId != null) invalidateRecentBuyersCache(safeListingId);
       const yyyymmdd = parsed.date.replace(/-/g, "");
       res.json({
         sequenceNo: created.sequenceNo,
@@ -421,6 +433,7 @@ export async function registerRoutes(
       }
       const updated = await storage.markBillPaid(req.session.userId, id, date);
       if (!updated) return res.status(404).json({ message: "Bill not found" });
+      if (updated.listingId != null) invalidateRecentBuyersCache(updated.listingId);
       res.json(updated);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -442,6 +455,7 @@ export async function registerRoutes(
       if (!existing) return res.status(404).json({ message: "Bill not found" });
       const updated = await storage.setBillArchived(req.session.userId, id, archived);
       if (!updated) return res.status(404).json({ message: "Bill not found" });
+      if (updated.listingId != null) invalidateRecentBuyersCache(updated.listingId);
       res.json(updated);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1992,6 +2006,31 @@ Respond in this structure:
     } catch (error) {
       console.error("Error fetching listing status:", error);
       res.status(500).json({ message: "Failed to fetch listing status" });
+    }
+  });
+
+  // Task #128: public anonymized recent-buyer groups for a listing.
+  // Window: last 30 days, non-archived bills. Returns only village (raw
+  // text from buyer address), buyer count, and unit-price per (village,
+  // unit-price) group — never buyer name / phone / id / qty / totals.
+  app.get("/api/marketplace/:id/recent-buyers", async (req: any, res) => {
+    try {
+      const listingId = parseInt(req.params.id, 10);
+      if (!Number.isInteger(listingId) || listingId <= 0) {
+        return res.status(400).json({ message: "Invalid id" });
+      }
+      const cached = recentBuyersCache.get(listingId);
+      const now = Date.now();
+      if (cached && now - cached.ts < RECENT_BUYERS_TTL_MS) {
+        return res.json(cached.data);
+      }
+      const groups = await storage.getRecentBuyerGroupsForListing(listingId, 30);
+      const data = { groups };
+      recentBuyersCache.set(listingId, { ts: now, data });
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching recent buyers:", error);
+      res.status(500).json({ message: "Failed to fetch recent buyers" });
     }
   });
 
