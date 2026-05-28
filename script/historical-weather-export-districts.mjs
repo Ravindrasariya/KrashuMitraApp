@@ -107,9 +107,23 @@ const API_BASE  = "https://archive-api.open-meteo.com/v1/archive";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Sentinel thrown from fetchWithRetry on HTTP 429 so main() can print a
+// single consolidated `done / cached / remaining` summary before exiting.
+// Open-Meteo returns 429 for both hourly and daily free-tier quota — we
+// don't try to distinguish, we just stop and let the operator re-run when
+// quota resets.
+class RateLimitStop extends Error {
+  constructor(label) {
+    super(`Rate-limited on ${label}`);
+    this.name = "RateLimitStop";
+    this.label = label;
+  }
+}
+
 async function fetchWithRetry(url, label) {
-  // On HTTP 429 (hourly or daily quota), exit the script cleanly so the next
-  // run resumes from per-chunk disk progress. Only retry on 5xx / network.
+  // On HTTP 429 (hourly or daily quota), throw a sentinel so main() can
+  // exit cleanly with a summary. Per-chunk progress is on disk, so the
+  // next run resumes mid-city. Only retry on 5xx / network.
   const backoffs = [5000, 15000, 30000];
   for (let attempt = 0; attempt <= backoffs.length; attempt++) {
     let transient = false;
@@ -117,10 +131,7 @@ async function fetchWithRetry(url, label) {
     try {
       const res = await fetch(url);
       if (res.status === 429) {
-        console.log(`\n=== RATE LIMIT (HTTP 429) on ${label} ===`);
-        console.log("Open-Meteo free-tier quota hit. Stopping cleanly.");
-        console.log("Per-chunk progress is on disk — re-run later to resume.");
-        process.exit(0);
+        throw new RateLimitStop(label);
       }
       if (res.status >= 500) {
         transient = true;
@@ -132,6 +143,7 @@ async function fetchWithRetry(url, label) {
         return await res.json();
       }
     } catch (err) {
+      if (err instanceof RateLimitStop) throw err;
       if (err.message && err.message.includes("(non-retryable)")) throw err;
       transient = true;
       reason = err.message;
@@ -262,17 +274,21 @@ async function fetchCity(city) {
   return rows;
 }
 
+function isCityCached(city) {
+  return existsSync(resolve(CACHE_DIR, `${city.name}.json`));
+}
+
 async function fetchCityCached(city) {
   const cachePath = resolve(CACHE_DIR, `${city.name}.json`);
   if (existsSync(cachePath)) {
     console.log(`[${city.name}] cache HIT, skipping`);
-    return JSON.parse(readFileSync(cachePath, "utf8"));
+    return { rows: JSON.parse(readFileSync(cachePath, "utf8")), fetched: false };
   }
   const rows = await fetchCity(city);
   mkdirSync(CACHE_DIR, { recursive: true });
   writeFileSync(cachePath, JSON.stringify(rows));
   console.log(`[${city.name}] cached → ${cachePath}`);
-  return rows;
+  return { rows, fetched: true };
 }
 
 async function main() {
@@ -283,9 +299,26 @@ async function main() {
   const buildOnly = args.length === 1 && args[0] === "build";
 
   if (!buildOnly) {
-    for (const city of CITIES) {
-      await fetchCityCached(city);
-      await sleep(200);
+    const cachedBeforeRun = CITIES.filter(isCityCached).length;
+    let fetchedThisRun = 0;
+    const summaryLine = (prefix, suffix = "") => {
+      const remaining = CITIES.length - cachedBeforeRun - fetchedThisRun;
+      return `\n${prefix} ${fetchedThisRun} cities fetched this run, ` +
+        `${cachedBeforeRun} already cached, ${remaining} remaining.${suffix}`;
+    };
+    try {
+      for (const city of CITIES) {
+        const { fetched } = await fetchCityCached(city);
+        if (fetched) fetchedThisRun++;
+        await sleep(200);
+      }
+      console.log(summaryLine("DONE."));
+    } catch (err) {
+      if (err instanceof RateLimitStop) {
+        console.log(summaryLine("RATE LIMIT (HTTP 429). Stopped.", " Re-run later to continue."));
+        return;
+      }
+      throw err;
     }
   }
 
