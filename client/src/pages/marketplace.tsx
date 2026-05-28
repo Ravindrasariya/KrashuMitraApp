@@ -2033,12 +2033,11 @@ export default function MarketplacePage() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between gap-1 min-h-[16px]">
-                    {(listing.ratingCount > 0) ? (
-                      <StarDisplay avg={listing.avgRating} count={listing.ratingCount} />
-                    ) : <span />}
-                    <RecentBuyersBadge listingId={listing.id} category={listing.category} />
-                  </div>
+                  <RecentBuyersBadge listingId={listing.id} category={listing.category} />
+
+                  {(listing.ratingCount > 0) && (
+                    <StarDisplay avg={listing.avgRating} count={listing.ratingCount} />
+                  )}
 
                   <div className="flex items-center gap-0.5 pt-1 border-t border-border/40">
                     {isAuthenticated && !contactInfo[listing.id] && (

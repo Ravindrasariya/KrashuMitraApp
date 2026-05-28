@@ -876,7 +876,10 @@ class DatabaseStorage implements IStorage {
       if (!cleaned) return { display: "", norm: "" };
       const segments = cleaned.split(",").map(s => s.trim()).filter(Boolean);
       let pick = "";
-      for (let i = segments.length - 1; i >= 0; i--) {
+      // Pick the FIRST non-numeric comma-segment. Sellers in this app
+      // type the village name first, then larger area / district —
+      // e.g. "Kachnariya, Makdone, Ujjain" → "Kachnariya".
+      for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         const digits = (seg.match(/\d/g) ?? []).length;
         if (digits >= 4) continue;            // looks like a phone / pincode
@@ -884,7 +887,7 @@ class DatabaseStorage implements IStorage {
         pick = seg;
         break;
       }
-      if (!pick) pick = segments[segments.length - 1] ?? cleaned;
+      if (!pick) pick = segments[0] ?? cleaned;
       pick = pick.replace(/\d+/g, "").replace(/\s+/g, " ").trim();
       if (pick.length > 40) pick = pick.slice(0, 40).trim();
       return { display: pick, norm: pick.toLowerCase() };
