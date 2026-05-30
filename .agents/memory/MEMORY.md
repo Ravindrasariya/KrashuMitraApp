@@ -1,0 +1,1 @@
+- [Weather district export](weather-district-export.md) — free-tier 429 cycling, cache trailing-row anomaly, and SheetJS large-sheet write slowness.
