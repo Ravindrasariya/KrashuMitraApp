@@ -5,16 +5,16 @@ generated = []
 id = "XN0JmCPTrF5m2hONYNRYg"
 uri = "file://exports/historical_weather_2010_to_today.xlsx"
 type = "table"
-title = "Historical Weather 2010 → Today (16 cities)"
+title = "Historical Weather — All Cities (2010–today)"
 
 [[outputs]]
 id = "MEDgUBtSKp-YvPODuuGCC"
 uri = "file://exports/historical_weather_rajasthan_gujarat_2010_to_today.xlsx"
 type = "table"
-title = "Historical Weather 2010 → 2026-05-16 (5 Rajasthan/Gujarat cities)"
+title = "Historical Weather — Rajasthan & Gujarat (2010–today)"
 
 [[outputs]]
 id = "Gq9ZuTIFIS0aDpI6vDjA2"
 uri = "file://exports/historical_weather_madhya_pradesh_2010_to_today.xlsx"
 type = "table"
-title = "Historical Weather 2010 → 2026-05-16 (Neemuch + Mandsaur, MP)"
+title = "Historical Weather — Madhya Pradesh (2010–today)"
