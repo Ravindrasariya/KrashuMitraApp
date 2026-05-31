@@ -895,14 +895,23 @@ class DatabaseStorage implements IStorage {
 
     for (const row of rows) {
       const payload = (row.payload ?? {}) as {
-        product?: { unitPrice?: string; qty?: string };
+        product?: { unitPrice?: string; discount?: string; qty?: string };
         buyerAddress?: string;
         buyerName?: string;
         buyerPhone?: string;
       };
+      // The bill stores `unitPrice` = MRP and `discount` = (MRP - KrashuVed
+      // price), so the price the buyer actually paid is the NET of the two.
+      // Surface that net KrashuVed price in the "recent buyers" badge, not
+      // the struck-through MRP.
       const unitPriceRaw = Number(String(payload.product?.unitPrice ?? "").trim());
       if (!Number.isFinite(unitPriceRaw) || unitPriceRaw <= 0) continue;
-      const unitPrice = Math.round(unitPriceRaw * 100) / 100;
+      const discountRaw = Number(String(payload.product?.discount ?? "").trim());
+      const discount = Number.isFinite(discountRaw) && discountRaw > 0 ? discountRaw : 0;
+      const netPrice = unitPriceRaw - discount;
+      if (!Number.isFinite(netPrice) || netPrice <= 0) continue;
+      const unitPrice = Math.round(netPrice * 100) / 100;
+      if (unitPrice <= 0) continue;
       const { display: villageDisplay, norm: villageNorm } = extractVillage(String(payload.buyerAddress ?? ""));
       const key = `${villageNorm}|${unitPrice}`;
       let g = groups.get(key);
