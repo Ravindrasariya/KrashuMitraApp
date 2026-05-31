@@ -25,10 +25,19 @@ districts on the **free tier only** (no API key on the archive endpoint) and wri
 - **How to apply:** if the build fails the uniform-grid check, filter rows by date range in the
   `exports/_cache/*.json` files before rebuilding — do not re-fetch.
 
-## SheetJS write is pathologically slow
-- `XLSX.writeFile` over the full grid (63 cities × 5980 rows × 28 cols ≈ 377k rows) is single-threaded
-  CPU-bound and takes **tens of minutes of CPU** (observed 30–40+ min at 100% CPU), with RSS flat
-  around ~1.9 GB. It is NOT hung — confirm via rising utime+stime in `/proc/<pid>/stat`.
-- A prior all-cities run produced an 82 MB xlsx, so the pipeline does complete; just let it run.
-- **How to apply:** run the build via the workflow (no bash timeout) and poll the filesystem for the
-  output file; don't kill it assuming a hang.
+## Big-grid workbook write: stream it, never build in memory
+- The full grid (63 cities × 5980 rows × 28 cols ≈ 377k rows) must NOT go through SheetJS
+  `XLSX.utils.json_to_sheet` + `XLSX.writeFile`: that materializes ~10.5M cell objects in RAM and
+  **OOM-kills** the process when the container has little free memory (seen at ~1.3 GB free — process
+  dies with no output, exit -1). Even when it survives it is single-threaded CPU-bound (tens of min).
+- **Fix (current code):** the write step streams one city (5980 rows) at a time, in alphabetical
+  city order, into a streamed CSV (`createWriteStream`, honor backpressure via `drain`) **and** a
+  streamed xlsx (`exceljs` `ExcelJS.stream.xlsx.WorkbookWriter`, `useStyles:false`,
+  `useSharedStrings:false`, `addRow(...).commit()` per row). Build stays well under the RAM ceiling.
+- **exceljs gotcha:** `sheet.columns = [...]` only sets keys/widths — it does NOT emit a header row in
+  streaming mode. You must explicitly `sheet.addRow(HEADER).commit()` or row 1 will be data.
+- **Why:** in-memory workbook libs scale O(rows×cols) in RAM; streaming writers are O(1). exceljs has
+  a streaming xlsx writer, SheetJS does not (its `XLSX.stream` only does csv/html/json, not xlsx).
+- **Run note:** bash backgrounding does not persist across separate tool calls (each call is a fresh
+  shell; /tmp not shared). Run foreground within one call (≈80s fits the ~110s budget) or use a
+  console workflow for longer jobs and poll the filesystem.

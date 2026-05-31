@@ -5,9 +5,9 @@
 // JSONs for 15 already-fetched cities are reusable as-is.
 // Free Open-Meteo archive endpoint; on first 429 we exit cleanly so the next
 // run picks up exactly where this one stopped.
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync, readFileSync, createWriteStream } from "node:fs";
 import { resolve } from "node:path";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 // Fetch order: Ratlam + Jhabua FIRST (user priority), then the other 46 new
 // cities, then the 15 already-cached cities (they cache-HIT and skip — no
@@ -103,6 +103,7 @@ const HOURLY_FIELDS = [
 
 const CACHE_DIR = resolve(process.cwd(), "exports/_cache");
 const OUT_PATH  = resolve(process.cwd(), "exports/historical_weather_district_subset_2010_to_today.xlsx");
+const CSV_OUT_PATH = resolve(process.cwd(), "exports/historical_weather_district_subset_2010_to_today.csv");
 const API_BASE  = "https://archive-api.open-meteo.com/v1/archive";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -331,39 +332,73 @@ async function main() {
     return;
   }
 
-  const allRows = [];
-  for (const city of CITIES) {
-    allRows.push(...JSON.parse(readFileSync(resolve(CACHE_DIR, `${city.name}.json`), "utf8")));
-  }
-  allRows.sort((a, b) =>
-    a.city < b.city ? -1 : a.city > b.city ? 1 :
-    a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  // Memory-safe streaming write. The container has limited RAM, so we never
+  // build the full 376k-row workbook in memory (SheetJS json_to_sheet OOMs).
+  // Instead we stream one city (5980 rows) at a time, in alphabetical city
+  // order, into both a streamed CSV and a streamed XLSX. Each city's rows are
+  // sorted by date before writing, so the output is city-then-date ordered.
+  mkdirSync(resolve(process.cwd(), "exports"), { recursive: true });
 
-  const perCity = new Map();
-  for (const r of allRows) perCity.set(r.city, (perCity.get(r.city) || 0) + 1);
-  for (const c of CITIES) {
-    const n = perCity.get(c.name) || 0;
-    if (n !== EXPECTED_ROWS_PER_CITY) {
-      throw new Error(`Uniform-grid check FAILED: ${c.name} has ${n} rows, expected ${EXPECTED_ROWS_PER_CITY}`);
+  const sortedCities = [...CITIES].sort((a, b) =>
+    a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+
+  const HEADER = Object.keys(
+    JSON.parse(readFileSync(resolve(CACHE_DIR, `${sortedCities[0].name}.json`), "utf8"))[0]
+  );
+
+  const csvEsc = (v) => {
+    if (v === null || v === undefined) return "";
+    const s = String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const csvStream = createWriteStream(CSV_OUT_PATH);
+  const csvWrite = (line) =>
+    csvStream.write(line) ? Promise.resolve() : new Promise((r) => csvStream.once("drain", r));
+
+  const wbStream = new ExcelJS.stream.xlsx.WorkbookWriter({
+    filename: OUT_PATH,
+    useStyles: false,
+    useSharedStrings: false,
+  });
+  const sheet = wbStream.addWorksheet("historical_weather", {
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+  sheet.columns = HEADER.map((key) => ({ key, width: 12 }));
+  sheet.addRow(HEADER).commit();
+
+  await csvWrite(HEADER.join(",") + "\n");
+
+  let total = 0;
+  let minD = null;
+  let maxD = null;
+  for (const city of sortedCities) {
+    const rows = JSON.parse(readFileSync(resolve(CACHE_DIR, `${city.name}.json`), "utf8"));
+    if (rows.length !== EXPECTED_ROWS_PER_CITY) {
+      throw new Error(`Uniform-grid check FAILED: ${city.name} has ${rows.length} rows, expected ${EXPECTED_ROWS_PER_CITY}`);
     }
+    rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    for (const r of rows) {
+      const ordered = HEADER.map((k) => r[k]);
+      sheet.addRow(ordered).commit();
+      await csvWrite(ordered.map(csvEsc).join(",") + "\n");
+      if (minD === null || r.date < minD) minD = r.date;
+      if (maxD === null || r.date > maxD) maxD = r.date;
+      total++;
+    }
+    console.log(`[${city.name}] streamed ${rows.length} rows (running total ${total})`);
   }
-  const dates = allRows.map((r) => r.date);
-  const minD = dates.reduce((a, b) => (a < b ? a : b));
-  const maxD = dates.reduce((a, b) => (a > b ? a : b));
+
+  await new Promise((res, rej) => csvStream.end((err) => (err ? rej(err) : res())));
+  await sheet.commit();
+  await wbStream.commit();
+
   if (minD !== START_DATE || maxD !== END_DATE) {
     throw new Error(`Date range check FAILED: got ${minD}…${maxD}, expected ${START_DATE}…${END_DATE}`);
   }
-  console.log(`Uniform grid OK: ${CITIES.length} cities × ${EXPECTED_ROWS_PER_CITY} rows = ${allRows.length}`);
-
-  const ws = XLSX.utils.json_to_sheet(allRows);
-  ws["!views"] = [{ state: "frozen", ySplit: 1, xSplit: 0, topLeftCell: "A2", activePane: "bottomLeft" }];
-  ws["!freeze"] = { xSplit: 0, ySplit: 1 };
-  ws["!cols"] = Array(28).fill({ wch: 12 });
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "historical_weather");
-  mkdirSync(resolve(process.cwd(), "exports"), { recursive: true });
-  XLSX.writeFile(wb, OUT_PATH);
+  console.log(`Uniform grid OK: ${sortedCities.length} cities × ${EXPECTED_ROWS_PER_CITY} rows = ${total}`);
   console.log(`Wrote ${OUT_PATH}`);
+  console.log(`Wrote ${CSV_OUT_PATH}`);
 }
 
 main().catch((err) => {

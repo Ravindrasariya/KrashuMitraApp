@@ -18,3 +18,15 @@ id = "Gq9ZuTIFIS0aDpI6vDjA2"
 uri = "file://exports/historical_weather_madhya_pradesh_2010_to_today.xlsx"
 type = "table"
 title = "Historical Weather — Madhya Pradesh (2010–today)"
+
+[[outputs]]
+id = "jXuaZglPsksWYp6KSB7pL"
+uri = "file://exports/historical_weather_district_subset_2010_to_today.xlsx"
+type = "table"
+title = "All 63 Districts — Historical Weather 2010 → 2026-05-16 (Excel)"
+
+[[outputs]]
+id = "WV6TPVRh3LrVT_iyBx_HA"
+uri = "file://exports/historical_weather_district_subset_2010_to_today.csv"
+type = "table"
+title = "All 63 Districts — Historical Weather (CSV backup)"
