@@ -6,6 +6,7 @@ import { useTranslation } from "@/lib/i18n";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PlotHealthChart } from "@/components/plot-health-chart";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -603,6 +604,16 @@ export default function PlotHealth({
             </p>
           )}
         </Card>
+      )}
+
+      {/* Index trend chart */}
+      {result && !result.noClearImage && lat != null && lng != null && (
+        <PlotHealthChart
+          lat={lat}
+          lng={lng}
+          boxSizeM={boxSizeM}
+          date={result.requestedDate}
+        />
       )}
 
       {/* Weather panel */}

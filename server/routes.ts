@@ -1694,6 +1694,68 @@ Respond in this structure:
     }
   });
 
+  const tsCache = new Map<string, sentinel.TimeSeriesPoint[]>();
+  const TS_CACHE_MAX = 200;
+
+  app.get("/api/plot-health/timeseries", isAuthenticated, async (req: any, res) => {
+    try {
+      if (!sentinel.hasCredentials()) {
+        return res.status(503).json({ code: "missing_credentials", message: "Satellite provider credentials are not configured." });
+      }
+      const lat = Number(req.query.lat);
+      const lng = Number(req.query.lng);
+      const boxSizeM = PLOT_HEALTH_BOX_SIZES.includes(Number(req.query.boxSizeM)) ? Number(req.query.boxSizeM) : 50;
+      const rawDate = typeof req.query.date === "string" ? req.query.date : "latest";
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return res.status(400).json({ message: "Valid latitude and longitude are required" });
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      const isLatest = rawDate === "latest" || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate);
+      // Anchor the window to the selected analysis date (today for "latest").
+      const anchor = isLatest ? today : rawDate;
+      const anchorMs = Date.parse(`${anchor}T00:00:00Z`);
+      const windowStart = new Date(anchorMs - 60 * 86400000).toISOString().slice(0, 10);
+      const windowEnd = new Date(anchorMs + 30 * 86400000).toISOString().slice(0, 10);
+      // Real satellite data only exists up to today; clip the measured query there.
+      const realTo = windowEnd > today ? today : windowEnd;
+
+      // `realTo` is part of the key so an evolving window (fixed anchor whose
+      // end is still in the future) re-fetches as new real data lands daily,
+      // instead of serving a stale measured/forecast split.
+      const cacheKey = `${lat.toFixed(5)}|${lng.toFixed(5)}|${boxSizeM}|${anchor}|${realTo}`;
+      let merged = tsCache.get(cacheKey);
+      if (!merged) {
+        const measured = await sentinel.getTimeSeries(lat, lng, boxSizeM, windowStart, realTo);
+        // Only extrapolate when the window actually extends past today; a fully
+        // historical window (anchor in the past) shows measured data only.
+        const forecast = windowEnd > today ? sentinel.buildForecast(measured, windowEnd) : [];
+        merged = [...measured, ...forecast];
+        tsCache.set(cacheKey, merged);
+        if (tsCache.size > TS_CACHE_MAX) {
+          const oldest = tsCache.keys().next().value;
+          if (oldest !== undefined) tsCache.delete(oldest);
+        }
+      }
+
+      res.json({
+        lat,
+        lng,
+        boxSizeM,
+        anchorDate: anchor,
+        windowStart,
+        windowEnd,
+        today,
+        points: merged,
+      });
+    } catch (error: any) {
+      if (error instanceof sentinel.MissingCredentialsError) {
+        return res.status(503).json({ code: "missing_credentials", message: "Satellite provider credentials are not configured." });
+      }
+      console.error("Plot health timeseries error:", error?.message || error);
+      res.status(502).json({ message: "Could not reach the satellite provider. Please try again." });
+    }
+  });
+
   app.get("/api/plot-health/tiles/:index/:z/:x/:y", isAuthenticated, async (req: any, res) => {
     try {
       if (!sentinel.hasCredentials()) {

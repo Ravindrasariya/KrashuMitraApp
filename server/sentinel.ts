@@ -367,3 +367,171 @@ export async function getStats(
   if (!ndvi && !ndre && !ndmi) return null;
   return { ndvi, ndre, ndmi, validFraction };
 }
+
+// ---------------------------------------------------------------------------
+// Time series (multi-date lot averages) + simple forward extrapolation
+// ---------------------------------------------------------------------------
+export interface TimeSeriesPoint {
+  date: string; // YYYY-MM-DD
+  ndvi: number | null;
+  ndre: number | null;
+  ndmi: number | null;
+  validFraction: number; // 0..1 (0 for estimated points)
+  estimated: boolean;
+}
+
+const DAY_MS = 86400000;
+
+// Per-date lot-average NDVI/NDRE/NDMI over [fromDate, toDate] inclusive, in a
+// single ranged Statistics request (daily aggregation). Returns only intervals
+// with usable, sufficiently clear data, sorted ascending by date. All points
+// are real measurements (estimated:false).
+export async function getTimeSeries(
+  lat: number,
+  lng: number,
+  sizeM: number,
+  fromDate: string,
+  toDate: string,
+  minValidFraction = 0.5,
+): Promise<TimeSeriesPoint[]> {
+  const token = await getAccessToken();
+  const bbox = boxBBox3857(lat, lng, sizeM);
+  // Exclusive end boundary (same rationale as getStats): the P1D interval for
+  // `toDate` runs [toDate 00:00 → toDate+1 00:00].
+  const end = new Date(`${toDate}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  const toExclusive = end.toISOString().slice(0, 10);
+  const payload = {
+    input: {
+      bounds: { bbox, properties: { crs: CRS_3857 } },
+      data: [{ type: "sentinel-2-l2a", dataFilter: { mosaickingOrder: "leastCC" } }],
+    },
+    aggregation: {
+      timeRange: { from: `${fromDate}T00:00:00Z`, to: `${toExclusive}T00:00:00Z` },
+      aggregationInterval: { of: "P1D" },
+      resx: 10,
+      resy: 10,
+      evalscript: STATS_EVALSCRIPT,
+    },
+    calculations: { indices: {} },
+  };
+  const res = await fetch(STATS_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`CDSE statistics (series) failed (${res.status}): ${txt.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as {
+    data?: Array<{
+      interval?: { from?: string; to?: string };
+      outputs?: {
+        indices?: { bands?: Record<string, { stats?: { mean?: number; sampleCount?: number; noDataCount?: number } }> };
+      };
+    }>;
+  };
+  const out: TimeSeriesPoint[] = [];
+  for (const entry of json.data ?? []) {
+    const bands = entry?.outputs?.indices?.bands;
+    if (!bands) continue;
+    const date = (entry.interval?.from ?? "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    const readMean = (key: string): number | null => {
+      const st = bands[key]?.stats;
+      if (!st || st.mean == null || !Number.isFinite(st.mean)) return null;
+      return Math.round((st.mean as number) * 1000) / 1000;
+    };
+    const first = bands["B0"]?.stats;
+    let validFraction = 1;
+    if (first && (first.sampleCount != null || first.noDataCount != null)) {
+      const sample = first.sampleCount ?? 0;
+      const nodata = first.noDataCount ?? 0;
+      const total = sample + nodata;
+      validFraction = total > 0 ? Math.round((sample / total) * 100) / 100 : 0;
+    }
+    const ndvi = readMean("B0");
+    const ndre = readMean("B1");
+    const ndmi = readMean("B2");
+    if (ndvi == null && ndre == null && ndmi == null) continue;
+    if (validFraction < minValidFraction) continue; // skip too-cloudy days
+    out.push({ date, ndvi, ndre, ndmi, validFraction, estimated: false });
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return out;
+}
+
+// Least-squares slope/intercept over (x, y) pairs. null if < 2 points.
+function linfit(pts: Array<{ x: number; y: number }>): { slope: number; intercept: number } | null {
+  const n = pts.length;
+  if (n < 2) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const p of pts) {
+    sx += p.x;
+    sy += p.y;
+    sxx += p.x * p.x;
+    sxy += p.x * p.y;
+  }
+  const denom = n * sxx - sx * sx;
+  if (denom === 0) return null;
+  const slope = (n * sxy - sx * sy) / denom;
+  const intercept = (sy - slope * sx) / n;
+  return { slope, intercept };
+}
+
+const clampIndex = (v: number) => Math.max(-1, Math.min(1, Math.round(v * 1000) / 1000));
+
+// Project the three indices forward from the last real reading to windowEnd at a
+// fixed cadence (≈ Sentinel-2 revisit). Returns estimated points (estimated:true)
+// only when there are at least `minRealPoints` measurements to fit a trend.
+export function buildForecast(
+  measured: TimeSeriesPoint[],
+  windowEnd: string,
+  cadenceDays = 5,
+  minRealPoints = 3,
+): TimeSeriesPoint[] {
+  const real = measured.filter((p) => !p.estimated);
+  if (real.length < minRealPoints) return [];
+  const lastDate = real[real.length - 1].date;
+  const lastMs = Date.parse(`${lastDate}T00:00:00Z`);
+  const endMs = Date.parse(`${windowEnd}T00:00:00Z`);
+  if (!Number.isFinite(lastMs) || !Number.isFinite(endMs) || endMs <= lastMs) return [];
+
+  // Fit each index trend over the recent window (last up to 8 readings).
+  const recent = real.slice(-8);
+  const x0 = Date.parse(`${recent[0].date}T00:00:00Z`);
+  const dayIndex = (ms: number) => (ms - x0) / DAY_MS;
+  const fitFor = (key: "ndvi" | "ndre" | "ndmi") => {
+    const pts = recent
+      .filter((p) => p[key] != null)
+      .map((p) => ({ x: dayIndex(Date.parse(`${p.date}T00:00:00Z`)), y: p[key] as number }));
+    const line = linfit(pts);
+    const lastVal = pts.length ? pts[pts.length - 1].y : null;
+    return { line, lastVal };
+  };
+  const fits = { ndvi: fitFor("ndvi"), ndre: fitFor("ndre"), ndmi: fitFor("ndmi") };
+  const project = (key: "ndvi" | "ndre" | "ndmi", ms: number): number | null => {
+    const f = fits[key];
+    if (f.line) return clampIndex(f.line.slope * dayIndex(ms) + f.line.intercept);
+    if (f.lastVal != null) return clampIndex(f.lastVal); // flat fallback
+    return null;
+  };
+
+  const out: TimeSeriesPoint[] = [];
+  for (let ms = lastMs + cadenceDays * DAY_MS; ms <= endMs; ms += cadenceDays * DAY_MS) {
+    out.push({
+      date: new Date(ms).toISOString().slice(0, 10),
+      ndvi: project("ndvi", ms),
+      ndre: project("ndre", ms),
+      ndmi: project("ndmi", ms),
+      validFraction: 0,
+      estimated: true,
+    });
+  }
+  return out;
+}
