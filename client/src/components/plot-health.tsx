@@ -249,14 +249,17 @@ export default function PlotHealth({
     };
   }, [lat, lng]);
 
+  const resultsTopRef = useRef<HTMLDivElement | null>(null);
+
   const analyzeMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars?: { date?: string }) => {
       if (lat == null || lng == null) throw new Error(t("phPickLocationFirst"));
+      const reqDate = vars?.date ?? (useLatest ? "latest" : dateValue);
       const res = await apiRequest("POST", "/api/plot-health/analyze", {
         lat,
         lng,
         boxSizeM,
-        date: useLatest ? "latest" : dateValue,
+        date: reqDate,
       });
       return res.json() as Promise<PlotHealthResult>;
     },
@@ -271,6 +274,15 @@ export default function PlotHealth({
       toast({ title: msg, variant: "destructive" });
     },
   });
+
+  function handleTrendPointClick(pickedDate: string) {
+    setUseLatest(false);
+    setDateValue(pickedDate);
+    analyzeMutation.mutate({ date: pickedDate });
+    // The chart sits below the imagery; bring the freshly-loaded image/stats
+    // back into view so the farmer sees the day they tapped.
+    resultsTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   function pickLocation(newLat: number, newLng: number) {
     setLat(newLat);
@@ -423,7 +435,7 @@ export default function PlotHealth({
         </label>
 
         <Button
-          onClick={() => analyzeMutation.mutate()}
+          onClick={() => analyzeMutation.mutate({})}
           disabled={analyzeMutation.isPending || lat == null || lng == null}
           className="w-full"
           data-testid="button-plot-analyze"
@@ -441,6 +453,8 @@ export default function PlotHealth({
           )}
         </Button>
       </div>
+
+      <div ref={resultsTopRef} aria-hidden="true" />
 
       {/* No clear image */}
       {result?.noClearImage && (
@@ -613,6 +627,7 @@ export default function PlotHealth({
           lng={lng}
           boxSizeM={boxSizeM}
           date={result.requestedDate}
+          onPointClick={handleTrendPointClick}
         />
       )}
 

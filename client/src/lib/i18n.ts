@@ -863,6 +863,7 @@ const translations = {
   phTrendTitle: { hi: "सूचकांक रुझान (~3 माह)", en: "Index trend (~3 months)" },
   phTrendSubtitle: { hi: "चुनी गई तारीख के ~2 माह पहले से ~1 माह बाद तक", en: "~2 months before to ~1 month after the selected date" },
   phTrendEstimatedNote: { hi: "धराशायी रेखा = हाल के असली मानों से अनुमानित रुझान", en: "Dashed line = estimated trend from recent real values" },
+  phTrendTapHint: { hi: "किसी असली (ठोस रेखा) बिंदु पर टैप करें — उस दिन की सैटेलाइट तस्वीर देखें", en: "Tap any real (solid-line) point to view that day's satellite image" },
   phTrendToday: { hi: "आज", en: "Today" },
   phTrendLoading: { hi: "रुझान लोड हो रहा है…", en: "Loading trend…" },
   phTrendEmpty: { hi: "रुझान बनाने के लिए पर्याप्त साफ़-आसमान डेटा नहीं — कृपया बाद में या दूसरी तारीख आज़माएँ।", en: "Not enough clear-sky data to draw a trend yet — try later or another date." },

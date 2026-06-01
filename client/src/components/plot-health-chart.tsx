@@ -89,11 +89,13 @@ export function PlotHealthChart({
   lng,
   boxSizeM,
   date,
+  onPointClick,
 }: {
   lat: number;
   lng: number;
   boxSizeM: number;
   date: string;
+  onPointClick?: (date: string) => void;
 }) {
   const { t, language } = useTranslation();
   const dateLocale = language === "hi" ? "hi-IN" : "en-IN";
@@ -129,6 +131,17 @@ export function PlotHealthChart({
   const fmtTick = (ts: number) =>
     new Date(ts).toLocaleDateString(dateLocale, { day: "numeric", month: "short" });
 
+  const clickable = typeof onPointClick === "function";
+
+  // Recharts fires this on both mouse-click and touch-tap, surfacing the
+  // nearest data point via activePayload. We only act on real (solid) points.
+  const handleChartClick = (state: any) => {
+    if (!clickable) return;
+    const row = state?.activePayload?.[0]?.payload as ChartRow | undefined;
+    if (!row || row.estimated) return;
+    onPointClick!(row.date);
+  };
+
   const Header = (
     <div className="flex items-center gap-2 mb-1">
       <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -140,6 +153,11 @@ export function PlotHealthChart({
     <Card className="p-4 space-y-2" data-testid="card-plot-trend">
       {Header}
       <p className="text-[11px] text-muted-foreground">{t("phTrendSubtitle")}</p>
+      {clickable && hasRealData && rows.length > 0 && (
+        <p className="text-[11px] text-emerald-700 dark:text-emerald-400" data-testid="text-trend-tap-hint">
+          {t("phTrendTapHint")}
+        </p>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground" data-testid="text-trend-loading">
@@ -156,9 +174,17 @@ export function PlotHealthChart({
         </p>
       ) : (
         <>
-          <div className="h-64 w-full" data-testid="chart-plot-trend">
+          <div
+            className={`h-64 w-full${clickable ? " [&_.recharts-dot]:cursor-pointer" : ""}`}
+            data-testid="chart-plot-trend"
+          >
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={rows} margin={{ top: 8, right: 8, bottom: 4, left: -16 }}>
+              <LineChart
+                data={rows}
+                margin={{ top: 8, right: 8, bottom: 4, left: -16 }}
+                onClick={clickable ? handleChartClick : undefined}
+                style={clickable ? { cursor: "pointer" } : undefined}
+              >
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
                 <XAxis
                   dataKey="ts"
