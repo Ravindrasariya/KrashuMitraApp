@@ -1,2 +1,3 @@
 - [Weather district export](weather-district-export.md) — free-tier 429 cycling, cache trailing-row anomaly, and SheetJS large-sheet write slowness.
 - [Bill price data contract](bill-price-data-contract.md) — bills store MRP in product.unitPrice + discount=(MRP−KrashuVed); sale price is unitPrice−discount, net it everywhere.
+- [CDSE / Sentinel Hub API quirks](cdse-sentinel-api.md) — Catalog needs Accept geo+json + no sortby + cql2-json filter; Statistics P1D needs next-day exclusive `to`.

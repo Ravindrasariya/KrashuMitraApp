@@ -1590,8 +1590,8 @@ Respond in this structure:
   // ----------------------------------------------------------------------
   const PLOT_HEALTH_DEFAULT_CENTER = { lat: 23.1765, lng: 75.7885, name: "Ujjain, MP" };
   const PLOT_HEALTH_MIN_ZOOM = 9;
-  const PLOT_HEALTH_MAX_ZOOM = 16;
-  const PLOT_HEALTH_MAX_NATIVE_ZOOM = 15;
+  const PLOT_HEALTH_MAX_ZOOM = 19;
+  const PLOT_HEALTH_MAX_NATIVE_ZOOM = 16;
   const PLOT_HEALTH_BOX_SIZES = [50, 100, 200];
 
   // Small in-memory LRU for rendered tiles (key -> PNG buffer).

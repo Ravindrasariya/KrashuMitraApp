@@ -225,22 +225,26 @@ export async function findAcquisition(
   const bbox = boxBBox4326(lat, lng, sizeM);
   const to = new Date(`${toDate}T23:59:59Z`);
   const from = new Date(to.getTime() - lookbackDays * 24 * 3600 * 1000);
+  // NOTE: The CDSE Catalog STAC search emits `application/geo+json`, so we must
+  // accept that (sending `Accept: application/json` returns HTTP 406). The
+  // `sortby` key is rejected by this endpoint (silently yields 0 features), so
+  // we omit it and sort the returned features by datetime descending in JS. The
+  // cloud-cover filter must be expressed as a cql2-json object on a JSON body.
   const payload = {
     collections: ["sentinel-2-l2a"],
     bbox,
     datetime: `${from.toISOString()}/${to.toISOString()}`,
     limit: 50,
-    filter: `eo:cloud_cover < ${maxCloud}`,
-    "filter-lang": "cql2-text",
+    filter: { op: "<", args: [{ property: "eo:cloud_cover" }, maxCloud] },
+    "filter-lang": "cql2-json",
     fields: { include: ["properties.datetime", "properties.eo:cloud_cover"], exclude: [] },
-    sortby: [{ field: "properties.datetime", direction: "desc" }],
   };
   const res = await fetch(CATALOG_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      Accept: "application/json",
+      Accept: "application/geo+json",
     },
     body: JSON.stringify(payload),
   });
@@ -251,8 +255,18 @@ export async function findAcquisition(
   const json = (await res.json()) as {
     features?: Array<{ properties: { datetime: string; "eo:cloud_cover"?: number } }>;
   };
-  const feat = json.features && json.features[0];
-  if (!feat) return null;
+  const features = (json.features ?? []).filter((f) => f?.properties?.datetime);
+  if (features.length === 0) return null;
+  // Most recent acquisition first (deterministic, format-agnostic).
+  features.sort((a, b) => {
+    const ta = Date.parse(a.properties.datetime);
+    const tb = Date.parse(b.properties.datetime);
+    if (Number.isNaN(ta) || Number.isNaN(tb)) {
+      return a.properties.datetime < b.properties.datetime ? 1 : a.properties.datetime > b.properties.datetime ? -1 : 0;
+    }
+    return tb - ta;
+  });
+  const feat = features[0];
   const dt = feat.properties.datetime;
   return {
     date: dt.slice(0, 10),
@@ -283,13 +297,20 @@ export async function getStats(
 ): Promise<LotStats | null> {
   const token = await getAccessToken();
   const bbox = boxBBox3857(lat, lng, sizeM);
+  // The P1D aggregation interval needs a full day boundary: the interval for
+  // `date` runs [date 00:00 → date+1 00:00]. A `to` of `${date}T23:59:59Z`
+  // falls short of that boundary, so the Statistics API returns an empty
+  // `data` array. We therefore set `to` to the start of the next day.
+  const nextDay = new Date(`${date}T00:00:00Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const toExclusive = nextDay.toISOString().slice(0, 10);
   const payload = {
     input: {
       bounds: { bbox, properties: { crs: CRS_3857 } },
       data: [{ type: "sentinel-2-l2a", dataFilter: { mosaickingOrder: "leastCC" } }],
     },
     aggregation: {
-      timeRange: { from: `${date}T00:00:00Z`, to: `${date}T23:59:59Z` },
+      timeRange: { from: `${date}T00:00:00Z`, to: `${toExclusive}T00:00:00Z` },
       aggregationInterval: { of: "P1D" },
       resx: 10,
       resy: 10,

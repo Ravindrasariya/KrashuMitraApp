@@ -137,16 +137,23 @@ function weatherEmoji(code: number): string {
 // ---------------------------------------------------------------------------
 // Map helpers
 // ---------------------------------------------------------------------------
-function MapController({ lat, lng }: { lat: number; lng: number }) {
+function MapController({ lat, lng, boxSizeM, maxZoom }: { lat: number; lng: number; boxSizeM: number; maxZoom: number }) {
   const map = useMap();
   const last = useRef<string>("");
   useEffect(() => {
-    const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+    const key = `${lat.toFixed(5)},${lng.toFixed(5)},${boxSizeM}`;
     if (key !== last.current) {
       last.current = key;
-      map.setView([lat, lng], map.getZoom(), { animate: true });
+      // Frame the plot box so the field roughly fills the view (with a little
+      // padding), capped at the configured max zoom so a tiny box doesn't
+      // over-zoom past the available imagery detail.
+      map.fitBounds(boxBounds(lat, lng, boxSizeM), {
+        padding: [40, 40],
+        maxZoom,
+        animate: true,
+      });
     }
-  }, [lat, lng, map]);
+  }, [lat, lng, boxSizeM, maxZoom, map]);
   return null;
 }
 
@@ -180,7 +187,7 @@ export default function PlotHealth({
   const [lngInput, setLngInput] = useState<string>(initialResult ? String(initialResult.lng) : "");
   const [boxSizeM, setBoxSizeM] = useState<number>(initialResult?.boxSizeM ?? 50);
   const [useLatest, setUseLatest] = useState<boolean>(
-    initialResult ? initialResult.requestedDate === "latest" : true,
+    initialResult ? initialResult.requestedDate === "latest" : false,
   );
   const [dateValue, setDateValue] = useState<string>(
     initialResult && initialResult.requestedDate !== "latest"
@@ -444,6 +451,32 @@ export default function PlotHealth({
         </Card>
       )}
 
+      {/* Resolved acquisition date notice */}
+      {result && !result.noClearImage && (
+        <Card className="p-3 bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800" data-testid="card-plot-date-notice">
+          <div className="flex items-start gap-2">
+            <Satellite className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <span data-testid="text-plot-resolved-date">
+                {t("phShowingImageFrom")}{" "}
+                <strong>{new Date(result.acquisitionDate).toLocaleDateString(dateLocale)}</strong>
+                {" · "}{t("phCloud")}: {result.cloudCover}%
+              </span>
+              {result.requestedDate !== "latest" && result.requestedDate !== result.resolvedDate && (
+                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1" data-testid="text-plot-date-mismatch">
+                  {t("phDateMismatch")}
+                </p>
+              )}
+              {result.requestedDate === "latest" && (
+                <p className="text-xs text-muted-foreground mt-1" data-testid="text-plot-latest-note">
+                  {t("phLatestActiveNote")}
+                </p>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Layer toggle */}
       {result && !result.noClearImage && (
         <div className="flex flex-wrap gap-2" data-testid="row-plot-layers">
@@ -489,7 +522,7 @@ export default function PlotHealth({
             <>
               <Rectangle bounds={boxBounds(lat, lng, boxSizeM)} pathOptions={{ color: "#facc15", weight: 2, fillOpacity: 0 }} />
               <CircleMarker center={[lat, lng]} radius={4} pathOptions={{ color: "#facc15", fillColor: "#facc15", fillOpacity: 1 }} />
-              <MapController lat={lat} lng={lng} />
+              <MapController lat={lat} lng={lng} boxSizeM={boxSizeM} maxZoom={maxZoom} />
             </>
           )}
           <ClickHandler onPick={pickLocation} />
@@ -498,6 +531,11 @@ export default function PlotHealth({
       <p className="text-[10px] text-muted-foreground -mt-2" data-testid="text-plot-resolution">
         {t("phResolutionNote")}
       </p>
+      {result && !result.noClearImage && (
+        <p className="text-[10px] text-muted-foreground -mt-3" data-testid="text-plot-base-helper">
+          {t("phBaseVsDataNote")}
+        </p>
+      )}
 
       {/* Opacity + legend */}
       {result && !result.noClearImage && (
@@ -537,23 +575,31 @@ export default function PlotHealth({
               {t("phImageDate")}: {new Date(result.acquisitionDate).toLocaleDateString(dateLocale)} · {t("phCloud")}: {result.cloudCover}%
             </span>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {(["ndvi", "ndre", "ndmi"] as const).map((k) => {
-              const st = result.stats?.[k];
-              return (
-                <div key={k} className="bg-background/60 rounded p-2" data-testid={`stat-${k}`}>
-                  <div className="text-[10px] text-muted-foreground uppercase">{t(`phIndex_${k}` as any)}</div>
-                  <div className="text-lg font-bold tabular-nums">{st ? st.mean.toFixed(2) : "—"}</div>
-                  <div className="text-[9px] text-muted-foreground">
-                    {st ? `${st.min.toFixed(2)} – ${st.max.toFixed(2)}` : ""}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {result.stats && result.stats.validFraction < 0.8 && (
-            <p className="text-[10px] text-orange-600 dark:text-orange-400" data-testid="text-plot-low-valid">
-              {t("phPartialCloud")} ({Math.round(result.stats.validFraction * 100)}%)
+          {result.stats && (result.stats.ndvi || result.stats.ndre || result.stats.ndmi) ? (
+            <>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {(["ndvi", "ndre", "ndmi"] as const).map((k) => {
+                  const st = result.stats?.[k];
+                  return (
+                    <div key={k} className="bg-background/60 rounded p-2" data-testid={`stat-${k}`}>
+                      <div className="text-[10px] text-muted-foreground uppercase">{t(`phIndex_${k}` as any)}</div>
+                      <div className="text-lg font-bold tabular-nums">{st ? st.mean.toFixed(2) : "—"}</div>
+                      <div className="text-[9px] text-muted-foreground">
+                        {st ? `${st.min.toFixed(2)} – ${st.max.toFixed(2)}` : ""}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {result.stats.validFraction < 0.8 && (
+                <p className="text-[10px] text-orange-600 dark:text-orange-400" data-testid="text-plot-low-valid">
+                  {t("phPartialCloud")} ({Math.round(result.stats.validFraction * 100)}%)
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground" data-testid="text-plot-no-stats">
+              {t("phNoStats")}
             </p>
           )}
         </Card>
