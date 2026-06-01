@@ -1,0 +1,641 @@
+import { useState, useEffect, useMemo, useRef } from "react";
+import { MapContainer, TileLayer, Rectangle, CircleMarker, useMap, useMapEvents } from "react-leaflet";
+import type { LatLngBoundsExpression } from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { useTranslation } from "@/lib/i18n";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Loader2,
+  MapPin,
+  Navigation,
+  Satellite,
+  Wind,
+  Droplets,
+  CloudRain,
+  Thermometer,
+  AlertTriangle,
+} from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+type IndexId = "truecolor" | "ndvi" | "ndre" | "ndmi";
+
+interface IndexStat {
+  mean: number;
+  min: number;
+  max: number;
+}
+interface LotStats {
+  ndvi: IndexStat | null;
+  ndre: IndexStat | null;
+  ndmi: IndexStat | null;
+  validFraction: number;
+}
+export interface PlotHealthResult {
+  lat: number;
+  lng: number;
+  boxSizeM: number;
+  requestedDate: string;
+  resolvedDate: string;
+  acquisitionDate: string;
+  cloudCover: number;
+  stats: LotStats | null;
+  noClearImage?: boolean;
+  id?: number;
+}
+
+interface PlotConfig {
+  hasCredentials: boolean;
+  defaultCenter: { lat: number; lng: number; name: string };
+  minZoom: number;
+  maxZoom: number;
+  maxNativeZoom: number;
+  boxSizes: number[];
+  indexes: IndexId[];
+}
+
+// ---------------------------------------------------------------------------
+// Index metadata (legends mirror the server color ramps)
+// ---------------------------------------------------------------------------
+const INDEX_META: Record<IndexId, { gradient: string | null; lowKey: string; highKey: string }> = {
+  truecolor: { gradient: null, lowKey: "", highKey: "" },
+  ndvi: {
+    gradient: "linear-gradient(to right, #a8a8a8, #c76633, #dbc745, #66bd45, #298c29, #004500)",
+    lowKey: "phLegendBare",
+    highKey: "phLegendDense",
+  },
+  ndre: {
+    gradient: "linear-gradient(to right, #b3b3b3, #e6d966, #b3d94d, #4db34d, #1a8026, #004d0d)",
+    lowKey: "phLegendLowChloro",
+    highKey: "phLegendHighChloro",
+  },
+  ndmi: {
+    gradient: "linear-gradient(to right, #663300, #cc994d, #e6e699, #66cc80, #1a80cc, #003399)",
+    lowKey: "phLegendDry",
+    highKey: "phLegendWet",
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Geometry
+// ---------------------------------------------------------------------------
+function boxBounds(lat: number, lng: number, sizeM: number): LatLngBoundsExpression {
+  const half = sizeM / 2;
+  const dLat = half / 111320;
+  const dLng = half / (111320 * Math.cos((lat * Math.PI) / 180));
+  return [
+    [lat - dLat, lng - dLng],
+    [lat + dLat, lng + dLng],
+  ];
+}
+
+const COMPASS_16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+function cardinal(deg: number): string {
+  return COMPASS_16[Math.round(((deg % 360) / 22.5)) % 16];
+}
+
+// ---------------------------------------------------------------------------
+// Weather (client-side Open-Meteo, no key required)
+// ---------------------------------------------------------------------------
+interface WeatherData {
+  temp: number;
+  humidity: number;
+  precip: number;
+  windSpeed: number;
+  windDir: number;
+  windGust: number;
+  code: number;
+  daily: { date: string; max: number; min: number; precip: number; code: number }[];
+}
+
+function weatherEmoji(code: number): string {
+  if (code === 0) return "☀️";
+  if (code <= 2) return "🌤️";
+  if (code === 3) return "☁️";
+  if (code <= 48) return "🌫️";
+  if (code <= 67) return "🌧️";
+  if (code <= 77) return "🌨️";
+  if (code <= 82) return "🌧️";
+  if (code <= 99) return "⛈️";
+  return "🌡️";
+}
+
+// ---------------------------------------------------------------------------
+// Map helpers
+// ---------------------------------------------------------------------------
+function MapController({ lat, lng }: { lat: number; lng: number }) {
+  const map = useMap();
+  const last = useRef<string>("");
+  useEffect(() => {
+    const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+    if (key !== last.current) {
+      last.current = key;
+      map.setView([lat, lng], map.getZoom(), { animate: true });
+    }
+  }, [lat, lng, map]);
+  return null;
+}
+
+function ClickHandler({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+export default function PlotHealth({
+  initialResult,
+  onSaved,
+}: {
+  initialResult?: PlotHealthResult | null;
+  onSaved?: () => void;
+}) {
+  const { t, language } = useTranslation();
+  const { toast } = useToast();
+
+  const { data: config } = useQuery<PlotConfig>({ queryKey: ["/api/plot-health/config"] });
+
+  const [lat, setLat] = useState<number | null>(initialResult?.lat ?? null);
+  const [lng, setLng] = useState<number | null>(initialResult?.lng ?? null);
+  const [latInput, setLatInput] = useState<string>(initialResult ? String(initialResult.lat) : "");
+  const [lngInput, setLngInput] = useState<string>(initialResult ? String(initialResult.lng) : "");
+  const [boxSizeM, setBoxSizeM] = useState<number>(initialResult?.boxSizeM ?? 50);
+  const [useLatest, setUseLatest] = useState<boolean>(
+    initialResult ? initialResult.requestedDate === "latest" : true,
+  );
+  const [dateValue, setDateValue] = useState<string>(
+    initialResult && initialResult.requestedDate !== "latest"
+      ? initialResult.requestedDate
+      : new Date().toISOString().slice(0, 10),
+  );
+  const [activeIndex, setActiveIndex] = useState<IndexId>("ndvi");
+  const [opacity, setOpacity] = useState<number>(0.8);
+  const [result, setResult] = useState<PlotHealthResult | null>(initialResult ?? null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
+
+  const center = useMemo(() => {
+    if (lat != null && lng != null) return { lat, lng };
+    if (config?.defaultCenter) return config.defaultCenter;
+    return { lat: 23.1765, lng: 75.7885 };
+  }, [lat, lng, config]);
+
+  // Fetch weather whenever a location is set.
+  useEffect(() => {
+    if (lat == null || lng == null) return;
+    let cancelled = false;
+    setWeatherLoading(true);
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=3`;
+    fetch(url)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const c = d.current || {};
+        const daily = d.daily || {};
+        const days: WeatherData["daily"] = (daily.time || []).map((date: string, i: number) => ({
+          date,
+          max: daily.temperature_2m_max?.[i],
+          min: daily.temperature_2m_min?.[i],
+          precip: daily.precipitation_sum?.[i],
+          code: daily.weather_code?.[i],
+        }));
+        setWeather({
+          temp: c.temperature_2m,
+          humidity: c.relative_humidity_2m,
+          precip: c.precipitation,
+          windSpeed: c.wind_speed_10m,
+          windDir: c.wind_direction_10m,
+          windGust: c.wind_gusts_10m,
+          code: c.weather_code,
+          daily: days,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setWeather(null);
+      })
+      .finally(() => {
+        if (!cancelled) setWeatherLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lat, lng]);
+
+  const analyzeMutation = useMutation({
+    mutationFn: async () => {
+      if (lat == null || lng == null) throw new Error(t("phPickLocationFirst"));
+      const res = await apiRequest("POST", "/api/plot-health/analyze", {
+        lat,
+        lng,
+        boxSizeM,
+        date: useLatest ? "latest" : dateValue,
+      });
+      return res.json() as Promise<PlotHealthResult>;
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      if (!data.noClearImage) onSaved?.();
+    },
+    onError: (err: any) => {
+      const msg = err?.message?.includes("503") || /credential/i.test(err?.message || "")
+        ? t("phMissingCreds")
+        : err?.message || t("phAnalyzeFailed");
+      toast({ title: msg, variant: "destructive" });
+    },
+  });
+
+  function pickLocation(newLat: number, newLng: number) {
+    setLat(newLat);
+    setLng(newLng);
+    setLatInput(newLat.toFixed(6));
+    setLngInput(newLng.toFixed(6));
+    setResult(null);
+  }
+
+  function handleGps() {
+    if (!navigator.geolocation) {
+      toast({ title: t("gpsNotSupported"), variant: "destructive" });
+      return;
+    }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        pickLocation(pos.coords.latitude, pos.coords.longitude);
+        setGpsLoading(false);
+      },
+      () => {
+        toast({ title: t("gpsFailed"), variant: "destructive" });
+        setGpsLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
+  function handleManualSet() {
+    const la = Number(latInput);
+    const ln = Number(lngInput);
+    if (!Number.isFinite(la) || !Number.isFinite(ln) || la < -90 || la > 90 || ln < -180 || ln > 180) {
+      toast({ title: t("phInvalidCoords"), variant: "destructive" });
+      return;
+    }
+    pickLocation(la, ln);
+  }
+
+  const tileUrl =
+    result && !result.noClearImage && activeIndex !== "truecolor"
+      ? `/api/plot-health/tiles/${activeIndex}/{z}/{x}/{y}.png?date=${result.resolvedDate}`
+      : null;
+  const trueColorUrl =
+    result && !result.noClearImage && activeIndex === "truecolor"
+      ? `/api/plot-health/tiles/truecolor/{z}/{x}/{y}.png?date=${result.resolvedDate}`
+      : null;
+  const overlayUrl = tileUrl || trueColorUrl;
+
+  const minZoom = config?.minZoom ?? 9;
+  const maxZoom = config?.maxZoom ?? 16;
+  const maxNativeZoom = config?.maxNativeZoom ?? 15;
+
+  const dateLocale = language === "hi" ? "hi-IN" : "en-IN";
+  const meta = INDEX_META[activeIndex];
+
+  if (config && !config.hasCredentials) {
+    return (
+      <Card className="p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800" data-testid="card-plot-health-no-creds">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="font-semibold text-sm mb-1">{t("phSetupNeeded")}</h4>
+            <p className="text-sm text-muted-foreground">{t("phMissingCreds")}</p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4" data-testid="plot-health-flow">
+      {/* Location input */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={handleGps} disabled={gpsLoading} data-testid="button-plot-gps">
+            {gpsLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Navigation className="w-4 h-4 mr-1" />}
+            {t("phUseGps")}
+          </Button>
+          <span className="text-xs text-muted-foreground self-center">{t("phOrTapMap")}</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+          <div>
+            <Label htmlFor="plot-lat" className="text-xs">{t("phLatitude")}</Label>
+            <Input
+              id="plot-lat"
+              value={latInput}
+              inputMode="decimal"
+              placeholder="23.1765"
+              onChange={(e) => setLatInput(e.target.value)}
+              className="mt-1"
+              data-testid="input-plot-lat"
+            />
+          </div>
+          <div>
+            <Label htmlFor="plot-lng" className="text-xs">{t("phLongitude")}</Label>
+            <Input
+              id="plot-lng"
+              value={lngInput}
+              inputMode="decimal"
+              placeholder="75.7885"
+              onChange={(e) => setLngInput(e.target.value)}
+              className="mt-1"
+              data-testid="input-plot-lng"
+            />
+          </div>
+          <Button variant="secondary" size="sm" onClick={handleManualSet} data-testid="button-plot-set-coords">
+            <MapPin className="w-4 h-4 mr-1" />
+            {t("phSet")}
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-xs">{t("phBoxSize")}</Label>
+            <Select value={String(boxSizeM)} onValueChange={(v) => setBoxSizeM(Number(v))}>
+              <SelectTrigger className="mt-1" data-testid="select-plot-box">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(config?.boxSizes ?? [50, 100, 200]).map((s) => (
+                  <SelectItem key={s} value={String(s)} data-testid={`option-box-${s}`}>
+                    {s} m
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">{t("phDate")}</Label>
+            <div className="flex items-center gap-2 mt-1">
+              <Input
+                type="date"
+                value={dateValue}
+                max={new Date().toISOString().slice(0, 10)}
+                disabled={useLatest}
+                onChange={(e) => setDateValue(e.target.value)}
+                className="flex-1"
+                data-testid="input-plot-date"
+              />
+            </div>
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer" data-testid="toggle-plot-latest">
+          <input
+            type="checkbox"
+            checked={useLatest}
+            onChange={(e) => setUseLatest(e.target.checked)}
+            className="w-4 h-4"
+          />
+          {t("phLatestClear")}
+        </label>
+
+        <Button
+          onClick={() => analyzeMutation.mutate()}
+          disabled={analyzeMutation.isPending || lat == null || lng == null}
+          className="w-full"
+          data-testid="button-plot-analyze"
+        >
+          {analyzeMutation.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              {t("phAnalyzing")}
+            </>
+          ) : (
+            <>
+              <Satellite className="w-4 h-4 mr-1" />
+              {t("phCheckHealth")}
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* No clear image */}
+      {result?.noClearImage && (
+        <Card className="p-3 bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800" data-testid="text-plot-no-clear">
+          <div className="flex items-start gap-2">
+            <CloudRain className="w-5 h-5 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
+            <p className="text-sm">{t("phNoClearImage")}</p>
+          </div>
+        </Card>
+      )}
+
+      {/* Layer toggle */}
+      {result && !result.noClearImage && (
+        <div className="flex flex-wrap gap-2" data-testid="row-plot-layers">
+          {(["truecolor", "ndvi", "ndre", "ndmi"] as IndexId[]).map((idx) => (
+            <Button
+              key={idx}
+              size="sm"
+              variant={activeIndex === idx ? "default" : "outline"}
+              onClick={() => setActiveIndex(idx)}
+              data-testid={`button-layer-${idx}`}
+            >
+              {t(`phIndex_${idx}` as any)}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {/* Map */}
+      <div className="rounded-md overflow-hidden border" style={{ height: "380px" }} data-testid="plot-map">
+        <MapContainer
+          center={[center.lat, center.lng]}
+          zoom={15}
+          minZoom={minZoom}
+          maxZoom={maxZoom}
+          style={{ height: "100%", width: "100%" }}
+          scrollWheelZoom
+        >
+          <TileLayer
+            attribution='&copy; Esri'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={maxZoom}
+          />
+          {overlayUrl && (
+            <TileLayer
+              key={`${activeIndex}-${result?.resolvedDate}`}
+              url={overlayUrl}
+              opacity={opacity}
+              maxNativeZoom={maxNativeZoom}
+              maxZoom={maxZoom}
+            />
+          )}
+          {lat != null && lng != null && (
+            <>
+              <Rectangle bounds={boxBounds(lat, lng, boxSizeM)} pathOptions={{ color: "#facc15", weight: 2, fillOpacity: 0 }} />
+              <CircleMarker center={[lat, lng]} radius={4} pathOptions={{ color: "#facc15", fillColor: "#facc15", fillOpacity: 1 }} />
+              <MapController lat={lat} lng={lng} />
+            </>
+          )}
+          <ClickHandler onPick={pickLocation} />
+        </MapContainer>
+      </div>
+      <p className="text-[10px] text-muted-foreground -mt-2" data-testid="text-plot-resolution">
+        {t("phResolutionNote")}
+      </p>
+
+      {/* Opacity + legend */}
+      {result && !result.noClearImage && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">{t("phOpacity")}</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={opacity}
+              onChange={(e) => setOpacity(Number(e.target.value))}
+              className="flex-1 accent-emerald-600"
+              data-testid="slider-plot-opacity"
+            />
+            <span className="text-xs tabular-nums w-9 text-right">{Math.round(opacity * 100)}%</span>
+          </div>
+          {meta.gradient && (
+            <div data-testid="plot-legend">
+              <div className="h-3 rounded" style={{ background: meta.gradient }} />
+              <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+                <span>{t(meta.lowKey as any)}</span>
+                <span>{t(meta.highKey as any)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stats panel */}
+      {result && !result.noClearImage && (
+        <Card className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 space-y-3" data-testid="card-plot-stats">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h4 className="font-semibold text-sm">{t("phLotStats")}</h4>
+            <span className="text-xs text-muted-foreground" data-testid="text-plot-acq-date">
+              {t("phImageDate")}: {new Date(result.acquisitionDate).toLocaleDateString(dateLocale)} · {t("phCloud")}: {result.cloudCover}%
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {(["ndvi", "ndre", "ndmi"] as const).map((k) => {
+              const st = result.stats?.[k];
+              return (
+                <div key={k} className="bg-background/60 rounded p-2" data-testid={`stat-${k}`}>
+                  <div className="text-[10px] text-muted-foreground uppercase">{t(`phIndex_${k}` as any)}</div>
+                  <div className="text-lg font-bold tabular-nums">{st ? st.mean.toFixed(2) : "—"}</div>
+                  <div className="text-[9px] text-muted-foreground">
+                    {st ? `${st.min.toFixed(2)} – ${st.max.toFixed(2)}` : ""}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {result.stats && result.stats.validFraction < 0.8 && (
+            <p className="text-[10px] text-orange-600 dark:text-orange-400" data-testid="text-plot-low-valid">
+              {t("phPartialCloud")} ({Math.round(result.stats.validFraction * 100)}%)
+            </p>
+          )}
+        </Card>
+      )}
+
+      {/* Weather panel */}
+      {lat != null && lng != null && (
+        <Card className="p-4 bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800" data-testid="card-plot-weather">
+          <h4 className="font-semibold text-sm mb-3">{t("phWeather")}</h4>
+          {weatherLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : weather ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                <div className="flex items-center gap-2" data-testid="weather-temp">
+                  <Thermometer className="w-4 h-4 text-red-500 shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">{t("phTemp")}</div>
+                    <div className="text-sm font-semibold">{weather.temp != null ? `${Math.round(weather.temp)}°C` : "—"}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2" data-testid="weather-humidity">
+                  <Droplets className="w-4 h-4 text-blue-500 shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">{t("phHumidity")}</div>
+                    <div className="text-sm font-semibold">{weather.humidity != null ? `${weather.humidity}%` : "—"}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2" data-testid="weather-rain">
+                  <CloudRain className="w-4 h-4 text-sky-500 shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">{t("phRain")}</div>
+                    <div className="text-sm font-semibold">{weather.precip != null ? `${weather.precip} mm` : "—"}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2" data-testid="weather-wind">
+                  <Wind className="w-4 h-4 text-slate-500 shrink-0" />
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">{t("phWind")}</div>
+                      <div className="text-sm font-semibold">
+                        {weather.windSpeed != null ? `${Math.round(weather.windSpeed)} km/h` : "—"}
+                      </div>
+                    </div>
+                    {weather.windDir != null && (
+                      <div className="flex flex-col items-center" data-testid="weather-wind-compass" title={`${t("phWindFrom")} ${cardinal(weather.windDir)} (${Math.round(weather.windDir)}°)`}>
+                        <Navigation
+                          className="w-5 h-5 text-slate-700 dark:text-slate-200"
+                          style={{ transform: `rotate(${weather.windDir + 180}deg)` }}
+                        />
+                        <span className="text-[9px] text-muted-foreground">{cardinal(weather.windDir)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {weather.windGust != null && (
+                <p className="text-[10px] text-muted-foreground mb-3" data-testid="weather-gust">
+                  {t("phGusts")}: {Math.round(weather.windGust)} km/h · {t("phWindFrom")} {cardinal(weather.windDir)} ({Math.round(weather.windDir)}°)
+                </p>
+              )}
+              <div className="flex gap-2">
+                {weather.daily.map((d) => (
+                  <div key={d.date} className="flex-1 bg-background/60 rounded p-2 text-center" data-testid={`weather-day-${d.date}`}>
+                    <div className="text-[10px] text-muted-foreground">
+                      {new Date(d.date).toLocaleDateString(dateLocale, { weekday: "short" })}
+                    </div>
+                    <div className="text-base">{weatherEmoji(d.code)}</div>
+                    <div className="text-[10px] font-medium">
+                      {Math.round(d.max)}° / {Math.round(d.min)}°
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("phWeatherUnavailable")}</p>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}

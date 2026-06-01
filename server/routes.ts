@@ -30,6 +30,7 @@ import { composeListingShareImage, getListingShareImageMeta, computeShareVersion
 import { createReadStream } from "fs";
 import { stat as fsStat } from "fs/promises";
 import { pingListingShareCache } from "./share-meta";
+import * as sentinel from "./sentinel";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 // Pick the IP that our immediate upstream proxy (Replit's edge) appended to
@@ -1581,6 +1582,166 @@ Respond in this structure:
       res.send(buffer);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch image" });
+    }
+  });
+
+  // ----------------------------------------------------------------------
+  // Plot Health Check (Sentinel-2 vegetation indices + per-lot stats)
+  // ----------------------------------------------------------------------
+  const PLOT_HEALTH_DEFAULT_CENTER = { lat: 23.1765, lng: 75.7885, name: "Ujjain, MP" };
+  const PLOT_HEALTH_MIN_ZOOM = 9;
+  const PLOT_HEALTH_MAX_ZOOM = 16;
+  const PLOT_HEALTH_MAX_NATIVE_ZOOM = 15;
+  const PLOT_HEALTH_BOX_SIZES = [50, 100, 200];
+
+  // Small in-memory LRU for rendered tiles (key -> PNG buffer).
+  const tileCache = new Map<string, Buffer>();
+  const TILE_CACHE_MAX = 800;
+  function tileCacheGet(key: string): Buffer | undefined {
+    const v = tileCache.get(key);
+    if (v) {
+      tileCache.delete(key);
+      tileCache.set(key, v);
+    }
+    return v;
+  }
+  function tileCacheSet(key: string, buf: Buffer) {
+    tileCache.set(key, buf);
+    if (tileCache.size > TILE_CACHE_MAX) {
+      const oldest = tileCache.keys().next().value;
+      if (oldest !== undefined) tileCache.delete(oldest);
+    }
+  }
+
+  // Cache per-lot stats by (lat,lng,box,date) so reopening doesn't re-query.
+  const statsCache = new Map<string, { acquisition: sentinel.Acquisition; stats: sentinel.LotStats | null }>();
+  const STATS_CACHE_MAX = 300;
+
+  app.get("/api/plot-health/config", isAuthenticated, async (_req: any, res) => {
+    res.json({
+      hasCredentials: sentinel.hasCredentials(),
+      defaultCenter: PLOT_HEALTH_DEFAULT_CENTER,
+      minZoom: PLOT_HEALTH_MIN_ZOOM,
+      maxZoom: PLOT_HEALTH_MAX_ZOOM,
+      maxNativeZoom: PLOT_HEALTH_MAX_NATIVE_ZOOM,
+      boxSizes: PLOT_HEALTH_BOX_SIZES,
+      indexes: sentinel.INDEX_IDS,
+    });
+  });
+
+  app.post("/api/plot-health/analyze", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.userId;
+      if (!sentinel.hasCredentials()) {
+        return res.status(503).json({ code: "missing_credentials", message: "Satellite provider credentials are not configured." });
+      }
+      const lat = Number(req.body?.lat);
+      const lng = Number(req.body?.lng);
+      const boxSizeM = PLOT_HEALTH_BOX_SIZES.includes(Number(req.body?.boxSizeM)) ? Number(req.body.boxSizeM) : 50;
+      const rawDate = typeof req.body?.date === "string" ? req.body.date : "latest";
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return res.status(400).json({ message: "Valid latitude and longitude are required" });
+      }
+      const isLatest = rawDate === "latest" || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate);
+      const today = new Date().toISOString().slice(0, 10);
+      const toDate = isLatest ? today : rawDate;
+      const lookbackDays = isLatest ? 45 : 6; // exact-date searches allow a small clear window
+      const maxCloud = 60;
+
+      const cacheKey = `${lat.toFixed(5)}|${lng.toFixed(5)}|${boxSizeM}|${isLatest ? "latest" : toDate}`;
+      let result = statsCache.get(cacheKey);
+      if (!result) {
+        const acquisition = await sentinel.findAcquisition(lat, lng, boxSizeM, toDate, lookbackDays, maxCloud);
+        if (!acquisition) {
+          return res.json({ noClearImage: true, boxSizeM, lat, lng, requestedDate: isLatest ? "latest" : toDate });
+        }
+        const stats = await sentinel.getStats(lat, lng, boxSizeM, acquisition.date);
+        result = { acquisition, stats };
+        statsCache.set(cacheKey, result);
+        if (statsCache.size > STATS_CACHE_MAX) {
+          const oldest = statsCache.keys().next().value;
+          if (oldest !== undefined) statsCache.delete(oldest);
+        }
+      }
+
+      const payload = {
+        lat,
+        lng,
+        boxSizeM,
+        requestedDate: isLatest ? "latest" : toDate,
+        resolvedDate: result.acquisition.date,
+        acquisitionDate: result.acquisition.datetime,
+        cloudCover: result.acquisition.cloudCover,
+        stats: result.stats,
+        noClearImage: false,
+      };
+
+      const saved = await storage.createServiceRequest({
+        userId,
+        serviceType: "plot_health",
+        inputData: JSON.stringify({ lat, lng, boxSizeM, requestedDate: payload.requestedDate }),
+        aiDiagnosis: JSON.stringify(payload),
+        status: "closed",
+      });
+
+      res.json({ ...payload, id: saved.id });
+    } catch (error: any) {
+      if (error instanceof sentinel.MissingCredentialsError) {
+        return res.status(503).json({ code: "missing_credentials", message: "Satellite provider credentials are not configured." });
+      }
+      console.error("Plot health analyze error:", error?.message || error);
+      res.status(502).json({ message: "Could not reach the satellite provider. Please try again." });
+    }
+  });
+
+  app.get("/api/plot-health/tiles/:index/:z/:x/:y", isAuthenticated, async (req: any, res) => {
+    try {
+      if (!sentinel.hasCredentials()) {
+        return res.status(503).json({ message: "Satellite provider credentials are not configured." });
+      }
+      const index = req.params.index as sentinel.IndexId;
+      if (!sentinel.INDEX_IDS.includes(index)) {
+        return res.status(400).json({ message: "Invalid index" });
+      }
+      const zRaw = String(req.params.z);
+      const xRaw = String(req.params.x);
+      const yRaw = String(req.params.y).replace(/\.png$/i, "");
+      const date = String(req.query.date || "");
+      // Strict integer-only strings (reject partial parses like "12abc") + valid date.
+      if (!/^\d{1,2}$/.test(zRaw) || !/^\d{1,9}$/.test(xRaw) || !/^\d{1,9}$/.test(yRaw) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ message: "Invalid tile request" });
+      }
+      // Bound the date to the Sentinel-2 era (>= 2015-06-01) and not the future
+      // so callers can't amplify cache-miss requests across arbitrary dates.
+      const todayStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      if (date < "2015-06-01" || date > todayStr) {
+        return res.status(400).json({ message: "Date out of range" });
+      }
+      const z = parseInt(zRaw, 10);
+      const x = parseInt(xRaw, 10);
+      const y = parseInt(yRaw, 10);
+      if (z < PLOT_HEALTH_MIN_ZOOM || z > PLOT_HEALTH_MAX_NATIVE_ZOOM) {
+        return res.status(400).json({ message: "Zoom out of range" });
+      }
+      // Enforce valid XYZ tile domain (0 <= x,y < 2^z) so callers can't fan out
+      // arbitrary cache-miss requests against the upstream CDSE renderer.
+      const maxIndex = Math.pow(2, z);
+      if (x < 0 || x >= maxIndex || y < 0 || y >= maxIndex) {
+        return res.status(400).json({ message: "Tile out of range" });
+      }
+      const key = `${index}|${z}|${x}|${y}|${date}`;
+      let buf = tileCacheGet(key);
+      if (!buf) {
+        buf = await sentinel.renderTile(index, z, x, y, date);
+        tileCacheSet(key, buf);
+      }
+      res.set("Content-Type", "image/png");
+      res.set("Cache-Control", "public, max-age=86400");
+      res.send(buf);
+    } catch (error: any) {
+      console.error("Plot health tile error:", error?.message || error);
+      // Return a transparent fallback so the map degrades gracefully.
+      res.status(502).end();
     }
   });
 

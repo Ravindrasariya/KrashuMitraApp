@@ -18,8 +18,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { FlaskConical, Leaf, Camera, Loader2, ClipboardList, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { FlaskConical, Leaf, Camera, Loader2, ClipboardList, ChevronDown, ChevronUp, Sparkles, Satellite } from "lucide-react";
 import type { ServiceRequest } from "@shared/schema";
+import PlotHealth, { type PlotHealthResult } from "@/components/plot-health";
 
 function MarkdownText({ text, className = "" }: { text: string; className?: string }) {
   const lines = text.split("\n");
@@ -93,6 +94,10 @@ export default function DigitalClinicPage() {
   const [onionSize, setOnionSize] = useState<"super" | "medium" | "gola" | "golti" | "auto" | null>(null);
   const [onionImages, setOnionImages] = useState<{ base64: string; mime: string; preview: string }[]>([]);
   const [latestOnionResult, setLatestOnionResult] = useState<string | null>(null);
+  const [plotHealthOpen, setPlotHealthOpen] = useState(false);
+  const [plotHealthReopen, setPlotHealthReopen] = useState<PlotHealthResult | null>(null);
+  const [plotHealthKey, setPlotHealthKey] = useState(0);
+  const plotHealthRef = useRef<HTMLDivElement | null>(null);
   const ONION_MAX_IMAGES = 3;
 
   const { data: requests = [], isLoading: requestsLoading } = useQuery<ServiceRequest[]>({
@@ -226,6 +231,7 @@ export default function DigitalClinicPage() {
     if (type === "potato_perishability_test") return t("potatoPerishTest");
     if (type === "crop_doctor") return t("cropDoctorAI");
     if (type === "onion_price_predictor") return t("onionPricePredictor");
+    if (type === "plot_health") return t("plotHealthCheck");
     return type;
   };
 
@@ -258,6 +264,49 @@ export default function DigitalClinicPage() {
               >
                 {t("bookNow")}
               </Button>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 md:p-5" data-testid="card-plot-health" ref={plotHealthRef}>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+              <Satellite className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold text-base mb-1">{t("plotHealthCheck")}</h3>
+                  <p className="text-sm text-muted-foreground mb-3">{t("plotHealthDesc")}</p>
+                </div>
+              </div>
+              {!plotHealthOpen ? (
+                <Button
+                  data-testid="button-open-plot-health"
+                  onClick={() => setPlotHealthOpen(true)}
+                >
+                  {t("phOpen")}
+                </Button>
+              ) : (
+                <div className="space-y-3">
+                  <PlotHealth
+                    key={plotHealthKey}
+                    initialResult={plotHealthReopen}
+                    onSaved={() => qc.invalidateQueries({ queryKey: ["/api/service-requests"] })}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    data-testid="button-close-plot-health"
+                    onClick={() => {
+                      setPlotHealthOpen(false);
+                      setPlotHealthReopen(null);
+                    }}
+                  >
+                    {t("phClose")}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -468,10 +517,12 @@ export default function DigitalClinicPage() {
             {requests.map((req) => {
               const isCropDoctor = req.serviceType === "crop_doctor" && req.aiDiagnosis;
               const isOnion = req.serviceType === "onion_price_predictor" && req.aiDiagnosis;
-              const isExpandable = isCropDoctor || isOnion;
+              const isPlotHealth = req.serviceType === "plot_health" && req.aiDiagnosis;
+              const isExpandable = isCropDoctor || isOnion || isPlotHealth;
               const isExpanded = expandedRequestId === req.id;
               const onionParsed = isOnion ? safeParseOnion(req.aiDiagnosis!) : null;
               const onionScoreBand = onionParsed?.quality_rating?.score_band;
+              const plotParsed: PlotHealthResult | null = isPlotHealth ? safeParsePlot(req.aiDiagnosis!) : null;
               return (
                 <Card
                   key={req.id}
@@ -548,6 +599,46 @@ export default function DigitalClinicPage() {
                       )}
                       {isCropDoctor && <MarkdownText text={req.aiDiagnosis!} />}
                       {isOnion && <OnionResultView raw={req.aiDiagnosis!} />}
+                      {isPlotHealth && plotParsed && (
+                        <div className="space-y-3" data-testid={`plot-summary-${req.id}`}>
+                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            <span>{plotParsed.lat.toFixed(4)}, {plotParsed.lng.toFixed(4)}</span>
+                            <span>· {plotParsed.boxSizeM} m</span>
+                            {plotParsed.acquisitionDate && (
+                              <span>· {t("phImageDate")}: {new Date(plotParsed.acquisitionDate).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN")}</span>
+                            )}
+                            {typeof plotParsed.cloudCover === "number" && <span>· {t("phCloud")}: {plotParsed.cloudCover}%</span>}
+                          </div>
+                          {plotParsed.stats && (
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                              {(["ndvi", "ndre", "ndmi"] as const).map((k) => {
+                                const st = plotParsed.stats?.[k];
+                                return (
+                                  <div key={k} className="bg-muted/50 rounded p-2" data-testid={`plot-hist-stat-${req.id}-${k}`}>
+                                    <div className="text-[10px] text-muted-foreground uppercase">{t(`phIndex_${k}` as any)}</div>
+                                    <div className="text-base font-bold tabular-nums">{st ? st.mean.toFixed(2) : "—"}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            data-testid={`button-reopen-plot-${req.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPlotHealthReopen({ ...plotParsed, id: req.id });
+                              setPlotHealthKey((k) => k + 1);
+                              setPlotHealthOpen(true);
+                              plotHealthRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }}
+                          >
+                            <Satellite className="w-4 h-4 mr-1" />
+                            {t("phOpen")}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </Card>
@@ -685,6 +776,16 @@ type OnionParsed = {
 function safeParseOnion(raw: string): OnionParsed | null {
   try {
     return JSON.parse(raw) as OnionParsed;
+  } catch {
+    return null;
+  }
+}
+
+function safeParsePlot(raw: string): PlotHealthResult | null {
+  try {
+    const p = JSON.parse(raw) as PlotHealthResult;
+    if (typeof p.lat === "number" && typeof p.lng === "number") return p;
+    return null;
   } catch {
     return null;
   }
