@@ -860,6 +860,7 @@ const translations = {
   phWindFrom: { hi: "हवा की दिशा", en: "Wind from" },
   phGusts: { hi: "झोंके", en: "Gusts" },
   phWeatherUnavailable: { hi: "मौसम जानकारी उपलब्ध नहीं", en: "Weather unavailable" },
+  phWeatherHistoricalNote: { hi: "ऐतिहासिक — चुनी गई तारीख का मौसम", en: "Historical — weather for the selected date" },
   phTrendTitle: { hi: "सूचकांक रुझान (~3 माह)", en: "Index trend (~3 months)" },
   phTrendSubtitle: { hi: "चुनी गई तारीख के ~2 माह पहले से ~1 माह बाद तक", en: "~2 months before to ~1 month after the selected date" },
   phTrendEstimatedNote: { hi: "धराशायी रेखा = हाल के असली मानों से अनुमानित रुझान", en: "Dashed line = estimated trend from recent real values" },

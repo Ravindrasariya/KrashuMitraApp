@@ -208,46 +208,124 @@ export default function PlotHealth({
     return { lat: 23.1765, lng: 75.7885 };
   }, [lat, lng, config]);
 
-  // Fetch weather whenever a location is set.
+  // The weather panel follows the date the farmer is actually analyzing. When the
+  // displayed result matches the current selection we anchor to its resolved image
+  // date (so weather lines up with the imagery shown); otherwise we track the date
+  // box / curve tap directly, falling back to today.
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const weatherDate = useMemo(() => {
+    if (
+      result &&
+      !result.noClearImage &&
+      (result.requestedDate === "latest"
+        ? useLatest
+        : !useLatest && result.requestedDate === dateValue)
+    ) {
+      return result.resolvedDate;
+    }
+    if (useLatest) return todayStr;
+    // Guard against a cleared/invalid date input so we never build a malformed
+    // historical request — fall back to today.
+    return /^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? dateValue : todayStr;
+  }, [result, useLatest, dateValue, todayStr]);
+  const weatherIsLive = weatherDate >= todayStr;
+
+  // Fetch weather whenever the location or the anchored date changes.
   useEffect(() => {
     if (lat == null || lng == null) return;
     let cancelled = false;
     setWeatherLoading(true);
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=3`;
-    fetch(url)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return;
-        const c = d.current || {};
-        const daily = d.daily || {};
-        const days: WeatherData["daily"] = (daily.time || []).map((date: string, i: number) => ({
-          date,
-          max: daily.temperature_2m_max?.[i],
-          min: daily.temperature_2m_min?.[i],
-          precip: daily.precipitation_sum?.[i],
-          code: daily.weather_code?.[i],
-        }));
-        setWeather({
-          temp: c.temperature_2m,
-          humidity: c.relative_humidity_2m,
-          precip: c.precipitation,
-          windSpeed: c.wind_speed_10m,
-          windDir: c.wind_direction_10m,
-          windGust: c.wind_gusts_10m,
-          code: c.weather_code,
-          daily: days,
-        });
-      })
-      .catch(() => {
+    const tz = "Asia%2FKolkata";
+
+    async function run() {
+      try {
+        if (weatherIsLive) {
+          // Today / latest → live current conditions + short forecast.
+          const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=${tz}&forecast_days=3`;
+          const d = await fetch(url).then((r) => r.json());
+          if (cancelled) return;
+          const c = d.current || {};
+          const daily = d.daily || {};
+          const days: WeatherData["daily"] = (daily.time || []).map((date: string, i: number) => ({
+            date,
+            max: daily.temperature_2m_max?.[i],
+            min: daily.temperature_2m_min?.[i],
+            precip: daily.precipitation_sum?.[i],
+            code: daily.weather_code?.[i],
+          }));
+          setWeather({
+            temp: c.temperature_2m,
+            humidity: c.relative_humidity_2m,
+            precip: c.precipitation,
+            windSpeed: c.wind_speed_10m,
+            windDir: c.wind_direction_10m,
+            windGust: c.wind_gusts_10m,
+            code: c.weather_code,
+            daily: days,
+          });
+        } else {
+          // Past date → that day's daily aggregates + hourly humidity, with a small
+          // 3-day strip around it. The recent-past forecast window covers ~3 months;
+          // older dates fall back to the (few-day-lagged) reanalysis archive.
+          const anchorMs = Date.parse(`${weatherDate}T00:00:00Z`);
+          const startStr = new Date(anchorMs - 86400000).toISOString().slice(0, 10);
+          let endStr = new Date(anchorMs + 86400000).toISOString().slice(0, 10);
+          if (endStr > todayStr) endStr = todayStr;
+          const daysAgo = Math.floor((Date.parse(`${todayStr}T00:00:00Z`) - anchorMs) / 86400000);
+          const base =
+            daysAgo > 90
+              ? "https://archive-api.open-meteo.com/v1/archive"
+              : "https://api.open-meteo.com/v1/forecast";
+          const url = `${base}?latitude=${lat}&longitude=${lng}&start_date=${startStr}&end_date=${endStr}&daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,weather_code,wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max&hourly=relative_humidity_2m&timezone=${tz}`;
+          const d = await fetch(url).then((r) => r.json());
+          if (cancelled) return;
+          const daily = d.daily || {};
+          const times: string[] = daily.time || [];
+          const idx = times.indexOf(weatherDate);
+          const di = idx >= 0 ? idx : times.length - 1;
+          // Mean humidity over the selected day, computed from hourly values.
+          let humidity: number | undefined;
+          const ht: string[] = d.hourly?.time || [];
+          const hh: number[] = d.hourly?.relative_humidity_2m || [];
+          const sameDay = ht
+            .map((tstr, i) => (tstr.slice(0, 10) === weatherDate ? hh[i] : null))
+            .filter((v): v is number => v != null && Number.isFinite(v));
+          if (sameDay.length) {
+            humidity = Math.round(sameDay.reduce((a, b) => a + b, 0) / sameDay.length);
+          }
+          const days: WeatherData["daily"] = times.map((date, i) => ({
+            date,
+            max: daily.temperature_2m_max?.[i],
+            min: daily.temperature_2m_min?.[i],
+            precip: daily.precipitation_sum?.[i],
+            code: daily.weather_code?.[i],
+          }));
+          const meanTemp = daily.temperature_2m_mean?.[di];
+          const dMax = daily.temperature_2m_max?.[di];
+          const dMin = daily.temperature_2m_min?.[di];
+          const fallbackTemp = dMax != null && dMin != null ? (dMax + dMin) / 2 : undefined;
+          setWeather({
+            temp: (meanTemp != null ? meanTemp : fallbackTemp) as number,
+            humidity: humidity as number,
+            precip: daily.precipitation_sum?.[di],
+            windSpeed: daily.wind_speed_10m_max?.[di],
+            windDir: daily.wind_direction_10m_dominant?.[di],
+            windGust: daily.wind_gusts_10m_max?.[di],
+            code: daily.weather_code?.[di],
+            daily: days,
+          });
+        }
+      } catch {
         if (!cancelled) setWeather(null);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setWeatherLoading(false);
-      });
+      }
+    }
+    run();
     return () => {
       cancelled = true;
     };
-  }, [lat, lng]);
+  }, [lat, lng, weatherDate, weatherIsLive, todayStr]);
 
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
 
@@ -634,7 +712,22 @@ export default function PlotHealth({
       {/* Weather panel */}
       {lat != null && lng != null && (
         <Card className="p-4 bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800" data-testid="card-plot-weather">
-          <h4 className="font-semibold text-sm mb-3">{t("phWeather")}</h4>
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+            <h4 className="font-semibold text-sm">{t("phWeather")}</h4>
+            <span className="text-xs text-muted-foreground" data-testid="text-weather-date">
+              {new Date(`${weatherDate}T00:00:00`).toLocaleDateString(dateLocale, {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </span>
+          </div>
+          {!weatherIsLive && (
+            <p className="text-[10px] text-muted-foreground mb-3" data-testid="text-weather-historical">
+              {t("phWeatherHistoricalNote")}
+            </p>
+          )}
+          {weatherIsLive && <div className="mb-3" />}
           {weatherLoading ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -691,7 +784,11 @@ export default function PlotHealth({
               )}
               <div className="flex gap-2">
                 {weather.daily.map((d) => (
-                  <div key={d.date} className="flex-1 bg-background/60 rounded p-2 text-center" data-testid={`weather-day-${d.date}`}>
+                  <div
+                    key={d.date}
+                    className={`flex-1 rounded p-2 text-center ${d.date === weatherDate ? "bg-sky-200/70 dark:bg-sky-700/40 ring-1 ring-sky-400" : "bg-background/60"}`}
+                    data-testid={`weather-day-${d.date}`}
+                  >
                     <div className="text-[10px] text-muted-foreground">
                       {new Date(d.date).toLocaleDateString(dateLocale, { weekday: "short" })}
                     </div>
