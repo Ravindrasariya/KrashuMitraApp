@@ -1285,7 +1285,10 @@ class DatabaseStorage implements IStorage {
     beforeResolvedDate: string;
   }): Promise<PlotHealthSearch | undefined> {
     const { userId, cropType, latitude, longitude, beforeResolvedDate } = params;
-    const COORD_TOL = 0.0005; // ~50 m
+    // ~5.5 m at Indian latitudes — tight enough that an adjacent field never
+    // matches, matching the 5-decimal precision of the stats cache key. A
+    // larger window risks comparing against a neighbouring plot.
+    const COORD_TOL = 0.00005;
     const conditions = [
       userId ? eq(plotHealthSearches.userId, userId) : isNull(plotHealthSearches.userId),
       eq(plotHealthSearches.cropType, cropType),
