@@ -54,6 +54,8 @@ interface CropIndexAssessment {
   lower: number | null;
   typical: number | null;
   upper: number | null;
+  previous?: number | null;
+  declined?: boolean;
 }
 export interface CropAssessment {
   cropType: string;
@@ -67,6 +69,8 @@ export interface CropAssessment {
   messageEn: string;
   indices: { ndvi: CropIndexAssessment; ndre: CropIndexAssessment; ndmi: CropIndexAssessment };
   weak: Array<"ndvi" | "ndre" | "ndmi">;
+  declining?: Array<"ndvi" | "ndre" | "ndmi">;
+  previousDate?: string | null;
 }
 export interface PlotHealthResult {
   lat: number;
@@ -831,6 +835,15 @@ export default function PlotHealth({
                       {t("phExpected")}: {ix.lower != null ? ix.lower.toFixed(2) : "—"}+
                     </div>
                     <div className={"text-[10px] font-semibold mt-0.5 " + statusCls}>{statusLabel}</div>
+                    {ix.declined && (
+                      <div
+                        className="text-[9px] font-semibold mt-0.5 text-red-600 dark:text-red-400"
+                        data-testid={`assessment-decline-${k}`}
+                      >
+                        ↓ {t("phDeclined")}
+                        {ix.previous != null ? ` (${ix.previous.toFixed(2)})` : ""}
+                      </div>
+                    )}
                   </div>
                 );
               })}

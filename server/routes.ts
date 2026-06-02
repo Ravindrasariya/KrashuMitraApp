@@ -1,6 +1,6 @@
 import type { Express, RequestHandler } from "express";
 import { createServer, type Server } from "http";
-import { storage, normalizeBuyerName, normalizeBuyerPhone } from "./storage";
+import { storage, normalizeBuyerName, normalizeBuyerPhone, isDeclineExemptStage } from "./storage";
 import { setupPhoneAuth, isAuthenticated } from "./auth-phone";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { GoogleGenAI } from "@google/genai";
@@ -201,6 +201,12 @@ interface CropIndexAssessment {
   lower: number | null;
   typical: number | null;
   upper: number | null;
+  // Task #146: trend vs the plot's previous reading. `previous` is that prior
+  // mean (null when there's no comparable earlier reading); `declined` is true
+  // when this index dropped by more than PLOT_DECLINE_THRESHOLD since then
+  // (always false at maturity/harvest, where a drop is expected).
+  previous: number | null;
+  declined: boolean;
 }
 interface CropAssessment {
   cropType: string;
@@ -214,13 +220,26 @@ interface CropAssessment {
   messageEn: string;
   indices: { ndvi: CropIndexAssessment; ndre: CropIndexAssessment; ndmi: CropIndexAssessment };
   weak: Array<"ndvi" | "ndre" | "ndmi">;
+  // Task #146: indices that fell > PLOT_DECLINE_THRESHOLD vs the previous
+  // reading, plus the resolved date of that previous reading (for the message).
+  declining: Array<"ndvi" | "ndre" | "ndmi">;
+  previousDate: string | null;
 }
 
 const PLOT_BAND_TOLERANCE = 0.03;
+// Task #146: a drop LARGER than this in any watched index mean vs the plot's
+// previous reading flags "needs attention" (separate constant from the
+// coincidentally-equal band tolerance, so the two can move independently).
+const PLOT_DECLINE_THRESHOLD = 0.03;
 const PLOT_WEAK_CAUSE: Record<"ndvi" | "ndre" | "ndmi", { hi: string; en: string }> = {
   ndvi: { hi: "कमजोर हरियाली/कैनोपी (NDVI)", en: "weak canopy/biomass (NDVI)" },
   ndre: { hi: "संभावित नाइट्रोजन/क्लोरोफिल की कमी (NDRE)", en: "possible nitrogen/chlorophyll deficiency (NDRE)" },
   ndmi: { hi: "संभावित जल/नमी तनाव (NDMI)", en: "possible water/moisture stress (NDMI)" },
+};
+const PLOT_DECLINE_CAUSE: Record<"ndvi" | "ndre" | "ndmi", { hi: string; en: string }> = {
+  ndvi: { hi: "हरियाली/कैनोपी (NDVI)", en: "canopy/biomass (NDVI)" },
+  ndre: { hi: "नाइट्रोजन/क्लोरोफिल (NDRE)", en: "nitrogen/chlorophyll (NDRE)" },
+  ndmi: { hi: "जल/नमी (NDMI)", en: "water/moisture (NDMI)" },
 };
 
 function assessIndex(
@@ -233,10 +252,35 @@ function assessIndex(
   // Treating a missing lower bound as "ok" would falsely classify the index as
   // healthy, so it is "na" instead.
   if (actual == null || !Number.isFinite(actual) || lower == null) {
-    return { status: "na", actual: actual ?? null, lower, typical, upper };
+    return { status: "na", actual: actual ?? null, lower, typical, upper, previous: null, declined: false };
   }
   const status: CropIndexStatus = (actual as number) >= lower - PLOT_BAND_TOLERANCE ? "ok" : "low";
-  return { status, actual: actual as number, lower, typical, upper };
+  return { status, actual: actual as number, lower, typical, upper, previous: null, declined: false };
+}
+
+// Task #146: fill in the trend fields on an already range-assessed index. A
+// decline counts only when both the current and previous means are finite and
+// the drop exceeds PLOT_DECLINE_THRESHOLD, and never when the stage is exempt.
+function applyDecline(
+  ix: CropIndexAssessment,
+  prevMean: number | null | undefined,
+  exempt: boolean,
+): void {
+  const prev = prevMean == null || !Number.isFinite(prevMean) ? null : (prevMean as number);
+  ix.previous = prev;
+  ix.declined =
+    !exempt &&
+    prev != null &&
+    ix.actual != null &&
+    Number.isFinite(ix.actual) &&
+    prev - (ix.actual as number) > PLOT_DECLINE_THRESHOLD;
+}
+
+interface PreviousPlotReading {
+  ndviMean: number | null;
+  ndreMean: number | null;
+  ndmiMean: number | null;
+  resolvedDate: string | null;
 }
 
 function computeCropAssessment(
@@ -244,17 +288,31 @@ function computeCropAssessment(
   cropStage: string,
   stats: LotStats | null,
   ref: CropStageReference,
+  previous: PreviousPlotReading | null,
+  declineExempt: boolean,
 ): CropAssessment {
   const ndvi = assessIndex(stats?.ndvi?.mean ?? null, ref.ndviLower, ref.ndviTypical, ref.ndviUpper);
   const ndre = assessIndex(stats?.ndre?.mean ?? null, ref.ndreLower, ref.ndreTypical, ref.ndreUpper);
   const ndmi = assessIndex(stats?.ndmi?.mean ?? null, ref.ndmiLower, ref.ndmiTypical, ref.ndmiUpper);
+
+  applyDecline(ndvi, previous?.ndviMean, declineExempt);
+  applyDecline(ndre, previous?.ndreMean, declineExempt);
+  applyDecline(ndmi, previous?.ndmiMean, declineExempt);
 
   const weak: Array<"ndvi" | "ndre" | "ndmi"> = [];
   if (ndvi.status === "low") weak.push("ndvi");
   if (ndre.status === "low") weak.push("ndre");
   if (ndmi.status === "low") weak.push("ndmi");
 
-  const overall: CropAssessment["overall"] = weak.length > 0 ? "needs_attention" : "healthy";
+  const declining: Array<"ndvi" | "ndre" | "ndmi"> = [];
+  if (ndvi.declined) declining.push("ndvi");
+  if (ndre.declined) declining.push("ndre");
+  if (ndmi.declined) declining.push("ndmi");
+
+  // OR logic: below-range OR a >threshold drop flags attention; both must be
+  // clear to stay healthy.
+  const overall: CropAssessment["overall"] =
+    weak.length > 0 || declining.length > 0 ? "needs_attention" : "healthy";
 
   let messageHi: string;
   let messageEn: string;
@@ -262,10 +320,23 @@ function computeCropAssessment(
     messageHi = "ठीक चल रहा है — इस अवस्था के लिए सभी सूचकांक स्वस्थ सीमा में हैं।";
     messageEn = "Looks on-track — all index values meet the expected healthy range for this stage.";
   } else {
-    const causesHi = weak.map((k) => PLOT_WEAK_CAUSE[k].hi).join(", ");
-    const causesEn = weak.map((k) => PLOT_WEAK_CAUSE[k].en).join(", ");
-    messageHi = `अपेक्षा से कम — ${causesHi}। कृपया खेत में जाकर समय रहते कार्रवाई करें।`;
-    messageEn = `Below the expected range — ${causesEn}. Please visit the field and act in time.`;
+    const segHi: string[] = [];
+    const segEn: string[] = [];
+    if (weak.length > 0) {
+      const causesHi = weak.map((k) => PLOT_WEAK_CAUSE[k].hi).join(", ");
+      const causesEn = weak.map((k) => PLOT_WEAK_CAUSE[k].en).join(", ");
+      segHi.push(`अपेक्षा से कम — ${causesHi}`);
+      segEn.push(`Below the expected range — ${causesEn}`);
+    }
+    if (declining.length > 0) {
+      const dHi = declining.map((k) => PLOT_DECLINE_CAUSE[k].hi).join(", ");
+      const dEn = declining.map((k) => PLOT_DECLINE_CAUSE[k].en).join(", ");
+      const when = previous?.resolvedDate ? ` (${previous.resolvedDate})` : "";
+      segHi.push(`पिछली रीडिंग${when} से गिरावट — ${dHi}`);
+      segEn.push(`Dropped since the last reading${when} — ${dEn}`);
+    }
+    messageHi = `${segHi.join("। ")}। कृपया खेत में जाकर समय रहते कार्रवाई करें।`;
+    messageEn = `${segEn.join(". ")}. Please visit the field and act in time.`;
   }
 
   return {
@@ -280,6 +351,8 @@ function computeCropAssessment(
     messageEn,
     indices: { ndvi, ndre, ndmi },
     weak,
+    declining,
+    previousDate: previous?.resolvedDate ?? null,
   };
 }
 
@@ -1792,7 +1865,29 @@ Respond in this structure:
       if (cropType && cropType !== "barren" && cropStage) {
         const ref = await storage.getCropStageReference(cropType, cropStage);
         if (ref && result.stats) {
-          cropAssessment = computeCropAssessment(cropType, cropStage, result.stats, ref);
+          // Task #146: pull the most recent earlier reading for the SAME plot +
+          // crop so we can flag a >threshold drop in any index. Fetched before
+          // this run's row is logged (below), so it never compares to itself.
+          const previous = await storage
+            .getPreviousPlotHealthSearch({
+              userId: userId ?? null,
+              cropType,
+              latitude: lat,
+              longitude: lng,
+              beforeResolvedDate: result.acquisition.date,
+            })
+            .catch((e) => {
+              console.error("Plot health previous-reading lookup error:", e?.message || e);
+              return undefined;
+            });
+          cropAssessment = computeCropAssessment(
+            cropType,
+            cropStage,
+            result.stats,
+            ref,
+            previous ?? null,
+            isDeclineExemptStage(cropType, cropStage),
+          );
         }
       }
 

@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, marketplaceStockCounters, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog, bills, type Bill, type InsertBill, buyers, type Buyer, cropStageReferences, type CropStageReference, type InsertCropStageReference, plotHealthSearches, type PlotHealthSearch, type InsertPlotHealthSearch, PLOT_CROP_STAGES, type PlotCropKey } from "@shared/schema";
-import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
+import { eq, desc, and, like, sql, ilike, asc, lt, isNull, isNotNull } from "drizzle-orm";
 
 // Task #112: buyer identity is normalized — case-insensitive on name with
 // internal whitespace collapsed, and phone with all whitespace stripped.
@@ -73,6 +73,20 @@ const PLOT_STAGE_PHASE: Record<PlotCropKey, Record<string, PlotPhase>> = {
   others: { early_growth: "early", vegetative_growth: "veg", reproductive_stage: "peak", yield_formation_stage: "filling", maturity: "maturity", harvest_ready: "harvest" },
   barren: {},
 };
+
+// Task #146: at maturity / harvest the canopy naturally senesces, so a drop in
+// the vegetation indices is expected there. The "fell vs the plot's previous
+// reading" warning is suppressed for those phases. PLOT_STAGE_PHASE stays the
+// single source of truth for the crop→stage→phase mapping.
+export function isDeclineExemptStage(cropKey: string, stageKey: string): boolean {
+  const phase = PLOT_STAGE_PHASE[cropKey as PlotCropKey]?.[stageKey];
+  if (phase === "maturity" || phase === "harvest") return true;
+  // Some crops (e.g. onion/garlic `bulb_maturity`) name a maturity stage that
+  // maps to an earlier phase bucket for the reference band. Senescence/decline
+  // is still expected at any explicitly maturity- or harvest-named stage, so
+  // exempt those by stage key too rather than mutating the shared phase map.
+  return /maturity|harvest/.test(stageKey);
+}
 
 // Crops with strong per-stage Sentinel-2 phenology literature get a specific
 // source; the rest lean on the general scale and are flagged generic.
@@ -209,6 +223,13 @@ export interface IStorage {
   getAllCropStageReferences(): Promise<CropStageReference[]>;
   seedCropStageReferences(): Promise<void>;
   createPlotHealthSearch(data: InsertPlotHealthSearch): Promise<PlotHealthSearch>;
+  getPreviousPlotHealthSearch(params: {
+    userId: string | null;
+    cropType: string;
+    latitude: number;
+    longitude: number;
+    beforeResolvedDate: string;
+  }): Promise<PlotHealthSearch | undefined>;
 }
 
 // Task #128: anonymized "recent buyers" aggregate for the marketplace card
@@ -1249,6 +1270,38 @@ class DatabaseStorage implements IStorage {
 
   async createPlotHealthSearch(data: InsertPlotHealthSearch): Promise<PlotHealthSearch> {
     const [row] = await db.insert(plotHealthSearches).values(data).returning();
+    return row;
+  }
+
+  // Task #146: most recent earlier reading for the SAME plot + crop, used to
+  // detect a >threshold drop in any index. "Same plot" = within ~50 m (coords
+  // rarely repeat to 5 decimals across taps). Only successful readings (clear
+  // image, non-null NDVI mean) with a strictly-earlier resolved date qualify.
+  async getPreviousPlotHealthSearch(params: {
+    userId: string | null;
+    cropType: string;
+    latitude: number;
+    longitude: number;
+    beforeResolvedDate: string;
+  }): Promise<PlotHealthSearch | undefined> {
+    const { userId, cropType, latitude, longitude, beforeResolvedDate } = params;
+    const COORD_TOL = 0.0005; // ~50 m
+    const conditions = [
+      userId ? eq(plotHealthSearches.userId, userId) : isNull(plotHealthSearches.userId),
+      eq(plotHealthSearches.cropType, cropType),
+      eq(plotHealthSearches.noClearImage, false),
+      isNotNull(plotHealthSearches.ndviMean),
+      isNotNull(plotHealthSearches.resolvedDate),
+      lt(plotHealthSearches.resolvedDate, beforeResolvedDate),
+      sql`abs(${plotHealthSearches.latitude} - ${latitude}) <= ${COORD_TOL}`,
+      sql`abs(${plotHealthSearches.longitude} - ${longitude}) <= ${COORD_TOL}`,
+    ];
+    const [row] = await db
+      .select()
+      .from(plotHealthSearches)
+      .where(and(...conditions))
+      .orderBy(desc(plotHealthSearches.resolvedDate), desc(plotHealthSearches.createdAt))
+      .limit(1);
     return row;
   }
 

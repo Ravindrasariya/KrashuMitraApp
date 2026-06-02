@@ -892,6 +892,7 @@ const translations = {
   phStatusOk: { hi: "ठीक", en: "OK" },
   phStatusLow: { hi: "कम", en: "Low" },
   phStatusNa: { hi: "डेटा नहीं", en: "No data" },
+  phDeclined: { hi: "पिछली बार से गिरा", en: "Dropped vs last" },
   phOpacity: { hi: "परत पारदर्शिता", en: "Layer opacity" },
   phLegendBare: { hi: "खाली/मिट्टी", en: "Bare/Soil" },
   phLegendDense: { hi: "घनी फसल", en: "Dense crop" },
