@@ -665,3 +665,75 @@ export type InsertBill = z.infer<typeof insertBillSchema>;
 
 export type WeatherLog = typeof weatherLogs.$inferSelect;
 export type InsertWeatherLog = z.infer<typeof insertWeatherLogSchema>;
+
+// Task #143: reference database of healthy satellite-index RANGES per crop +
+// growth stage, used by the Plot Health Check to turn raw NDVI/NDRE/NDMI
+// numbers into a plain-language verdict. Each index carries a lower bound, a
+// typical value, and an upper bound; a field at or above the lower bound is
+// considered healthy for that index. `source` records the published reference
+// the band was derived from and `isGeneric` flags rows that lean on the
+// general NDVI scale rather than crop-specific literature (validate locally).
+// Seeded idempotently on startup (see seedCropStageReferences in storage.ts);
+// kept DB-stored so the numbers stay tunable.
+export const cropStageReferences = pgTable("crop_stage_references", {
+  id: serial("id").primaryKey(),
+  cropKey: text("crop_key").notNull(),
+  stageKey: text("stage_key").notNull(),
+  ndviLower: doublePrecision("ndvi_lower"),
+  ndviTypical: doublePrecision("ndvi_typical"),
+  ndviUpper: doublePrecision("ndvi_upper"),
+  ndreLower: doublePrecision("ndre_lower"),
+  ndreTypical: doublePrecision("ndre_typical"),
+  ndreUpper: doublePrecision("ndre_upper"),
+  ndmiLower: doublePrecision("ndmi_lower"),
+  ndmiTypical: doublePrecision("ndmi_typical"),
+  ndmiUpper: doublePrecision("ndmi_upper"),
+  guidanceHi: text("guidance_hi"),
+  guidanceEn: text("guidance_en"),
+  source: text("source"),
+  isGeneric: boolean("is_generic").notNull().default(false),
+}, (table) => [
+  uniqueIndex("crop_stage_references_crop_stage_idx").on(table.cropKey, table.stageKey),
+]);
+
+export const insertCropStageReferenceSchema = createInsertSchema(cropStageReferences).omit({
+  id: true,
+});
+
+export type CropStageReference = typeof cropStageReferences.$inferSelect;
+export type InsertCropStageReference = z.infer<typeof insertCropStageReferenceSchema>;
+
+// Task #143: single source of truth for the Plot Health crop list and the
+// growth stages each crop exposes. Shared between the seed routine
+// (server/storage.ts), the analyze validation (server/routes.ts) and the
+// dropdowns (client/src/components/plot-health.tsx) so the three never drift.
+// Display labels live in i18n (`phCrop_*` / `phStage_*`); these are the
+// stable machine keys. Order is the exact dropdown order requested:
+// alphabetical crops, then the two generic options pinned at the end.
+export const PLOT_CROP_KEYS = [
+  "chilli", "cotton", "garlic", "moong", "onion", "peas",
+  "potato", "soybean", "tomato", "wheat", "others", "barren",
+] as const;
+export type PlotCropKey = typeof PLOT_CROP_KEYS[number];
+
+// Generic stage set reused by crops without an explicit per-stage list
+// (Others, and — per the task assumptions — Chilli, Cotton, Tomato).
+export const PLOT_GENERIC_STAGES = [
+  "early_growth", "vegetative_growth", "reproductive_stage",
+  "yield_formation_stage", "maturity", "harvest_ready",
+] as const;
+
+export const PLOT_CROP_STAGES: Record<PlotCropKey, readonly string[]> = {
+  potato: ["emergence", "vegetative_growth", "canopy_development", "tuber_formation", "tuber_bulking", "maturity", "harvest_ready"],
+  onion: ["germination_emergence", "vegetative_growth", "bulb_initiation", "bulb_development", "bulb_maturity", "harvest_ready"],
+  garlic: ["germination_emergence", "vegetative_growth", "bulb_initiation", "bulb_development", "bulb_maturity", "harvest_ready"],
+  wheat: ["germination", "tillering", "stem_elongation", "ear_emergence", "flowering", "grain_filling", "maturity", "harvest_ready"],
+  soybean: ["germination", "vegetative_growth", "flowering", "pod_formation", "seed_filling", "maturity", "harvest_ready"],
+  moong: ["germination", "vegetative_growth", "flowering", "pod_formation", "seed_filling", "maturity", "harvest_ready"],
+  peas: ["germination", "vegetative_growth", "flowering", "pod_formation", "pod_development", "maturity", "harvest_ready"],
+  chilli: PLOT_GENERIC_STAGES,
+  cotton: PLOT_GENERIC_STAGES,
+  tomato: PLOT_GENERIC_STAGES,
+  others: PLOT_GENERIC_STAGES,
+  barren: [],
+};

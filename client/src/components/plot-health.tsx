@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PlotHealthChart } from "@/components/plot-health-chart";
+import { PLOT_CROP_KEYS, PLOT_CROP_STAGES, type PlotCropKey } from "@shared/schema";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,27 @@ interface LotStats {
   ndmi: IndexStat | null;
   validFraction: number;
 }
+type CropIndexStatus = "ok" | "low" | "na";
+interface CropIndexAssessment {
+  status: CropIndexStatus;
+  actual: number | null;
+  lower: number | null;
+  typical: number | null;
+  upper: number | null;
+}
+export interface CropAssessment {
+  cropType: string;
+  cropStage: string;
+  overall: "healthy" | "needs_attention" | "none";
+  isGeneric: boolean;
+  source: string | null;
+  guidanceHi: string | null;
+  guidanceEn: string | null;
+  messageHi: string;
+  messageEn: string;
+  indices: { ndvi: CropIndexAssessment; ndre: CropIndexAssessment; ndmi: CropIndexAssessment };
+  weak: Array<"ndvi" | "ndre" | "ndmi">;
+}
 export interface PlotHealthResult {
   lat: number;
   lng: number;
@@ -57,6 +79,9 @@ export interface PlotHealthResult {
   stats: LotStats | null;
   noClearImage?: boolean;
   id?: number;
+  cropType?: string | null;
+  cropStage?: string | null;
+  cropAssessment?: CropAssessment | null;
 }
 
 interface PlotConfig {
@@ -197,6 +222,10 @@ export default function PlotHealth({
   );
   const [activeIndex, setActiveIndex] = useState<IndexId>("ndvi");
   const [opacity, setOpacity] = useState<number>(0.8);
+  // Task #143: chosen crop + growth stage for the health verdict. Restored from
+  // a reopened history result; "" means none chosen.
+  const [cropType, setCropType] = useState<string>(initialResult?.cropType ?? "");
+  const [cropStage, setCropStage] = useState<string>(initialResult?.cropStage ?? "");
   const [result, setResult] = useState<PlotHealthResult | null>(initialResult ?? null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -332,12 +361,19 @@ export default function PlotHealth({
   const analyzeMutation = useMutation({
     mutationFn: async (vars?: { date?: string }) => {
       if (lat == null || lng == null) throw new Error(t("phPickLocationFirst"));
+      // Task #143: if a real crop is chosen (not barren), a stage is required to
+      // produce a verdict — otherwise the health check would silently skip it.
+      if (cropType && cropType !== "barren" && !cropStage) {
+        throw new Error(t("phSelectStageFirst"));
+      }
       const reqDate = vars?.date ?? (useLatest ? "latest" : dateValue);
       const res = await apiRequest("POST", "/api/plot-health/analyze", {
         lat,
         lng,
         boxSizeM,
         date: reqDate,
+        cropType: cropType || undefined,
+        cropStage: cropStage || undefined,
       });
       return res.json() as Promise<PlotHealthResult>;
     },
@@ -440,6 +476,48 @@ export default function PlotHealth({
             {t("phUseGps")}
           </Button>
           <span className="text-xs text-muted-foreground self-center">{t("phOrTapMap")}</span>
+        </div>
+        {/* Task #143: crop + stage selection drives the health verdict. */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-xs">{t("phCropInField")}</Label>
+            <Select
+              value={cropType}
+              onValueChange={(v) => {
+                setCropType(v);
+                const stages = (PLOT_CROP_STAGES[v as PlotCropKey] ?? []) as readonly string[];
+                if (!stages.includes(cropStage)) setCropStage("");
+              }}
+            >
+              <SelectTrigger className="mt-1" data-testid="select-plot-crop">
+                <SelectValue placeholder={t("phSelectCrop")} />
+              </SelectTrigger>
+              <SelectContent>
+                {PLOT_CROP_KEYS.map((c) => (
+                  <SelectItem key={c} value={c} data-testid={`option-crop-${c}`}>
+                    {t(`phCrop_${c}` as any)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {cropType && cropType !== "barren" && (
+            <div>
+              <Label className="text-xs">{t("phCropStage")}</Label>
+              <Select value={cropStage} onValueChange={setCropStage}>
+                <SelectTrigger className="mt-1" data-testid="select-plot-stage">
+                  <SelectValue placeholder={t("phSelectStage")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {((PLOT_CROP_STAGES[cropType as PlotCropKey] ?? []) as readonly string[]).map((s) => (
+                    <SelectItem key={s} value={s} data-testid={`option-stage-${s}`}>
+                      {t(`phStage_${s}` as any)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
           <div>
@@ -697,6 +775,83 @@ export default function PlotHealth({
           )}
         </Card>
       )}
+
+      {/* Crop health assessment (Task #143) */}
+      {result && !result.noClearImage && result.cropAssessment && result.cropAssessment.overall !== "none" && (() => {
+        const a = result.cropAssessment!;
+        const healthy = a.overall === "healthy";
+        const guidance = language === "hi" ? a.guidanceHi : a.guidanceEn;
+        const message = language === "hi" ? a.messageHi : a.messageEn;
+        return (
+          <Card
+            className={
+              "p-4 space-y-3 " +
+              (healthy
+                ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
+                : "bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800")
+            }
+            data-testid="card-plot-assessment"
+          >
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h4 className="font-semibold text-sm">{t("phAssessmentTitle")}</h4>
+              <span className="text-xs text-muted-foreground">
+                {t(`phCrop_${a.cropType}` as any)}
+                {a.cropStage ? ` · ${t(`phStage_${a.cropStage}` as any)}` : ""}
+              </span>
+            </div>
+
+            <div className="flex items-start gap-2" data-testid="text-plot-verdict">
+              {healthy ? (
+                <Satellite className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+              )}
+              <div>
+                <div className={"text-sm font-semibold " + (healthy ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>
+                  {healthy ? t("phVerdictHealthy") : t("phVerdictAttention")}
+                </div>
+                <p className="text-xs text-foreground/80 mt-0.5">{message}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {(["ndvi", "ndre", "ndmi"] as const).map((k) => {
+                const ix = a.indices[k];
+                const statusLabel = ix.status === "ok" ? t("phStatusOk") : ix.status === "low" ? t("phStatusLow") : t("phStatusNa");
+                const statusCls = ix.status === "ok"
+                  ? "text-emerald-700 dark:text-emerald-300"
+                  : ix.status === "low"
+                    ? "text-amber-700 dark:text-amber-300"
+                    : "text-muted-foreground";
+                return (
+                  <div key={k} className="bg-background/60 rounded p-2" data-testid={`assessment-${k}`}>
+                    <div className="text-[10px] text-muted-foreground uppercase">{t(`phIndex_${k}` as any)}</div>
+                    <div className="text-base font-bold tabular-nums">{ix.actual != null ? ix.actual.toFixed(2) : "—"}</div>
+                    <div className="text-[9px] text-muted-foreground">
+                      {t("phExpected")}: {ix.lower != null ? ix.lower.toFixed(2) : "—"}+
+                    </div>
+                    <div className={"text-[10px] font-semibold mt-0.5 " + statusCls}>{statusLabel}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {guidance && (
+              <p className="text-xs text-foreground/80" data-testid="text-plot-guidance">
+                <span className="font-semibold">{t("phGuidance")}: </span>{guidance}
+              </p>
+            )}
+            {a.isGeneric && (
+              <p className="text-[10px] text-muted-foreground" data-testid="text-plot-generic-note">{t("phGenericNote")}</p>
+            )}
+            {a.source && (
+              <p className="text-[10px] text-muted-foreground" data-testid="text-plot-source">
+                <span className="font-semibold">{t("phSource")}: </span>{a.source}
+              </p>
+            )}
+          </Card>
+        );
+      })()}
 
       {/* Index trend chart */}
       {result && !result.noClearImage && lat != null && lng != null && (

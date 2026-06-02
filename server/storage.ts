@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, marketplaceStockCounters, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog, bills, type Bill, type InsertBill, buyers, type Buyer } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, marketplaceStockCounters, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog, bills, type Bill, type InsertBill, buyers, type Buyer, cropStageReferences, type CropStageReference, type InsertCropStageReference, PLOT_CROP_STAGES, type PlotCropKey } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc } from "drizzle-orm";
 
 // Task #112: buyer identity is normalized — case-insensitive on name with
@@ -14,6 +14,95 @@ export function normalizeBuyerPhone(s: string): string {
 export interface BuyerWithDue extends Buyer {
   totalDue: string;
   totalPaid: string;
+}
+
+// ---------------------------------------------------------------------------
+// Task #143: Plot Health crop+stage reference seed data.
+//
+// Rather than hand-write a band per (crop, stage) row, every stage is mapped to
+// one of seven phenological PHASES, and each phase carries one band set for
+// NDVI / NDRE / NDMI (lower / typical / upper). This keeps the seed compact and
+// internally consistent (the same physiological moment yields the same band
+// across crops). Numbers are derived from published remote-sensing references:
+//   - NDVI breakpoints from the general USGS/NASA vegetation scale, shaped over
+//     the season to match Sentinel-2 crop-phenology literature (MDPI Remote
+//     Sensing / FAO-ICAR for Indian crops).
+//   - NDRE nitrogen bands (<0.2 severe deficiency, 0.3-0.6 healthy) and NDMI
+//     moisture bands (>0.4 well-hydrated, 0.0-0.2 mild stress, <0 deficit) from
+//     EOSDA Crop Monitoring and Sentinel Hub index docs.
+// Bands stay DB-stored and tunable; per the references, absolute thresholds must
+// be validated against local cultivar/region/atmosphere conditions.
+type PlotPhase = "emergence" | "early" | "veg" | "peak" | "filling" | "maturity" | "harvest";
+
+interface IndexBand { lower: number; typical: number; upper: number }
+interface PhaseBands { ndvi: IndexBand; ndre: IndexBand; ndmi: IndexBand }
+
+const PLOT_PHASE_BANDS: Record<PlotPhase, PhaseBands> = {
+  emergence: { ndvi: { lower: 0.15, typical: 0.25, upper: 0.40 }, ndre: { lower: 0.10, typical: 0.18, upper: 0.30 }, ndmi: { lower: 0.00, typical: 0.10, upper: 0.25 } },
+  early:     { ndvi: { lower: 0.30, typical: 0.45, upper: 0.60 }, ndre: { lower: 0.18, typical: 0.28, upper: 0.40 }, ndmi: { lower: 0.05, typical: 0.18, upper: 0.30 } },
+  veg:       { ndvi: { lower: 0.45, typical: 0.60, upper: 0.75 }, ndre: { lower: 0.25, typical: 0.35, upper: 0.50 }, ndmi: { lower: 0.15, typical: 0.28, upper: 0.40 } },
+  peak:      { ndvi: { lower: 0.65, typical: 0.80, upper: 0.90 }, ndre: { lower: 0.30, typical: 0.45, upper: 0.60 }, ndmi: { lower: 0.20, typical: 0.35, upper: 0.50 } },
+  filling:   { ndvi: { lower: 0.45, typical: 0.60, upper: 0.75 }, ndre: { lower: 0.22, typical: 0.32, upper: 0.45 }, ndmi: { lower: 0.10, typical: 0.25, upper: 0.40 } },
+  maturity:  { ndvi: { lower: 0.25, typical: 0.40, upper: 0.55 }, ndre: { lower: 0.12, typical: 0.20, upper: 0.32 }, ndmi: { lower: 0.00, typical: 0.12, upper: 0.28 } },
+  harvest:   { ndvi: { lower: 0.15, typical: 0.25, upper: 0.40 }, ndre: { lower: 0.08, typical: 0.15, upper: 0.28 }, ndmi: { lower: -0.05, typical: 0.05, upper: 0.20 } },
+};
+
+// Short bilingual stage guidance keyed by phase (generic, stage-appropriate).
+const PLOT_PHASE_GUIDANCE: Record<PlotPhase, { hi: string; en: string }> = {
+  emergence: { hi: "अंकुरण अवस्था — खेत में नमी बनाए रखें और जमाव की निगरानी करें।", en: "Emergence — keep soil moist and watch for an even, healthy stand." },
+  early:     { hi: "प्रारंभिक वृद्धि — खरपतवार नियंत्रण और हल्की खाद पर ध्यान दें।", en: "Early growth — focus on weed control and a light starter dose of nutrients." },
+  veg:       { hi: "वानस्पतिक वृद्धि — नाइट्रोजन व सिंचाई पर्याप्त रखें ताकि कैनोपी अच्छी बने।", en: "Vegetative growth — maintain nitrogen and irrigation so the canopy builds well." },
+  peak:      { hi: "चरम वृद्धि/प्रजनन अवस्था — जल व पोषक तत्वों की मांग सबसे अधिक है, तनाव से बचाएं।", en: "Peak/reproductive stage — water and nutrient demand is highest; avoid any stress." },
+  filling:   { hi: "उपज भराव अवस्था — संतुलित नमी रखें; अधिक नाइट्रोजन से बचें।", en: "Yield-filling stage — keep moisture balanced; avoid excess late nitrogen." },
+  maturity:  { hi: "परिपक्वता — सिंचाई धीरे-धीरे कम करें; फसल का पकना देखें।", en: "Maturity — taper off irrigation and monitor the crop ripening." },
+  harvest:   { hi: "कटाई हेतु तैयार — कटाई व भंडारण की योजना बनाएं।", en: "Harvest ready — plan harvesting and storage." },
+};
+
+// (crop → stage → phase) map. Mirrors PLOT_CROP_STAGES in shared/schema.ts.
+const PLOT_STAGE_PHASE: Record<PlotCropKey, Record<string, PlotPhase>> = {
+  potato: { emergence: "emergence", vegetative_growth: "veg", canopy_development: "peak", tuber_formation: "peak", tuber_bulking: "peak", maturity: "maturity", harvest_ready: "harvest" },
+  onion: { germination_emergence: "emergence", vegetative_growth: "veg", bulb_initiation: "peak", bulb_development: "peak", bulb_maturity: "filling", harvest_ready: "harvest" },
+  garlic: { germination_emergence: "emergence", vegetative_growth: "veg", bulb_initiation: "peak", bulb_development: "peak", bulb_maturity: "filling", harvest_ready: "harvest" },
+  wheat: { germination: "emergence", tillering: "veg", stem_elongation: "peak", ear_emergence: "peak", flowering: "peak", grain_filling: "filling", maturity: "maturity", harvest_ready: "harvest" },
+  soybean: { germination: "emergence", vegetative_growth: "veg", flowering: "peak", pod_formation: "peak", seed_filling: "filling", maturity: "maturity", harvest_ready: "harvest" },
+  moong: { germination: "emergence", vegetative_growth: "veg", flowering: "peak", pod_formation: "peak", seed_filling: "filling", maturity: "maturity", harvest_ready: "harvest" },
+  peas: { germination: "emergence", vegetative_growth: "veg", flowering: "peak", pod_formation: "peak", pod_development: "filling", maturity: "maturity", harvest_ready: "harvest" },
+  chilli: { early_growth: "early", vegetative_growth: "veg", reproductive_stage: "peak", yield_formation_stage: "filling", maturity: "maturity", harvest_ready: "harvest" },
+  cotton: { early_growth: "early", vegetative_growth: "veg", reproductive_stage: "peak", yield_formation_stage: "filling", maturity: "maturity", harvest_ready: "harvest" },
+  tomato: { early_growth: "early", vegetative_growth: "veg", reproductive_stage: "peak", yield_formation_stage: "filling", maturity: "maturity", harvest_ready: "harvest" },
+  others: { early_growth: "early", vegetative_growth: "veg", reproductive_stage: "peak", yield_formation_stage: "filling", maturity: "maturity", harvest_ready: "harvest" },
+  barren: {},
+};
+
+// Crops with strong per-stage Sentinel-2 phenology literature get a specific
+// source; the rest lean on the general scale and are flagged generic.
+const PLOT_CROP_WELL_SUPPORTED = new Set<PlotCropKey>(["potato", "onion", "wheat", "soybean"]);
+const PLOT_SOURCE_SPECIFIC = "Sentinel-2 crop-phenology literature (MDPI Remote Sensing / FAO-ICAR); NDRE/NDMI bands from EOSDA Crop Monitoring & Sentinel Hub.";
+const PLOT_SOURCE_GENERIC = "General NDVI scale (USGS/NASA) + EOSDA/Sentinel Hub NDRE & NDMI bands — generic estimate, validate against local conditions.";
+
+function buildCropStageReferenceSeed(): InsertCropStageReference[] {
+  const rows: InsertCropStageReference[] = [];
+  for (const cropKey of Object.keys(PLOT_STAGE_PHASE) as PlotCropKey[]) {
+    const stageMap = PLOT_STAGE_PHASE[cropKey];
+    const wellSupported = PLOT_CROP_WELL_SUPPORTED.has(cropKey);
+    for (const stageKey of Object.keys(stageMap)) {
+      const phase = stageMap[stageKey];
+      const b = PLOT_PHASE_BANDS[phase];
+      const g = PLOT_PHASE_GUIDANCE[phase];
+      rows.push({
+        cropKey,
+        stageKey,
+        ndviLower: b.ndvi.lower, ndviTypical: b.ndvi.typical, ndviUpper: b.ndvi.upper,
+        ndreLower: b.ndre.lower, ndreTypical: b.ndre.typical, ndreUpper: b.ndre.upper,
+        ndmiLower: b.ndmi.lower, ndmiTypical: b.ndmi.typical, ndmiUpper: b.ndmi.upper,
+        guidanceHi: g.hi,
+        guidanceEn: g.en,
+        source: wellSupported ? PLOT_SOURCE_SPECIFIC : PLOT_SOURCE_GENERIC,
+        isGeneric: !wellSupported,
+      });
+    }
+  }
+  return rows;
 }
 
 export interface IStorage {
@@ -116,6 +205,9 @@ export interface IStorage {
   markBillPaid(sellerId: string, billId: number, paidDate: string | null): Promise<Bill | undefined>;
   setBillArchived(sellerId: string, billId: number, archived: boolean): Promise<Bill | undefined>;
   getRecentBuyerGroupsForListing(listingId: number, days?: number): Promise<RecentBuyerGroup[]>;
+  getCropStageReference(cropKey: string, stageKey: string): Promise<CropStageReference | undefined>;
+  getAllCropStageReferences(): Promise<CropStageReference[]>;
+  seedCropStageReferences(): Promise<void>;
 }
 
 // Task #128: anonymized "recent buyers" aggregate for the marketplace card
@@ -1129,6 +1221,29 @@ class DatabaseStorage implements IStorage {
 
   async deletePriceCrop(id: number): Promise<void> {
     await db.delete(priceCrops).where(eq(priceCrops.id, id));
+  }
+
+  async getCropStageReference(cropKey: string, stageKey: string): Promise<CropStageReference | undefined> {
+    const [row] = await db
+      .select()
+      .from(cropStageReferences)
+      .where(and(eq(cropStageReferences.cropKey, cropKey), eq(cropStageReferences.stageKey, stageKey)));
+    return row;
+  }
+
+  async getAllCropStageReferences(): Promise<CropStageReference[]> {
+    return db.select().from(cropStageReferences).orderBy(asc(cropStageReferences.cropKey), asc(cropStageReferences.stageKey));
+  }
+
+  // Task #143: idempotently seed the per-crop, per-stage healthy index ranges
+  // so the Plot Health verdict works out of the box in dev and prod. Rows are
+  // generated from a compact (crop → stage → phenological phase) mapping plus a
+  // per-phase band table, then inserted with onConflictDoNothing so any later
+  // admin/manual tuning of a row is preserved across restarts.
+  async seedCropStageReferences(): Promise<void> {
+    const rows = buildCropStageReferenceSeed();
+    if (rows.length === 0) return;
+    await db.insert(cropStageReferences).values(rows).onConflictDoNothing();
   }
 
   async getPriceEntries(cropId: number, limit?: number): Promise<PriceEntry[]> {

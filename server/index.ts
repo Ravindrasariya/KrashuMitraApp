@@ -72,6 +72,14 @@ app.use((req, res, next) => {
 (async () => {
   await registerRoutes(httpServer, app);
 
+  // Task #143: idempotently seed the Plot Health crop+stage reference ranges
+  // (no-op once present) so the health verdict works out of the box.
+  try {
+    await storage.seedCropStageReferences();
+  } catch (error) {
+    console.error("Crop-stage reference seeding error:", error);
+  }
+
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

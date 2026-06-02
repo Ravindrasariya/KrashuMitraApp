@@ -21,7 +21,11 @@ import {
   MARKETPLACE_FAN_COLORS,
   MARKETPLACE_OTHERS_CONDITIONS,
   MARKETPLACE_OTHERS_RETURN_POLICIES,
+  PLOT_CROP_STAGES,
+  type PlotCropKey,
+  type CropStageReference,
 } from "@shared/schema";
+import type { LotStats } from "./sentinel";
 import { parsePriceInput } from "@shared/price-format";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -179,6 +183,101 @@ type RecentBuyersCacheEntry = { ts: number; data: { groups: unknown[] } };
 const recentBuyersCache = new Map<number, RecentBuyersCacheEntry>();
 function invalidateRecentBuyersCache(listingId: number): void {
   recentBuyersCache.delete(listingId);
+}
+
+// Task #143: build the Plot Health crop-health verdict by comparing the field's
+// measured NDVI/NDRE/NDMI mean against the stored healthy range for the chosen
+// crop + stage. A field at or above the band's lower bound (minus a small
+// boundary tolerance so values sitting right on the edge don't flip-flop) counts
+// as healthy for that index. Overall verdict is healthy when every measured
+// index is in/above its band, needs_attention when any is below. The weak
+// index(es) name the likely cause (NDVI = canopy/biomass, NDRE = nitrogen,
+// NDMI = water) so the advice is actionable. Returns null when there's nothing
+// to assess (barren / no reference / no stats).
+type CropIndexStatus = "ok" | "low" | "na";
+interface CropIndexAssessment {
+  status: CropIndexStatus;
+  actual: number | null;
+  lower: number | null;
+  typical: number | null;
+  upper: number | null;
+}
+interface CropAssessment {
+  cropType: string;
+  cropStage: string;
+  overall: "healthy" | "needs_attention" | "none";
+  isGeneric: boolean;
+  source: string | null;
+  guidanceHi: string | null;
+  guidanceEn: string | null;
+  messageHi: string;
+  messageEn: string;
+  indices: { ndvi: CropIndexAssessment; ndre: CropIndexAssessment; ndmi: CropIndexAssessment };
+  weak: Array<"ndvi" | "ndre" | "ndmi">;
+}
+
+const PLOT_BAND_TOLERANCE = 0.03;
+const PLOT_WEAK_CAUSE: Record<"ndvi" | "ndre" | "ndmi", { hi: string; en: string }> = {
+  ndvi: { hi: "कमजोर हरियाली/कैनोपी (NDVI)", en: "weak canopy/biomass (NDVI)" },
+  ndre: { hi: "संभावित नाइट्रोजन/क्लोरोफिल की कमी (NDRE)", en: "possible nitrogen/chlorophyll deficiency (NDRE)" },
+  ndmi: { hi: "संभावित जल/नमी तनाव (NDMI)", en: "possible water/moisture stress (NDMI)" },
+};
+
+function assessIndex(
+  actual: number | null | undefined,
+  lower: number | null,
+  typical: number | null,
+  upper: number | null,
+): CropIndexAssessment {
+  if (actual == null || !Number.isFinite(actual) || lower == null) {
+    return { status: actual == null || !Number.isFinite(actual as number) ? "na" : "ok", actual: actual ?? null, lower, typical, upper };
+  }
+  const status: CropIndexStatus = (actual as number) >= lower - PLOT_BAND_TOLERANCE ? "ok" : "low";
+  return { status, actual: actual as number, lower, typical, upper };
+}
+
+function computeCropAssessment(
+  cropType: string,
+  cropStage: string,
+  stats: LotStats | null,
+  ref: CropStageReference,
+): CropAssessment {
+  const ndvi = assessIndex(stats?.ndvi?.mean ?? null, ref.ndviLower, ref.ndviTypical, ref.ndviUpper);
+  const ndre = assessIndex(stats?.ndre?.mean ?? null, ref.ndreLower, ref.ndreTypical, ref.ndreUpper);
+  const ndmi = assessIndex(stats?.ndmi?.mean ?? null, ref.ndmiLower, ref.ndmiTypical, ref.ndmiUpper);
+
+  const weak: Array<"ndvi" | "ndre" | "ndmi"> = [];
+  if (ndvi.status === "low") weak.push("ndvi");
+  if (ndre.status === "low") weak.push("ndre");
+  if (ndmi.status === "low") weak.push("ndmi");
+
+  const overall: CropAssessment["overall"] = weak.length > 0 ? "needs_attention" : "healthy";
+
+  let messageHi: string;
+  let messageEn: string;
+  if (overall === "healthy") {
+    messageHi = "ठीक चल रहा है — इस अवस्था के लिए सभी सूचकांक स्वस्थ सीमा में हैं।";
+    messageEn = "Looks on-track — all index values meet the expected healthy range for this stage.";
+  } else {
+    const causesHi = weak.map((k) => PLOT_WEAK_CAUSE[k].hi).join(", ");
+    const causesEn = weak.map((k) => PLOT_WEAK_CAUSE[k].en).join(", ");
+    messageHi = `अपेक्षा से कम — ${causesHi}। कृपया खेत में जाकर समय रहते कार्रवाई करें।`;
+    messageEn = `Below the expected range — ${causesEn}. Please visit the field and act in time.`;
+  }
+
+  return {
+    cropType,
+    cropStage,
+    overall,
+    isGeneric: ref.isGeneric,
+    source: ref.source,
+    guidanceHi: ref.guidanceHi,
+    guidanceEn: ref.guidanceEn,
+    messageHi,
+    messageEn,
+    indices: { ndvi, ndre, ndmi },
+    weak,
+  };
 }
 
 export async function registerRoutes(
@@ -1639,6 +1738,15 @@ Respond in this structure:
       const lng = Number(req.body?.lng);
       const boxSizeM = PLOT_HEALTH_BOX_SIZES.includes(Number(req.body?.boxSizeM)) ? Number(req.body.boxSizeM) : 50;
       const rawDate = typeof req.body?.date === "string" ? req.body.date : "latest";
+      // Optional crop + stage for the health verdict. Validated against the
+      // shared crop→stage map so only known keys reach the reference lookup.
+      const rawCropType = typeof req.body?.cropType === "string" ? req.body.cropType.trim() : "";
+      const cropType = (rawCropType in PLOT_CROP_STAGES ? rawCropType : "") as PlotCropKey | "";
+      const rawCropStage = typeof req.body?.cropStage === "string" ? req.body.cropStage.trim() : "";
+      const cropStage =
+        cropType && cropType !== "barren" && (PLOT_CROP_STAGES[cropType] as readonly string[]).includes(rawCropStage)
+          ? rawCropStage
+          : "";
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
         return res.status(400).json({ message: "Valid latitude and longitude are required" });
       }
@@ -1664,6 +1772,16 @@ Respond in this structure:
         }
       }
 
+      // Compute the crop-health verdict when a real crop + stage was chosen and
+      // a reference band exists (skipped for Barren / unknown crop / no stats).
+      let cropAssessment: CropAssessment | null = null;
+      if (cropType && cropType !== "barren" && cropStage) {
+        const ref = await storage.getCropStageReference(cropType, cropStage);
+        if (ref && result.stats) {
+          cropAssessment = computeCropAssessment(cropType, cropStage, result.stats, ref);
+        }
+      }
+
       const payload = {
         lat,
         lng,
@@ -1674,12 +1792,15 @@ Respond in this structure:
         cloudCover: result.acquisition.cloudCover,
         stats: result.stats,
         noClearImage: false,
+        cropType: cropType || null,
+        cropStage: cropStage || null,
+        cropAssessment,
       };
 
       const saved = await storage.createServiceRequest({
         userId,
         serviceType: "plot_health",
-        inputData: JSON.stringify({ lat, lng, boxSizeM, requestedDate: payload.requestedDate }),
+        inputData: JSON.stringify({ lat, lng, boxSizeM, requestedDate: payload.requestedDate, cropType: cropType || null, cropStage: cropStage || null }),
         aiDiagnosis: JSON.stringify(payload),
         status: "closed",
       });
