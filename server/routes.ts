@@ -229,8 +229,11 @@ function assessIndex(
   typical: number | null,
   upper: number | null,
 ): CropIndexAssessment {
+  // No measured value, or no lower bound to compare against → not assessable.
+  // Treating a missing lower bound as "ok" would falsely classify the index as
+  // healthy, so it is "na" instead.
   if (actual == null || !Number.isFinite(actual) || lower == null) {
-    return { status: actual == null || !Number.isFinite(actual as number) ? "na" : "ok", actual: actual ?? null, lower, typical, upper };
+    return { status: "na", actual: actual ?? null, lower, typical, upper };
   }
   const status: CropIndexStatus = (actual as number) >= lower - PLOT_BAND_TOLERANCE ? "ok" : "low";
   return { status, actual: actual as number, lower, typical, upper };
