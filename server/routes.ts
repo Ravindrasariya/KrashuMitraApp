@@ -1764,6 +1764,17 @@ Respond in this structure:
       if (!result) {
         const acquisition = await sentinel.findAcquisition(lat, lng, boxSizeM, toDate, lookbackDays, maxCloud);
         if (!acquisition) {
+          // Still log the search (no usable image → index values stay null).
+          await storage.createPlotHealthSearch({
+            userId: userId ?? null,
+            requestedDate: isLatest ? "latest" : toDate,
+            latitude: lat,
+            longitude: lng,
+            boxSizeM,
+            cropType: cropType || null,
+            cropStage: cropStage || null,
+            noClearImage: true,
+          }).catch((e) => console.error("Plot health search log error:", e?.message || e));
           return res.json({ noClearImage: true, boxSizeM, lat, lng, requestedDate: isLatest ? "latest" : toDate });
         }
         const stats = await sentinel.getStats(lat, lng, boxSizeM, acquisition.date);
@@ -1807,6 +1818,33 @@ Respond in this structure:
         aiDiagnosis: JSON.stringify(payload),
         status: "closed",
       });
+
+      // Log the search (date, location, crop, stage + measured index values) to
+      // the dedicated audit table. Errors are swallowed so a logging failure
+      // never breaks the analyze response.
+      await storage.createPlotHealthSearch({
+        userId: userId ?? null,
+        requestedDate: payload.requestedDate,
+        resolvedDate: result.acquisition.date,
+        latitude: lat,
+        longitude: lng,
+        boxSizeM,
+        cropType: cropType || null,
+        cropStage: cropStage || null,
+        ndviMean: result.stats?.ndvi?.mean ?? null,
+        ndviMin: result.stats?.ndvi?.min ?? null,
+        ndviMax: result.stats?.ndvi?.max ?? null,
+        ndreMean: result.stats?.ndre?.mean ?? null,
+        ndreMin: result.stats?.ndre?.min ?? null,
+        ndreMax: result.stats?.ndre?.max ?? null,
+        ndmiMean: result.stats?.ndmi?.mean ?? null,
+        ndmiMin: result.stats?.ndmi?.min ?? null,
+        ndmiMax: result.stats?.ndmi?.max ?? null,
+        cloudCover: result.acquisition.cloudCover ?? null,
+        validFraction: result.stats?.validFraction ?? null,
+        verdict: cropAssessment?.overall ?? null,
+        noClearImage: false,
+      }).catch((e) => console.error("Plot health search log error:", e?.message || e));
 
       res.json({ ...payload, id: saved.id });
     } catch (error: any) {

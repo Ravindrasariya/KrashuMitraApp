@@ -703,6 +703,44 @@ export const insertCropStageReferenceSchema = createInsertSchema(cropStageRefere
 export type CropStageReference = typeof cropStageReferences.$inferSelect;
 export type InsertCropStageReference = z.infer<typeof insertCropStageReferenceSchema>;
 
+// Audit log of every Plot Health Check search: the requested/resolved date,
+// location, chosen crop + stage, and the measured NDVI/NDRE/NDMI values plus
+// the derived health verdict. One row is written per analyze call (including
+// "no clear image" misses, where the index values stay null).
+export const plotHealthSearches = pgTable("plot_health_searches", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id),
+  requestedDate: text("requested_date").notNull(),
+  resolvedDate: text("resolved_date"),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  boxSizeM: integer("box_size_m").notNull(),
+  cropType: text("crop_type"),
+  cropStage: text("crop_stage"),
+  ndviMean: doublePrecision("ndvi_mean"),
+  ndviMin: doublePrecision("ndvi_min"),
+  ndviMax: doublePrecision("ndvi_max"),
+  ndreMean: doublePrecision("ndre_mean"),
+  ndreMin: doublePrecision("ndre_min"),
+  ndreMax: doublePrecision("ndre_max"),
+  ndmiMean: doublePrecision("ndmi_mean"),
+  ndmiMin: doublePrecision("ndmi_min"),
+  ndmiMax: doublePrecision("ndmi_max"),
+  cloudCover: doublePrecision("cloud_cover"),
+  validFraction: doublePrecision("valid_fraction"),
+  verdict: text("verdict"),
+  noClearImage: boolean("no_clear_image").notNull().default(false),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertPlotHealthSearchSchema = createInsertSchema(plotHealthSearches).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PlotHealthSearch = typeof plotHealthSearches.$inferSelect;
+export type InsertPlotHealthSearch = z.infer<typeof insertPlotHealthSearchSchema>;
+
 // Task #143: single source of truth for the Plot Health crop list and the
 // growth stages each crop exposes. Shared between the seed routine
 // (server/storage.ts), the analyze validation (server/routes.ts) and the
