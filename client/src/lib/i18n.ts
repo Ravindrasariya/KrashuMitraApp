@@ -832,6 +832,7 @@ const translations = {
   phFarmName: { hi: "खेत का नाम", en: "Farm Name" },
   phFarmNamePlaceholder: { hi: "जैसे: घर के पास का खेत", en: "e.g. Field near home" },
   phFarmNameRequired: { hi: "कृपया खेत का नाम दर्ज करें", en: "Please enter a farm name" },
+  phFarmAlreadySaved: { hi: "यह स्थान पहले से सहेजा गया है", en: "This location is already saved" },
   phFarmSaved: { hi: "खेत सहेजा गया!", en: "Farm saved!" },
   phFarmSaveFailed: { hi: "खेत सहेजा नहीं जा सका", en: "Could not save farm" },
   phFarmDeleted: { hi: "खेत हटा दिया गया", en: "Farm deleted" },

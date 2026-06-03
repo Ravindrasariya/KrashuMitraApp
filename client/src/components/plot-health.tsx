@@ -311,6 +311,10 @@ export default function PlotHealth({
       toast({ title: t("phInvalidCoords"), variant: "destructive" });
       return;
     }
+    if (coordsMatchSaved(la, ln)) {
+      toast({ title: t("phFarmAlreadySaved"), variant: "destructive" });
+      return;
+    }
     saveFarmMutation.mutate({ name, latitude: la, longitude: ln });
   }
 
@@ -318,6 +322,19 @@ export default function PlotHealth({
     const farm = savedFarms.find((f) => String(f.id) === value);
     if (farm) pickLocation(farm.latitude, farm.longitude);
   }
+
+  function coordsMatchSaved(la: number, ln: number) {
+    const r = (n: number) => Math.round(n * 1e5) / 1e5;
+    return savedFarms.some((f) => r(f.latitude) === r(la) && r(f.longitude) === r(ln));
+  }
+
+  const coordsAlreadySaved = useMemo(() => {
+    const la = latInput.trim() !== "" ? Number(latInput) : lat;
+    const ln = lngInput.trim() !== "" ? Number(lngInput) : lng;
+    if (la == null || ln == null || !Number.isFinite(la) || !Number.isFinite(ln)) return false;
+    return coordsMatchSaved(la, ln);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latInput, lngInput, lat, lng, savedFarms]);
 
   const saveFarmValid = useMemo(() => {
     const name = farmNameInput.trim();
@@ -822,12 +839,24 @@ export default function PlotHealth({
               <MapPin className="w-4 h-4 mr-1" />
               {t("phSet")}
             </Button>
-            <Button variant="outline" size="sm" onClick={openSaveDialog} data-testid="button-save-farm">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openSaveDialog}
+              disabled={coordsAlreadySaved}
+              title={coordsAlreadySaved ? t("phFarmAlreadySaved") : undefined}
+              data-testid="button-save-farm"
+            >
               <Bookmark className="w-4 h-4 mr-1" />
               {t("phSaveFarm")}
             </Button>
           </div>
         </div>
+        {coordsAlreadySaved && (
+          <p className="text-xs text-muted-foreground" data-testid="text-farm-already-saved">
+            {t("phFarmAlreadySaved")}
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label className="text-xs">{t("phBoxSize")}</Label>
@@ -948,7 +977,7 @@ export default function PlotHealth({
       )}
 
       {/* Map */}
-      <div className="rounded-md overflow-hidden border" style={{ height: "380px" }} data-testid="plot-map">
+      <div className="relative z-0 isolate rounded-md overflow-hidden border" style={{ height: "380px" }} data-testid="plot-map">
         <MapContainer
           center={[center.lat, center.lng]}
           zoom={15}
