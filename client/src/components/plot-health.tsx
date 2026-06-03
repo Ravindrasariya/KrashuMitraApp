@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Rectangle, CircleMarker, useMap, useMapEvents 
 import type { LatLngBoundsExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useTranslation } from "@/lib/i18n";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PlotHealthChart } from "@/components/plot-health-chart";
@@ -528,6 +528,10 @@ export default function PlotHealth({
       return res.json();
     },
     enabled: timelineEnabled,
+    // Keep the previous date's stops on screen while the re-centered window
+    // refetches, so the slider control never momentarily unmounts (it only
+    // renders when there are 2+ stops) when the farmer changes the date.
+    placeholderData: keepPreviousData,
   });
 
   // Only real (non-estimated) acquisitions, oldest → newest, become slider stops.
