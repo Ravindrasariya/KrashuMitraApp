@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, marketplaceStockCounters, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog, bills, type Bill, type InsertBill, buyers, type Buyer, cropStageReferences, type CropStageReference, type InsertCropStageReference, plotHealthSearches, type PlotHealthSearch, type InsertPlotHealthSearch, PLOT_CROP_STAGES, type PlotCropKey } from "@shared/schema";
+import { users, type User, cropCards, cropEvents, type CropCard, type InsertCropCard, type CropEvent, type InsertCropEvent, khataRegisters, khataItems, type KhataRegister, type InsertKhataRegister, type KhataItem, type InsertKhataItem, panatPayments, type PanatPayment, type InsertPanatPayment, lendenTransactions, type LendenTransaction, type InsertLendenTransaction, chatImages, type ChatImage, serviceRequests, type ServiceRequest, type InsertServiceRequest, marketplaceListings, type MarketplaceListing, type InsertMarketplaceListing, marketplacePhotos, type MarketplacePhoto, marketplaceRatings, type MarketplaceRating, marketplaceStockCounters, banners, type Banner, type InsertBanner, priceCrops, type PriceCrop, type InsertPriceCrop, priceEntries, type PriceEntry, type InsertPriceEntry, pricePolls, type PricePoll, siteVisits, weatherLogs, type WeatherLog, type InsertWeatherLog, bills, type Bill, type InsertBill, buyers, type Buyer, cropStageReferences, type CropStageReference, type InsertCropStageReference, plotHealthSearches, type PlotHealthSearch, type InsertPlotHealthSearch, savedFarms, type SavedFarm, type InsertSavedFarm, PLOT_CROP_STAGES, type PlotCropKey } from "@shared/schema";
 import { eq, desc, and, like, sql, ilike, asc, lt, isNull, isNotNull } from "drizzle-orm";
 
 // Task #112: buyer identity is normalized — case-insensitive on name with
@@ -230,6 +230,9 @@ export interface IStorage {
     longitude: number;
     beforeResolvedDate: string;
   }): Promise<PlotHealthSearch | undefined>;
+  getSavedFarmsByUser(userId: string): Promise<SavedFarm[]>;
+  createSavedFarm(data: InsertSavedFarm & { userId: string }): Promise<SavedFarm>;
+  deleteSavedFarm(userId: string, id: number): Promise<boolean>;
 }
 
 // Task #128: anonymized "recent buyers" aggregate for the marketplace card
@@ -1306,6 +1309,20 @@ class DatabaseStorage implements IStorage {
       .orderBy(desc(plotHealthSearches.resolvedDate), desc(plotHealthSearches.createdAt))
       .limit(1);
     return row;
+  }
+
+  async getSavedFarmsByUser(userId: string): Promise<SavedFarm[]> {
+    return db.select().from(savedFarms).where(eq(savedFarms.userId, userId)).orderBy(desc(savedFarms.createdAt));
+  }
+
+  async createSavedFarm(data: InsertSavedFarm & { userId: string }): Promise<SavedFarm> {
+    const [row] = await db.insert(savedFarms).values(data).returning();
+    return row;
+  }
+
+  async deleteSavedFarm(userId: string, id: number): Promise<boolean> {
+    const result = await db.delete(savedFarms).where(and(eq(savedFarms.id, id), eq(savedFarms.userId, userId))).returning();
+    return result.length > 0;
   }
 
   async getPriceEntries(cropId: number, limit?: number): Promise<PriceEntry[]> {

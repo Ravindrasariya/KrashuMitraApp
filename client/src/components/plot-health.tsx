@@ -7,11 +7,19 @@ import { useMutation, useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PlotHealthChart } from "@/components/plot-health-chart";
-import { PLOT_CROP_KEYS, PLOT_CROP_STAGES, type PlotCropKey } from "@shared/schema";
+import { PLOT_CROP_KEYS, PLOT_CROP_STAGES, type PlotCropKey, type SavedFarm } from "@shared/schema";
+import { queryClient } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -30,6 +38,8 @@ import {
   Thermometer,
   AlertTriangle,
   History,
+  Bookmark,
+  Trash2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -243,6 +253,71 @@ export default function PlotHealth({
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+
+  // Task #152: saved farm plots. A farmer can store the current coordinates
+  // under a name and reload them from the dropdown without re-typing lat/long.
+  const { data: savedFarms = [] } = useQuery<SavedFarm[]>({ queryKey: ["/api/plot-health/farms"] });
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [farmNameInput, setFarmNameInput] = useState("");
+  const [saveLatInput, setSaveLatInput] = useState("");
+  const [saveLngInput, setSaveLngInput] = useState("");
+
+  const saveFarmMutation = useMutation({
+    mutationFn: async (data: { name: string; latitude: number; longitude: number }) => {
+      const res = await apiRequest("POST", "/api/plot-health/farms", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plot-health/farms"] });
+      setSaveDialogOpen(false);
+      toast({ title: t("phFarmSaved") });
+    },
+    onError: () => {
+      toast({ title: t("phFarmSaveFailed"), variant: "destructive" });
+    },
+  });
+
+  const deleteFarmMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/plot-health/farms/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/plot-health/farms"] });
+      toast({ title: t("phFarmDeleted") });
+    },
+    onError: () => {
+      toast({ title: t("phFarmDeleteFailed"), variant: "destructive" });
+    },
+  });
+
+  function openSaveDialog() {
+    // Pre-fill from the currently set/typed coordinates so the popup opens with
+    // the plot the farmer is looking at, while still allowing manual edits.
+    setSaveLatInput(latInput || (lat != null ? lat.toFixed(6) : ""));
+    setSaveLngInput(lngInput || (lng != null ? lng.toFixed(6) : ""));
+    setFarmNameInput("");
+    setSaveDialogOpen(true);
+  }
+
+  function handleSaveFarmConfirm() {
+    const name = farmNameInput.trim();
+    const la = Number(saveLatInput);
+    const ln = Number(saveLngInput);
+    if (!name) {
+      toast({ title: t("phFarmNameRequired"), variant: "destructive" });
+      return;
+    }
+    if (!Number.isFinite(la) || !Number.isFinite(ln) || la < -90 || la > 90 || ln < -180 || ln > 180) {
+      toast({ title: t("phInvalidCoords"), variant: "destructive" });
+      return;
+    }
+    saveFarmMutation.mutate({ name, latitude: la, longitude: ln });
+  }
+
+  function handleSelectSavedFarm(value: string) {
+    const farm = savedFarms.find((f) => String(f.id) === value);
+    if (farm) pickLocation(farm.latitude, farm.longitude);
+  }
 
   const center = useMemo(() => {
     if (lat != null && lng != null) return { lat, lng };
@@ -641,11 +716,25 @@ export default function PlotHealth({
     <div className="space-y-4" data-testid="plot-health-flow">
       {/* Location input */}
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <Button variant="outline" size="sm" onClick={handleGps} disabled={gpsLoading} data-testid="button-plot-gps">
             {gpsLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Navigation className="w-4 h-4 mr-1" />}
             {t("phUseGps")}
           </Button>
+          {savedFarms.length > 0 && (
+            <Select value="" onValueChange={handleSelectSavedFarm}>
+              <SelectTrigger className="h-9 w-auto min-w-[140px]" data-testid="select-saved-farm">
+                <SelectValue placeholder={t("phSavedFarms")} />
+              </SelectTrigger>
+              <SelectContent>
+                {savedFarms.map((f) => (
+                  <SelectItem key={f.id} value={String(f.id)} data-testid={`option-saved-farm-${f.id}`}>
+                    {f.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <span className="text-xs text-muted-foreground self-center">{t("phOrTapMap")}</span>
         </div>
         {/* Task #143: crop + stage selection drives the health verdict. */}
@@ -715,10 +804,16 @@ export default function PlotHealth({
               data-testid="input-plot-lng"
             />
           </div>
-          <Button variant="secondary" size="sm" onClick={handleManualSet} data-testid="button-plot-set-coords">
-            <MapPin className="w-4 h-4 mr-1" />
-            {t("phSet")}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={handleManualSet} data-testid="button-plot-set-coords">
+              <MapPin className="w-4 h-4 mr-1" />
+              {t("phSet")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={openSaveDialog} data-testid="button-plot-save-farm">
+              <Bookmark className="w-4 h-4 mr-1" />
+              {t("phSaveFarm")}
+            </Button>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -1229,6 +1324,101 @@ export default function PlotHealth({
           )}
         </Card>
       )}
+
+      {/* Task #152: save / manage farm plots */}
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent data-testid="dialog-save-farm">
+          <DialogHeader>
+            <DialogTitle>{t("phSaveFarm")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="save-farm-name" className="text-xs">{t("phFarmName")}</Label>
+              <Input
+                id="save-farm-name"
+                value={farmNameInput}
+                maxLength={60}
+                placeholder={t("phFarmNamePlaceholder")}
+                onChange={(e) => setFarmNameInput(e.target.value)}
+                className="mt-1"
+                data-testid="input-save-farm-name"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label htmlFor="save-farm-lat" className="text-xs">{t("phLatitude")}</Label>
+                <Input
+                  id="save-farm-lat"
+                  value={saveLatInput}
+                  inputMode="decimal"
+                  placeholder="23.1765"
+                  onChange={(e) => setSaveLatInput(e.target.value)}
+                  className="mt-1"
+                  data-testid="input-save-farm-lat"
+                />
+              </div>
+              <div>
+                <Label htmlFor="save-farm-lng" className="text-xs">{t("phLongitude")}</Label>
+                <Input
+                  id="save-farm-lng"
+                  value={saveLngInput}
+                  inputMode="decimal"
+                  placeholder="75.7885"
+                  onChange={(e) => setSaveLngInput(e.target.value)}
+                  className="mt-1"
+                  data-testid="input-save-farm-lng"
+                />
+              </div>
+            </div>
+
+            {savedFarms.length > 0 && (
+              <div className="border-t pt-3">
+                <Label className="text-xs text-muted-foreground">{t("phSavedFarms")}</Label>
+                <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+                  {savedFarms.map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between gap-2 rounded border px-2 py-1.5"
+                      data-testid={`row-saved-farm-${f.id}`}
+                    >
+                      <button
+                        type="button"
+                        className="flex-1 text-left text-sm truncate hover:underline"
+                        onClick={() => { handleSelectSavedFarm(String(f.id)); setSaveDialogOpen(false); }}
+                        data-testid={`button-load-saved-farm-${f.id}`}
+                      >
+                        <span className="font-medium">{f.name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          {f.latitude.toFixed(4)}, {f.longitude.toFixed(4)}
+                        </span>
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-destructive"
+                        onClick={() => deleteFarmMutation.mutate(f.id)}
+                        disabled={deleteFarmMutation.isPending}
+                        data-testid={`button-delete-saved-farm-${f.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveDialogOpen(false)} data-testid="button-cancel-save-farm">
+              {t("cancel")}
+            </Button>
+            <Button onClick={handleSaveFarmConfirm} disabled={saveFarmMutation.isPending} data-testid="button-confirm-save-farm">
+              {saveFarmMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+              {t("save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
   PLOT_CROP_STAGES,
   type PlotCropKey,
   type CropStageReference,
+  insertSavedFarmSchema,
 } from "@shared/schema";
 import type { LotStats } from "./sentinel";
 import { parsePriceInput } from "@shared/price-format";
@@ -2010,6 +2011,46 @@ Respond in this structure:
       }
       console.error("Plot health timeseries error:", error?.message || error);
       res.status(502).json({ message: "Could not reach the satellite provider. Please try again." });
+    }
+  });
+
+  // Task #152: per-user saved farm plots so a farmer can store a plot's
+  // coordinates under a name and reload them from a dropdown in the Plot Health
+  // Check flow instead of re-typing the lat/long every time.
+  app.get("/api/plot-health/farms", isAuthenticated, async (req: any, res) => {
+    try {
+      const farms = await storage.getSavedFarmsByUser(req.session.userId);
+      res.json(farms);
+    } catch (error) {
+      console.error("Error listing saved farms:", error);
+      res.status(500).json({ message: "Failed to list saved farms" });
+    }
+  });
+
+  app.post("/api/plot-health/farms", isAuthenticated, async (req: any, res) => {
+    try {
+      const parsed = insertSavedFarmSchema.parse(req.body);
+      const created = await storage.createSavedFarm({ ...parsed, userId: req.session.userId });
+      res.json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid farm data", errors: error.errors });
+      }
+      console.error("Error creating saved farm:", error);
+      res.status(500).json({ message: "Failed to save farm" });
+    }
+  });
+
+  app.delete("/api/plot-health/farms/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid id" });
+      const ok = await storage.deleteSavedFarm(req.session.userId, id);
+      if (!ok) return res.status(404).json({ message: "Farm not found" });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting saved farm:", error);
+      res.status(500).json({ message: "Failed to delete farm" });
     }
   });
 

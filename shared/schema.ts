@@ -741,6 +741,29 @@ export const insertPlotHealthSearchSchema = createInsertSchema(plotHealthSearche
 export type PlotHealthSearch = typeof plotHealthSearches.$inferSelect;
 export type InsertPlotHealthSearch = z.infer<typeof insertPlotHealthSearchSchema>;
 
+// Task #152: a farmer's saved plots. Lets a farmer store a plot's coordinates
+// under a name and reload them later from a dropdown instead of re-typing the
+// lat/long every time in the Plot Health Check flow. Per-user.
+export const savedFarms = pgTable("saved_farms", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertSavedFarmSchema = createInsertSchema(savedFarms)
+  .omit({ id: true, userId: true, createdAt: true })
+  .extend({
+    name: z.string().trim().min(1).max(60),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+  });
+
+export type SavedFarm = typeof savedFarms.$inferSelect;
+export type InsertSavedFarm = z.infer<typeof insertSavedFarmSchema>;
+
 // Task #143: single source of truth for the Plot Health crop list and the
 // growth stages each crop exposes. Shared between the seed routine
 // (server/storage.ts), the analyze validation (server/routes.ts) and the
