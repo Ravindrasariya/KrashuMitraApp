@@ -484,17 +484,21 @@ export default function PlotHealth({
 
   // ---- Date slider ("time-lapse") ----------------------------------------
   // Stops come from the same time-series endpoint the trend chart uses, anchored
-  // to "latest" so the slider domain is a stable run of recent real acquisitions
-  // (up to today) regardless of which historical date is currently shown.
+  // to the currently selected analysis date (`requestedDate`, "latest" → today).
+  // The server window is [anchor-60d, anchor+30d] clipped to today, so the slider
+  // re-centers on whichever date the farmer picks (via date input or trend tap)
+  // and exposes ~2 months back plus forward real acquisitions around it. Sharing
+  // the same query key as the chart means no extra fetch.
+  const timelineDate = result?.requestedDate ?? "latest";
   const timelineEnabled = !!result && !result.noClearImage && lat != null && lng != null;
   const { data: timeline } = useQuery<{ today: string; points: TimelinePoint[] }>({
-    queryKey: ["/api/plot-health/timeseries", lat, lng, boxSizeM, "latest"],
+    queryKey: ["/api/plot-health/timeseries", lat, lng, boxSizeM, timelineDate],
     queryFn: async () => {
       const params = new URLSearchParams({
         lat: String(lat),
         lng: String(lng),
         boxSizeM: String(boxSizeM),
-        date: "latest",
+        date: timelineDate,
       });
       const res = await fetch(`/api/plot-health/timeseries?${params.toString()}`, {
         credentials: "include",
