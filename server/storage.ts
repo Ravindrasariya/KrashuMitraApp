@@ -231,6 +231,7 @@ export interface IStorage {
     beforeResolvedDate: string;
   }): Promise<PlotHealthSearch | undefined>;
   getSavedFarmsByUser(userId: string): Promise<SavedFarm[]>;
+  getSavedFarm(id: number): Promise<SavedFarm | undefined>;
   createSavedFarm(data: InsertSavedFarm & { userId: string }): Promise<SavedFarm>;
   deleteSavedFarm(userId: string, id: number): Promise<boolean>;
 }
@@ -1313,6 +1314,11 @@ class DatabaseStorage implements IStorage {
 
   async getSavedFarmsByUser(userId: string): Promise<SavedFarm[]> {
     return db.select().from(savedFarms).where(eq(savedFarms.userId, userId)).orderBy(desc(savedFarms.createdAt));
+  }
+
+  async getSavedFarm(id: number): Promise<SavedFarm | undefined> {
+    const [row] = await db.select().from(savedFarms).where(eq(savedFarms.id, id));
+    return row;
   }
 
   async createSavedFarm(data: InsertSavedFarm & { userId: string }): Promise<SavedFarm> {

@@ -2045,8 +2045,10 @@ Respond in this structure:
     try {
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid id" });
-      const ok = await storage.deleteSavedFarm(req.session.userId, id);
-      if (!ok) return res.status(404).json({ message: "Farm not found" });
+      const existing = await storage.getSavedFarm(id);
+      if (!existing) return res.status(404).json({ message: "Farm not found" });
+      if (existing.userId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      await storage.deleteSavedFarm(req.session.userId, id);
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting saved farm:", error);

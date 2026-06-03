@@ -319,6 +319,19 @@ export default function PlotHealth({
     if (farm) pickLocation(farm.latitude, farm.longitude);
   }
 
+  const saveFarmValid = useMemo(() => {
+    const name = farmNameInput.trim();
+    const la = Number(saveLatInput);
+    const ln = Number(saveLngInput);
+    return (
+      name.length > 0 &&
+      saveLatInput.trim() !== "" &&
+      saveLngInput.trim() !== "" &&
+      Number.isFinite(la) && Number.isFinite(ln) &&
+      la >= -90 && la <= 90 && ln >= -180 && ln <= 180
+    );
+  }, [farmNameInput, saveLatInput, saveLngInput]);
+
   const center = useMemo(() => {
     if (lat != null && lng != null) return { lat, lng };
     if (config?.defaultCenter) return config.defaultCenter;
@@ -728,7 +741,7 @@ export default function PlotHealth({
               </SelectTrigger>
               <SelectContent>
                 {savedFarms.map((f) => (
-                  <SelectItem key={f.id} value={String(f.id)} data-testid={`option-saved-farm-${f.id}`}>
+                  <SelectItem key={f.id} value={String(f.id)} data-testid={`option-farm-${f.id}`}>
                     {f.name}
                   </SelectItem>
                 ))}
@@ -809,7 +822,7 @@ export default function PlotHealth({
               <MapPin className="w-4 h-4 mr-1" />
               {t("phSet")}
             </Button>
-            <Button variant="outline" size="sm" onClick={openSaveDialog} data-testid="button-plot-save-farm">
+            <Button variant="outline" size="sm" onClick={openSaveDialog} data-testid="button-save-farm">
               <Bookmark className="w-4 h-4 mr-1" />
               {t("phSaveFarm")}
             </Button>
@@ -1341,7 +1354,7 @@ export default function PlotHealth({
                 placeholder={t("phFarmNamePlaceholder")}
                 onChange={(e) => setFarmNameInput(e.target.value)}
                 className="mt-1"
-                data-testid="input-save-farm-name"
+                data-testid="input-farm-name"
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -1412,7 +1425,7 @@ export default function PlotHealth({
             <Button variant="outline" onClick={() => setSaveDialogOpen(false)} data-testid="button-cancel-save-farm">
               {t("cancel")}
             </Button>
-            <Button onClick={handleSaveFarmConfirm} disabled={saveFarmMutation.isPending} data-testid="button-confirm-save-farm">
+            <Button onClick={handleSaveFarmConfirm} disabled={saveFarmMutation.isPending || !saveFarmValid} data-testid="button-confirm-save-farm">
               {saveFarmMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
               {t("save")}
             </Button>
