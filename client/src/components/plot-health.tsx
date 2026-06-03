@@ -29,6 +29,7 @@ import {
   CloudRain,
   Thermometer,
   AlertTriangle,
+  History,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -86,6 +87,14 @@ export interface PlotHealthResult {
   cropType?: string | null;
   cropStage?: string | null;
   cropAssessment?: CropAssessment | null;
+}
+
+interface TimelinePoint {
+  date: string;
+  ndvi: number | null;
+  ndre: number | null;
+  ndmi: number | null;
+  estimated: boolean;
 }
 
 interface PlotConfig {
@@ -361,6 +370,17 @@ export default function PlotHealth({
   }, [lat, lng, weatherDate, weatherIsLive, todayStr]);
 
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
+  // Monotonic request id so a slow, older analyze response (e.g. while the
+  // farmer drags the date slider) can't overwrite a newer selection.
+  const reqSeqRef = useRef(0);
+  // Debounce handle for the time-lapse date slider.
+  const sliderDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelSliderDebounce = () => {
+    if (sliderDebounceRef.current) {
+      clearTimeout(sliderDebounceRef.current);
+      sliderDebounceRef.current = null;
+    }
+  };
 
   const analyzeMutation = useMutation({
     mutationFn: async (vars?: { date?: string }) => {
@@ -370,6 +390,7 @@ export default function PlotHealth({
       if (cropType && cropType !== "barren" && !cropStage) {
         throw new Error(t("phSelectStageFirst"));
       }
+      const seq = ++reqSeqRef.current;
       const reqDate = vars?.date ?? (useLatest ? "latest" : dateValue);
       const res = await apiRequest("POST", "/api/plot-health/analyze", {
         lat,
@@ -379,9 +400,12 @@ export default function PlotHealth({
         cropType: cropType || undefined,
         cropStage: cropStage || undefined,
       });
-      return res.json() as Promise<PlotHealthResult>;
+      const data = (await res.json()) as PlotHealthResult;
+      return { data, seq };
     },
-    onSuccess: (data) => {
+    onSuccess: ({ data, seq }) => {
+      // Drop the result if a newer analyze request has since been issued.
+      if (seq !== reqSeqRef.current) return;
       setResult(data);
       if (!data.noClearImage) onSaved?.();
     },
@@ -396,6 +420,7 @@ export default function PlotHealth({
   function handleTrendPointClick(pickedDate: string) {
     setUseLatest(false);
     setDateValue(pickedDate);
+    cancelSliderDebounce(); // a tap supersedes any pending slider commit
     analyzeMutation.mutate({ date: pickedDate });
     // The chart sits below the imagery; bring the freshly-loaded image/stats
     // back into view so the farmer sees the day they tapped.
@@ -407,6 +432,7 @@ export default function PlotHealth({
     setLng(newLng);
     setLatInput(newLat.toFixed(6));
     setLngInput(newLng.toFixed(6));
+    cancelSliderDebounce(); // a new location invalidates any pending slider commit
     setResult(null);
   }
 
@@ -455,6 +481,81 @@ export default function PlotHealth({
 
   const dateLocale = language === "hi" ? "hi-IN" : "en-IN";
   const meta = INDEX_META[activeIndex];
+
+  // ---- Date slider ("time-lapse") ----------------------------------------
+  // Stops come from the same time-series endpoint the trend chart uses, anchored
+  // to "latest" so the slider domain is a stable run of recent real acquisitions
+  // (up to today) regardless of which historical date is currently shown.
+  const timelineEnabled = !!result && !result.noClearImage && lat != null && lng != null;
+  const { data: timeline } = useQuery<{ today: string; points: TimelinePoint[] }>({
+    queryKey: ["/api/plot-health/timeseries", lat, lng, boxSizeM, "latest"],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        lat: String(lat),
+        lng: String(lng),
+        boxSizeM: String(boxSizeM),
+        date: "latest",
+      });
+      const res = await fetch(`/api/plot-health/timeseries?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    enabled: timelineEnabled,
+  });
+
+  // Only real (non-estimated) acquisitions, oldest → newest, become slider stops.
+  const sliderStops = useMemo(() => {
+    const pts = (timeline?.points ?? []).filter((p) => !p.estimated);
+    return [...pts].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  }, [timeline]);
+
+  // Index of the stop matching the currently shown image (exact, else nearest).
+  const resolvedStopIndex = useMemo(() => {
+    if (!result || sliderStops.length === 0) return -1;
+    const exact = sliderStops.findIndex((p) => p.date === result.resolvedDate);
+    if (exact >= 0) return exact;
+    const target = Date.parse(`${result.resolvedDate}T00:00:00Z`);
+    let best = -1;
+    let bestDiff = Infinity;
+    sliderStops.forEach((p, i) => {
+      const diff = Math.abs(Date.parse(`${p.date}T00:00:00Z`) - target);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = i;
+      }
+    });
+    return best;
+  }, [result, sliderStops]);
+
+  const [sliderIndex, setSliderIndex] = useState(0);
+
+  // Keep the thumb on the stop whose image is actually being shown.
+  useEffect(() => {
+    if (resolvedStopIndex >= 0) setSliderIndex(resolvedStopIndex);
+  }, [resolvedStopIndex]);
+
+  useEffect(() => () => cancelSliderDebounce(), []);
+
+  function handleSliderChange(idx: number) {
+    setSliderIndex(idx); // move the thumb immediately for responsiveness
+    const stop = sliderStops[idx];
+    if (!stop) return;
+    cancelSliderDebounce();
+    // Debounce so dragging across many stops only loads the one it lands on.
+    sliderDebounceRef.current = setTimeout(() => {
+      if (stop.date === result?.resolvedDate) return;
+      setUseLatest(false);
+      setDateValue(stop.date);
+      analyzeMutation.mutate({ date: stop.date });
+    }, 350);
+  }
+
+  const currentStop = sliderStops[sliderIndex];
+  const prevStop = sliderIndex > 0 ? sliderStops[sliderIndex - 1] : undefined;
+  const fmtStopShort = (d: string) =>
+    new Date(`${d}T00:00:00Z`).toLocaleDateString(dateLocale, { day: "numeric", month: "short" });
 
   if (config && !config.hasCredentials) {
     return (
@@ -595,7 +696,10 @@ export default function PlotHealth({
         </label>
 
         <Button
-          onClick={() => analyzeMutation.mutate({})}
+          onClick={() => {
+            cancelSliderDebounce();
+            analyzeMutation.mutate({});
+          }}
           disabled={analyzeMutation.isPending || lat == null || lng == null}
           className="w-full"
           data-testid="button-plot-analyze"
@@ -703,6 +807,72 @@ export default function PlotHealth({
           <ClickHandler onPick={pickLocation} />
         </MapContainer>
       </div>
+
+      {/* Time-lapse date slider — drag through past acquisitions */}
+      {result && !result.noClearImage && sliderStops.length >= 2 && (
+        <div className="space-y-1" data-testid="plot-timeline">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium flex items-center gap-1">
+              <History className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              {t("phTimeline")}
+            </span>
+            <span
+              className="text-xs tabular-nums text-muted-foreground inline-flex items-center gap-1"
+              data-testid="text-timeline-date"
+            >
+              {analyzeMutation.isPending ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {t("phTimelineLoading")}
+                </>
+              ) : (
+                currentStop && (
+                  <>
+                    {new Date(`${currentStop.date}T00:00:00Z`).toLocaleDateString(dateLocale, {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                    {currentStop.ndvi != null && (
+                      <span className="text-foreground">
+                        · NDVI {currentStop.ndvi.toFixed(2)}
+                        {prevStop?.ndvi != null && currentStop.ndvi !== prevStop.ndvi && (
+                          <span
+                            className={
+                              currentStop.ndvi > prevStop.ndvi
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-red-600 dark:text-red-400"
+                            }
+                          >
+                            {" "}
+                            {currentStop.ndvi > prevStop.ndvi ? "▲" : "▼"}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </>
+                )
+              )}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={sliderStops.length - 1}
+            step={1}
+            value={sliderIndex}
+            onChange={(e) => handleSliderChange(Number(e.target.value))}
+            className="w-full accent-emerald-600"
+            data-testid="slider-plot-timeline"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>{fmtStopShort(sliderStops[0].date)}</span>
+            <span className="text-center">{t("phTimelineHint")}</span>
+            <span>{fmtStopShort(sliderStops[sliderStops.length - 1].date)}</span>
+          </div>
+        </div>
+      )}
+
       <p className="text-[10px] text-muted-foreground -mt-2" data-testid="text-plot-resolution">
         {t("phResolutionNote")}
       </p>
