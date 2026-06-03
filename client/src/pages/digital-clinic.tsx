@@ -274,40 +274,40 @@ export default function DigitalClinicPage() {
               <Satellite className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="font-semibold text-base mb-1">{t("plotHealthCheck")}</h3>
-                  <p className="text-sm text-muted-foreground mb-3">{t("plotHealthDesc")}</p>
-                </div>
-              </div>
-              {!plotHealthOpen ? (
-                <Button
-                  data-testid="button-open-plot-health"
-                  onClick={() => setPlotHealthOpen(true)}
-                >
-                  {t("phOpen")}
-                </Button>
-              ) : (
-                <div className="space-y-3">
-                  <PlotHealth
-                    key={plotHealthKey}
-                    initialResult={plotHealthReopen}
-                    onSaved={() => qc.invalidateQueries({ queryKey: ["/api/service-requests"] })}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    data-testid="button-close-plot-health"
-                    onClick={() => {
-                      setPlotHealthOpen(false);
-                      setPlotHealthReopen(null);
-                    }}
-                  >
-                    {t("phClose")}
-                  </Button>
-                </div>
-              )}
+              <h3 className="font-semibold text-base mb-1">{t("plotHealthCheck")}</h3>
+              <p className="text-sm text-muted-foreground">{t("plotHealthDesc")}</p>
             </div>
+          </div>
+          {/* Body renders full card width (no left indent under the icon) so the
+              map, analysis, and chart get maximum horizontal space. */}
+          <div className="mt-3">
+            {!plotHealthOpen ? (
+              <Button
+                data-testid="button-open-plot-health"
+                onClick={() => setPlotHealthOpen(true)}
+              >
+                {t("phOpen")}
+              </Button>
+            ) : (
+              <div className="space-y-3">
+                <PlotHealth
+                  key={plotHealthKey}
+                  initialResult={plotHealthReopen}
+                  onSaved={() => qc.invalidateQueries({ queryKey: ["/api/service-requests"] })}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-testid="button-close-plot-health"
+                  onClick={() => {
+                    setPlotHealthOpen(false);
+                    setPlotHealthReopen(null);
+                  }}
+                >
+                  {t("phClose")}
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
 
