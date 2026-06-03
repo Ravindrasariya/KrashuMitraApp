@@ -89,12 +89,14 @@ export function PlotHealthChart({
   lng,
   boxSizeM,
   date,
+  selectedDate,
   onPointClick,
 }: {
   lat: number;
   lng: number;
   boxSizeM: number;
   date: string;
+  selectedDate?: string;
   onPointClick?: (date: string) => void;
 }) {
   const { t, language } = useTranslation();
@@ -126,6 +128,12 @@ export function PlotHealthChart({
   const todayTs = useMemo(
     () => (data ? Date.parse(`${data.today}T00:00:00Z`) : null),
     [data],
+  );
+  // Persistent marker for the date whose imagery is currently shown, so the
+  // chart stays in sync with the date slider / date input / map.
+  const selectedTs = useMemo(
+    () => (selectedDate ? Date.parse(`${selectedDate}T00:00:00Z`) : null),
+    [selectedDate],
   );
 
   const fmtTick = (ts: number) =>
@@ -206,6 +214,19 @@ export function PlotHealthChart({
                     stroke="#64748b"
                     strokeDasharray="2 2"
                     label={{ value: t("phTrendToday"), position: "top", fontSize: 10, fill: "#64748b" }}
+                  />
+                )}
+                {selectedTs != null && selectedTs !== todayTs && (
+                  <ReferenceLine
+                    x={selectedTs}
+                    stroke="#059669"
+                    strokeWidth={2}
+                    label={{
+                      value: fmtTick(selectedTs),
+                      position: "insideTopLeft",
+                      fontSize: 10,
+                      fill: "#059669",
+                    }}
                   />
                 )}
                 <Tooltip

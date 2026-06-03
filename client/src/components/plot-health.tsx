@@ -1047,6 +1047,7 @@ export default function PlotHealth({
           lng={lng}
           boxSizeM={boxSizeM}
           date={result.requestedDate}
+          selectedDate={result.resolvedDate}
           onPointClick={handleTrendPointClick}
         />
       )}
