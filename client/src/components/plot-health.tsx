@@ -381,6 +381,13 @@ export default function PlotHealth({
       sliderDebounceRef.current = null;
     }
   };
+  // Date the slider is currently previewing (from already-loaded chart data)
+  // before the authoritative analyze settles. null → show the analyzed result.
+  // Drives the map imagery + chart marker + lot averages instantly while
+  // dragging, so there is no per-step loading round-trip.
+  const [previewDate, setPreviewDate] = useState<string | null>(null);
+  // Latest stop date the slider landed on, flushed to a full analyze on release.
+  const pendingSliderDateRef = useRef<string | null>(null);
 
   const analyzeMutation = useMutation({
     mutationFn: async (vars?: { date?: string }) => {
@@ -407,9 +414,16 @@ export default function PlotHealth({
       // Drop the result if a newer analyze request has since been issued.
       if (seq !== reqSeqRef.current) return;
       setResult(data);
+      // Only retire the preview if this result is for the day we're previewing.
+      // If the farmer has already dragged on to a newer date, keep showing that
+      // preview instead of snapping back to this (now older) analyzed day.
+      setPreviewDate((prev) => (prev === data.resolvedDate ? null : prev));
       if (!data.noClearImage) onSaved?.();
     },
     onError: (err: any) => {
+      // Don't strand the UI in preview mode after a failed settle pull.
+      setPreviewDate(null);
+      pendingSliderDateRef.current = null;
       const msg = err?.message?.includes("503") || /credential/i.test(err?.message || "")
         ? t("phMissingCreds")
         : err?.message || t("phAnalyzeFailed");
@@ -421,6 +435,8 @@ export default function PlotHealth({
     setUseLatest(false);
     setDateValue(pickedDate);
     cancelSliderDebounce(); // a tap supersedes any pending slider commit
+    pendingSliderDateRef.current = null;
+    setPreviewDate(pickedDate); // swap imagery instantly while the full pull runs
     analyzeMutation.mutate({ date: pickedDate });
     // The chart sits below the imagery; bring the freshly-loaded image/stats
     // back into view so the farmer sees the day they tapped.
@@ -433,6 +449,8 @@ export default function PlotHealth({
     setLatInput(newLat.toFixed(6));
     setLngInput(newLng.toFixed(6));
     cancelSliderDebounce(); // a new location invalidates any pending slider commit
+    pendingSliderDateRef.current = null;
+    setPreviewDate(null);
     setResult(null);
   }
 
@@ -465,13 +483,16 @@ export default function PlotHealth({
     pickLocation(la, ln);
   }
 
+  // The map + chart marker follow the previewed slider date the instant it
+  // changes, falling back to the last fully-analyzed acquisition date.
+  const displayDate = previewDate ?? result?.resolvedDate;
   const tileUrl =
-    result && !result.noClearImage && activeIndex !== "truecolor"
-      ? `/api/plot-health/tiles/${activeIndex}/{z}/{x}/{y}.png?date=${result.resolvedDate}`
+    result && !result.noClearImage && displayDate && activeIndex !== "truecolor"
+      ? `/api/plot-health/tiles/${activeIndex}/{z}/{x}/{y}.png?date=${displayDate}`
       : null;
   const trueColorUrl =
-    result && !result.noClearImage && activeIndex === "truecolor"
-      ? `/api/plot-health/tiles/truecolor/{z}/{x}/{y}.png?date=${result.resolvedDate}`
+    result && !result.noClearImage && displayDate && activeIndex === "truecolor"
+      ? `/api/plot-health/tiles/truecolor/{z}/{x}/{y}.png?date=${displayDate}`
       : null;
   const overlayUrl = tileUrl || trueColorUrl;
 
@@ -542,22 +563,59 @@ export default function PlotHealth({
 
   useEffect(() => () => cancelSliderDebounce(), []);
 
+  // Run the full analyze for the date the slider last landed on. min–max ranges
+  // + the crop verdict + history logging only happen here, on settle — never on
+  // every intermediate drag step.
+  function flushSliderCommit() {
+    cancelSliderDebounce();
+    const date = pendingSliderDateRef.current;
+    pendingSliderDateRef.current = null;
+    if (!date) return;
+    if (date === result?.resolvedDate) {
+      setPreviewDate(null); // already showing this day → nothing to fetch
+      return;
+    }
+    setUseLatest(false);
+    setDateValue(date);
+    analyzeMutation.mutate({ date });
+  }
+
+  // While dragging: move the thumb + swap imagery/averages instantly from the
+  // already-loaded chart data, with NO network call. A short fallback timer
+  // settles the full pull in case the pointer-release event never fires.
   function handleSliderChange(idx: number) {
-    setSliderIndex(idx); // move the thumb immediately for responsiveness
+    setSliderIndex(idx);
     const stop = sliderStops[idx];
     if (!stop) return;
+    setPreviewDate(stop.date);
+    pendingSliderDateRef.current = stop.date;
     cancelSliderDebounce();
-    // Debounce so dragging across many stops only loads the one it lands on.
-    sliderDebounceRef.current = setTimeout(() => {
-      if (stop.date === result?.resolvedDate) return;
-      setUseLatest(false);
-      setDateValue(stop.date);
-      analyzeMutation.mutate({ date: stop.date });
-    }, 350);
+    sliderDebounceRef.current = setTimeout(flushSliderCommit, 500);
   }
 
   const currentStop = sliderStops[sliderIndex];
   const prevStop = sliderIndex > 0 ? sliderStops[sliderIndex - 1] : undefined;
+  // True while the slider shows an instant preview from chart data and the
+  // authoritative analyze for that day hasn't landed yet.
+  const previewing = previewDate != null && previewDate !== result?.resolvedDate;
+  // Lot averages to show: during a preview we have only the per-date means from
+  // the trend data (no min–max); once settled we use the full analyzed stats.
+  type DisplayCell = { mean: number; min: number | null; max: number | null };
+  const displayIndices = useMemo<
+    | { ndvi: DisplayCell | null; ndre: DisplayCell | null; ndmi: DisplayCell | null }
+    | null
+  >(() => {
+    if (previewing && currentStop) {
+      const cell = (v: number | null): DisplayCell | null =>
+        v == null ? null : { mean: v, min: null, max: null };
+      return { ndvi: cell(currentStop.ndvi), ndre: cell(currentStop.ndre), ndmi: cell(currentStop.ndmi) };
+    }
+    if (result?.stats) {
+      return { ndvi: result.stats.ndvi, ndre: result.stats.ndre, ndmi: result.stats.ndmi };
+    }
+    return null;
+  }, [previewing, currentStop, result]);
+  const displayValidFraction = result?.stats?.validFraction ?? 1;
   const fmtStopShort = (d: string) =>
     new Date(`${d}T00:00:00Z`).toLocaleDateString(dateLocale, { day: "numeric", month: "short" });
 
@@ -794,7 +852,7 @@ export default function PlotHealth({
           />
           {overlayUrl && (
             <TileLayer
-              key={`${activeIndex}-${result?.resolvedDate}`}
+              key={`${activeIndex}-${displayDate}`}
               url={overlayUrl}
               opacity={opacity}
               maxNativeZoom={maxNativeZoom}
@@ -824,38 +882,34 @@ export default function PlotHealth({
               className="text-xs tabular-nums text-muted-foreground inline-flex items-center gap-1"
               data-testid="text-timeline-date"
             >
-              {analyzeMutation.isPending ? (
+              {currentStop && (
                 <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  {t("phTimelineLoading")}
+                  {new Date(`${currentStop.date}T00:00:00Z`).toLocaleDateString(dateLocale, {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                  {currentStop.ndvi != null && (
+                    <span className="text-foreground">
+                      · NDVI {currentStop.ndvi.toFixed(2)}
+                      {prevStop?.ndvi != null && currentStop.ndvi !== prevStop.ndvi && (
+                        <span
+                          className={
+                            currentStop.ndvi > prevStop.ndvi
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-red-600 dark:text-red-400"
+                          }
+                        >
+                          {" "}
+                          {currentStop.ndvi > prevStop.ndvi ? "▲" : "▼"}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {analyzeMutation.isPending && (
+                    <Loader2 className="w-3 h-3 animate-spin" data-testid="icon-timeline-settling" />
+                  )}
                 </>
-              ) : (
-                currentStop && (
-                  <>
-                    {new Date(`${currentStop.date}T00:00:00Z`).toLocaleDateString(dateLocale, {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                    {currentStop.ndvi != null && (
-                      <span className="text-foreground">
-                        · NDVI {currentStop.ndvi.toFixed(2)}
-                        {prevStop?.ndvi != null && currentStop.ndvi !== prevStop.ndvi && (
-                          <span
-                            className={
-                              currentStop.ndvi > prevStop.ndvi
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-red-600 dark:text-red-400"
-                            }
-                          >
-                            {" "}
-                            {currentStop.ndvi > prevStop.ndvi ? "▲" : "▼"}
-                          </span>
-                        )}
-                      </span>
-                    )}
-                  </>
-                )
               )}
             </span>
           </div>
@@ -866,6 +920,9 @@ export default function PlotHealth({
             step={1}
             value={sliderIndex}
             onChange={(e) => handleSliderChange(Number(e.target.value))}
+            onPointerUp={flushSliderCommit}
+            onTouchEnd={flushSliderCommit}
+            onKeyUp={flushSliderCommit}
             className="w-full accent-emerald-600"
             data-testid="slider-plot-timeline"
           />
@@ -919,30 +976,41 @@ export default function PlotHealth({
       {result && !result.noClearImage && (
         <Card className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 space-y-3" data-testid="card-plot-stats">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h4 className="font-semibold text-sm">{t("phLotStats")}</h4>
+            <h4 className="font-semibold text-sm inline-flex items-center gap-2">
+              {t("phLotStats")}
+              {previewing && (
+                <span
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
+                  data-testid="badge-stats-preview"
+                >
+                  {t("phPreviewTag")}
+                </span>
+              )}
+            </h4>
             <span className="text-xs text-muted-foreground" data-testid="text-plot-acq-date">
-              {t("phImageDate")}: {new Date(result.acquisitionDate).toLocaleDateString(dateLocale)} · {t("phCloud")}: {result.cloudCover}%
+              {t("phImageDate")}: {new Date(`${(previewing ? currentStop?.date : result.acquisitionDate) ?? result.acquisitionDate}T00:00:00Z`).toLocaleDateString(dateLocale)}
+              {!previewing && <> · {t("phCloud")}: {result.cloudCover}%</>}
             </span>
           </div>
-          {result.stats && (result.stats.ndvi || result.stats.ndre || result.stats.ndmi) ? (
+          {displayIndices && (displayIndices.ndvi || displayIndices.ndre || displayIndices.ndmi) ? (
             <>
               <div className="grid grid-cols-3 gap-2 text-center">
                 {(["ndvi", "ndre", "ndmi"] as const).map((k) => {
-                  const st = result.stats?.[k];
+                  const st = displayIndices?.[k];
                   return (
                     <div key={k} className="bg-background/60 rounded p-2" data-testid={`stat-${k}`}>
                       <div className="text-[10px] text-muted-foreground uppercase">{t(`phIndex_${k}` as any)}</div>
                       <div className="text-lg font-bold tabular-nums">{st ? st.mean.toFixed(2) : "—"}</div>
                       <div className="text-[9px] text-muted-foreground">
-                        {st ? `${st.min.toFixed(2)} – ${st.max.toFixed(2)}` : ""}
+                        {st && st.min != null && st.max != null ? `${st.min.toFixed(2)} – ${st.max.toFixed(2)}` : "—"}
                       </div>
                     </div>
                   );
                 })}
               </div>
-              {result.stats.validFraction < 0.8 && (
+              {!previewing && displayValidFraction < 0.8 && (
                 <p className="text-[10px] text-orange-600 dark:text-orange-400" data-testid="text-plot-low-valid">
-                  {t("phPartialCloud")} ({Math.round(result.stats.validFraction * 100)}%)
+                  {t("phPartialCloud")} ({Math.round(displayValidFraction * 100)}%)
                 </p>
               )}
             </>
@@ -963,7 +1031,8 @@ export default function PlotHealth({
         return (
           <Card
             className={
-              "p-4 space-y-3 " +
+              "p-4 space-y-3 transition-opacity " +
+              (previewing ? "opacity-60 " : "") +
               (healthy
                 ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
                 : "bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800")
@@ -971,7 +1040,15 @@ export default function PlotHealth({
             data-testid="card-plot-assessment"
           >
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h4 className="font-semibold text-sm">{t("phAssessmentTitle")}</h4>
+              <h4 className="font-semibold text-sm inline-flex items-center gap-2">
+                {t("phAssessmentTitle")}
+                {previewing && (
+                  <span className="text-[10px] font-normal text-muted-foreground inline-flex items-center gap-1" data-testid="text-assessment-updating">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    {t("phPreviewUpdating")}
+                  </span>
+                )}
+              </h4>
               <span className="text-xs text-muted-foreground">
                 {t(`phCrop_${a.cropType}` as any)}
                 {a.cropStage ? ` · ${t(`phStage_${a.cropStage}` as any)}` : ""}
@@ -1047,7 +1124,7 @@ export default function PlotHealth({
           lng={lng}
           boxSizeM={boxSizeM}
           date={result.requestedDate}
-          selectedDate={result.resolvedDate}
+          selectedDate={displayDate}
           onPointClick={handleTrendPointClick}
         />
       )}

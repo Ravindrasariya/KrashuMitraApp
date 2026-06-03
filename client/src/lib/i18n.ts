@@ -896,6 +896,8 @@ const translations = {
   phTimeline: { hi: "समय-यात्रा", en: "Time-lapse" },
   phTimelineHint: { hi: "खेत में समय के साथ हुए बदलाव देखने के लिए स्लाइड करें", en: "Slide to see how your field changed over time" },
   phTimelineLoading: { hi: "तस्वीर लोड हो रही है…", en: "Loading imagery…" },
+  phPreviewTag: { hi: "झलक", en: "Preview" },
+  phPreviewUpdating: { hi: "पूरी जानकारी आ रही है…", en: "Loading full details…" },
   phOpacity: { hi: "परत पारदर्शिता", en: "Layer opacity" },
   phLegendBare: { hi: "खाली/मिट्टी", en: "Bare/Soil" },
   phLegendDense: { hi: "घनी फसल", en: "Dense crop" },
