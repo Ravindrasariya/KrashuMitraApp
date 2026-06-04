@@ -938,6 +938,11 @@ const translations = {
   phTrendFailed: { hi: "रुझान लोड नहीं हो सका", en: "Could not load trend" },
   phTrendAxisValue: { hi: "सूचकांक मान", en: "Index value" },
   phTrendEstimatedTag: { hi: "अनुमानित", en: "est." },
+  phConfidence: { hi: "विश्वास", en: "Confidence" },
+  phConfHigh: { hi: "उच्च", en: "High" },
+  phConfMedium: { hi: "मध्यम", en: "Medium" },
+  phConfLow: { hi: "कम", en: "Low" },
+  phConfEstimate: { hi: "अनुमान", en: "Estimate" },
   gpsNotSupported: { hi: "इस डिवाइस पर GPS उपलब्ध नहीं है", en: "GPS is not available on this device" },
   gpsFailed: { hi: "स्थान का पता नहीं चल सका", en: "Could not detect location" },
 } as const;

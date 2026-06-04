@@ -14,6 +14,11 @@ import {
 import { Card } from "@/components/ui/card";
 import { Loader2, TrendingUp } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import {
+  computeConfidence,
+  CONFIDENCE_CLASSES,
+  type ConfidenceBand,
+} from "@/lib/plot-confidence";
 
 interface TimeSeriesPoint {
   date: string;
@@ -55,6 +60,9 @@ interface ChartRow {
   ndreEst: number | null;
   ndmiEst: number | null;
   estimated: boolean;
+  // Single combined confidence for the reading (null for estimated/forecast).
+  confidencePct: number | null;
+  confidenceBand: ConfidenceBand | null;
 }
 
 function buildRows(points: TimeSeriesPoint[]): ChartRow[] {
@@ -67,9 +75,17 @@ function buildRows(points: TimeSeriesPoint[]): ChartRow[] {
   for (let i = 0; i < sorted.length; i++) {
     if (!sorted[i].estimated) lastRealIdx = i;
   }
+  // Confidence is computed per *real* reading against its nearest real
+  // neighbours (estimated points are excluded from the artifact check).
+  const reals = sorted.filter((p) => !p.estimated);
+  const confByDate = new Map<string, { pct: number; band: ConfidenceBand }>();
+  reals.forEach((p, i) => {
+    confByDate.set(p.date, computeConfidence(p.validFraction, p, reals[i - 1] ?? null, reals[i + 1] ?? null));
+  });
   return sorted.map((p, i) => {
     const real = !p.estimated;
     const bridge = i === lastRealIdx; // connector point for the dashed line
+    const conf = real ? confByDate.get(p.date) : undefined;
     return {
       date: p.date,
       ts: Date.parse(`${p.date}T00:00:00Z`),
@@ -80,6 +96,8 @@ function buildRows(points: TimeSeriesPoint[]): ChartRow[] {
       ndreEst: !real ? p.ndre : bridge ? p.ndre : null,
       ndmiEst: !real ? p.ndmi : bridge ? p.ndmi : null,
       estimated: p.estimated,
+      confidencePct: conf ? conf.pct : null,
+      confidenceBand: conf ? conf.band : null,
     };
   });
 }
@@ -234,12 +252,27 @@ export function PlotHealthChart({
                     if (!active || !payload?.length) return null;
                     const row = payload[0]?.payload as ChartRow | undefined;
                     if (!row) return null;
+                    const confBand = row.confidenceBand;
                     return (
                       <div className="rounded-lg border border-border/60 bg-background px-2.5 py-1.5 text-xs shadow-xl">
                         <div className="font-medium mb-1">
                           {fmtTick(row.ts)}
                           {row.estimated && (
                             <span className="ml-1 text-muted-foreground">({t("phTrendEstimatedTag")})</span>
+                          )}
+                        </div>
+                        <div
+                          className="flex items-center justify-between gap-3 mb-1 pb-1 border-b border-border/40"
+                          data-testid="tooltip-confidence"
+                        >
+                          <span className="text-muted-foreground">{t("phConfidence")}</span>
+                          {row.estimated || confBand == null || row.confidencePct == null ? (
+                            <span className="font-semibold text-muted-foreground">{t("phConfEstimate")}</span>
+                          ) : (
+                            <span className={"font-semibold flex items-center gap-1.5 " + CONFIDENCE_CLASSES[confBand].text}>
+                              <span className={"inline-block w-2 h-2 rounded-full " + CONFIDENCE_CLASSES[confBand].dot} />
+                              {row.confidencePct}% ({t(`phConf${confBand.charAt(0).toUpperCase() + confBand.slice(1)}` as any)})
+                            </span>
                           )}
                         </div>
                         <div className="grid gap-0.5">

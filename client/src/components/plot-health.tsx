@@ -7,6 +7,7 @@ import { useMutation, useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PlotHealthChart } from "@/components/plot-health-chart";
+import { computeConfidence, CONFIDENCE_CLASSES } from "@/lib/plot-confidence";
 import { PLOT_CROP_KEYS, PLOT_CROP_STAGES, type PlotCropKey, type SavedFarm } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
@@ -104,6 +105,7 @@ interface TimelinePoint {
   ndvi: number | null;
   ndre: number | null;
   ndmi: number | null;
+  validFraction: number;
   estimated: boolean;
 }
 
@@ -734,6 +736,33 @@ export default function PlotHealth({
     return null;
   }, [previewing, currentStop, result]);
   const displayValidFraction = result?.stats?.validFraction ?? 1;
+  // Single combined confidence for the date currently shown (preview slider or
+  // settled analyze), built from the per-plot valid-pixel fraction plus a
+  // one-day artifact check against the neighbouring real readings.
+  const displayConfidence = useMemo(() => {
+    const triple = displayIndices
+      ? {
+          ndvi: displayIndices.ndvi?.mean ?? null,
+          ndre: displayIndices.ndre?.mean ?? null,
+          ndmi: displayIndices.ndmi?.mean ?? null,
+        }
+      : null;
+    if (previewing && currentStop) {
+      const idx = sliderStops.findIndex((p) => p.date === currentStop.date);
+      const prev = idx > 0 ? sliderStops[idx - 1] : null;
+      const next = idx >= 0 && idx < sliderStops.length - 1 ? sliderStops[idx + 1] : null;
+      return computeConfidence(currentStop.validFraction, triple, prev, next);
+    }
+    if (result?.stats) {
+      const idx = resolvedStopIndex;
+      const prev = idx > 0 ? sliderStops[idx - 1] : null;
+      const next = idx >= 0 && idx < sliderStops.length - 1 ? sliderStops[idx + 1] : null;
+      return computeConfidence(displayValidFraction, triple, prev, next);
+    }
+    return null;
+  }, [previewing, currentStop, result, displayIndices, displayValidFraction, sliderStops, resolvedStopIndex]);
+  const confLabelKey = (b: "high" | "medium" | "low") =>
+    (`phConf${b.charAt(0).toUpperCase() + b.slice(1)}`) as "phConfHigh" | "phConfMedium" | "phConfLow";
   const fmtStopShort = (d: string) =>
     new Date(`${d}T00:00:00Z`).toLocaleDateString(dateLocale, { day: "numeric", month: "short" });
 
@@ -1145,6 +1174,18 @@ export default function PlotHealth({
               {!previewing && <> · {t("phCloud")}: {result.cloudCover}%</>}
             </span>
           </div>
+          {displayConfidence && (
+            <div
+              className="flex items-center justify-between gap-2 rounded bg-background/60 px-2.5 py-1.5"
+              data-testid="stats-confidence"
+            >
+              <span className="text-xs font-medium text-muted-foreground">{t("phConfidence")}</span>
+              <span className={"text-sm font-bold flex items-center gap-1.5 " + CONFIDENCE_CLASSES[displayConfidence.band].text}>
+                <span className={"inline-block w-2.5 h-2.5 rounded-full " + CONFIDENCE_CLASSES[displayConfidence.band].dot} />
+                {displayConfidence.pct}% ({t(confLabelKey(displayConfidence.band))})
+              </span>
+            </div>
+          )}
           {displayIndices && (displayIndices.ndvi || displayIndices.ndre || displayIndices.ndmi) ? (
             <>
               <div className="grid grid-cols-3 gap-2 text-center">
@@ -1207,6 +1248,19 @@ export default function PlotHealth({
                 {a.cropStage ? ` · ${t(`phStage_${a.cropStage}` as any)}` : ""}
               </span>
             </div>
+
+            {displayConfidence && (
+              <div
+                className="flex items-center justify-between gap-2 rounded bg-background/60 px-2.5 py-1.5"
+                data-testid="assessment-confidence"
+              >
+                <span className="text-xs font-medium text-muted-foreground">{t("phConfidence")}</span>
+                <span className={"text-sm font-bold flex items-center gap-1.5 " + CONFIDENCE_CLASSES[displayConfidence.band].text}>
+                  <span className={"inline-block w-2.5 h-2.5 rounded-full " + CONFIDENCE_CLASSES[displayConfidence.band].dot} />
+                  {displayConfidence.pct}% ({t(confLabelKey(displayConfidence.band))})
+                </span>
+              </div>
+            )}
 
             <div className="flex items-start gap-2" data-testid="text-plot-verdict">
               {healthy ? (
