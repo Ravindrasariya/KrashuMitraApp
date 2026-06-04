@@ -333,8 +333,8 @@ function computeCropAssessment(
       const dHi = declining.map((k) => PLOT_DECLINE_CAUSE[k].hi).join(", ");
       const dEn = declining.map((k) => PLOT_DECLINE_CAUSE[k].en).join(", ");
       const when = previous?.resolvedDate ? ` (${previous.resolvedDate})` : "";
-      segHi.push(`पिछली रीडिंग${when} से गिरावट — ${dHi}`);
-      segEn.push(`Dropped since the last reading${when} — ${dEn}`);
+      segHi.push(`पिछली सैटेलाइट तस्वीर${when} से गिरावट — ${dHi}`);
+      segEn.push(`Dropped since the previous satellite image${when} — ${dEn}`);
     }
     messageHi = `${segHi.join("। ")}। कृपया खेत में जाकर समय रहते कार्रवाई करें।`;
     messageEn = `${segEn.join(". ")}. Please visit the field and act in time.`;
@@ -1866,27 +1866,34 @@ Respond in this structure:
       if (cropType && cropType !== "barren" && cropStage) {
         const ref = await storage.getCropStageReference(cropType, cropStage);
         if (ref && result.stats) {
-          // Task #146: pull the most recent earlier reading for the SAME plot +
-          // crop so we can flag a >threshold drop in any index. Fetched before
-          // this run's row is logged (below), so it never compares to itself.
-          const previous = await storage
-            .getPreviousPlotHealthSearch({
-              userId: userId ?? null,
-              cropType,
-              latitude: lat,
-              longitude: lng,
-              beforeResolvedDate: result.acquisition.date,
+          // Task #157: compare the selected date against the previous date for
+          // which real satellite data exists (the same time-series the trend
+          // chart uses), so a >threshold drop is flagged even on a plot's first
+          // analysis. Look back ~60 days for the most recent clear acquisition
+          // strictly before this run's resolved date.
+          const resolvedDate = result.acquisition.date;
+          const seriesStart = new Date(Date.parse(`${resolvedDate}T00:00:00Z`) - 60 * 86400000)
+            .toISOString()
+            .slice(0, 10);
+          const previous = await sentinel
+            .getTimeSeries(lat, lng, boxSizeM, seriesStart, resolvedDate)
+            .then((series) => {
+              const prior = series.filter((p) => !p.estimated && p.date < resolvedDate);
+              const last = prior[prior.length - 1];
+              return last
+                ? { ndviMean: last.ndvi, ndreMean: last.ndre, ndmiMean: last.ndmi, resolvedDate: last.date }
+                : null;
             })
             .catch((e) => {
-              console.error("Plot health previous-reading lookup error:", e?.message || e);
-              return undefined;
+              console.error("Plot health previous-acquisition lookup error:", e?.message || e);
+              return null;
             });
           cropAssessment = computeCropAssessment(
             cropType,
             cropStage,
             result.stats,
             ref,
-            previous ?? null,
+            previous,
             isDeclineExemptStage(cropType, cropStage),
           );
         }

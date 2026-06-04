@@ -223,13 +223,6 @@ export interface IStorage {
   getAllCropStageReferences(): Promise<CropStageReference[]>;
   seedCropStageReferences(): Promise<void>;
   createPlotHealthSearch(data: InsertPlotHealthSearch): Promise<PlotHealthSearch>;
-  getPreviousPlotHealthSearch(params: {
-    userId: string | null;
-    cropType: string;
-    latitude: number;
-    longitude: number;
-    beforeResolvedDate: string;
-  }): Promise<PlotHealthSearch | undefined>;
   getSavedFarmsByUser(userId: string): Promise<SavedFarm[]>;
   getSavedFarm(id: number): Promise<SavedFarm | undefined>;
   createSavedFarm(data: InsertSavedFarm & { userId: string }): Promise<SavedFarm>;
@@ -1274,41 +1267,6 @@ class DatabaseStorage implements IStorage {
 
   async createPlotHealthSearch(data: InsertPlotHealthSearch): Promise<PlotHealthSearch> {
     const [row] = await db.insert(plotHealthSearches).values(data).returning();
-    return row;
-  }
-
-  // Task #146: most recent earlier reading for the SAME plot + crop, used to
-  // detect a >threshold drop in any index. "Same plot" = within ~50 m (coords
-  // rarely repeat to 5 decimals across taps). Only successful readings (clear
-  // image, non-null NDVI mean) with a strictly-earlier resolved date qualify.
-  async getPreviousPlotHealthSearch(params: {
-    userId: string | null;
-    cropType: string;
-    latitude: number;
-    longitude: number;
-    beforeResolvedDate: string;
-  }): Promise<PlotHealthSearch | undefined> {
-    const { userId, cropType, latitude, longitude, beforeResolvedDate } = params;
-    // ~5.5 m at Indian latitudes — tight enough that an adjacent field never
-    // matches, matching the 5-decimal precision of the stats cache key. A
-    // larger window risks comparing against a neighbouring plot.
-    const COORD_TOL = 0.00005;
-    const conditions = [
-      userId ? eq(plotHealthSearches.userId, userId) : isNull(plotHealthSearches.userId),
-      eq(plotHealthSearches.cropType, cropType),
-      eq(plotHealthSearches.noClearImage, false),
-      isNotNull(plotHealthSearches.ndviMean),
-      isNotNull(plotHealthSearches.resolvedDate),
-      lt(plotHealthSearches.resolvedDate, beforeResolvedDate),
-      sql`abs(${plotHealthSearches.latitude} - ${latitude}) <= ${COORD_TOL}`,
-      sql`abs(${plotHealthSearches.longitude} - ${longitude}) <= ${COORD_TOL}`,
-    ];
-    const [row] = await db
-      .select()
-      .from(plotHealthSearches)
-      .where(and(...conditions))
-      .orderBy(desc(plotHealthSearches.resolvedDate), desc(plotHealthSearches.createdAt))
-      .limit(1);
     return row;
   }
 
