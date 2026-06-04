@@ -336,6 +336,15 @@ export default function PlotHealth({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latInput, lngInput, lat, lng, savedFarms]);
 
+  const selectedFarmId = useMemo(() => {
+    const la = latInput.trim() !== "" ? Number(latInput) : lat;
+    const ln = lngInput.trim() !== "" ? Number(lngInput) : lng;
+    if (la == null || ln == null || !Number.isFinite(la) || !Number.isFinite(ln)) return "";
+    const r = (n: number) => Math.round(n * 1e5) / 1e5;
+    const match = savedFarms.find((f) => r(f.latitude) === r(la) && r(f.longitude) === r(ln));
+    return match ? String(match.id) : "";
+  }, [latInput, lngInput, lat, lng, savedFarms]);
+
   const saveFarmValid = useMemo(() => {
     const name = farmNameInput.trim();
     const la = Number(saveLatInput);
@@ -752,7 +761,7 @@ export default function PlotHealth({
             {t("phUseGps")}
           </Button>
           {savedFarms.length > 0 && (
-            <Select value="" onValueChange={handleSelectSavedFarm}>
+            <Select value={selectedFarmId} onValueChange={handleSelectSavedFarm}>
               <SelectTrigger className="h-9 w-auto min-w-[140px]" data-testid="select-saved-farm">
                 <SelectValue placeholder={t("phSavedFarms")} />
               </SelectTrigger>
@@ -1129,7 +1138,10 @@ export default function PlotHealth({
               )}
             </h4>
             <span className="text-xs text-muted-foreground" data-testid="text-plot-acq-date">
-              {t("phImageDate")}: {new Date(`${(previewing ? currentStop?.date : result.acquisitionDate) ?? result.acquisitionDate}T00:00:00Z`).toLocaleDateString(dateLocale)}
+              {t("phImageDate")}: {(previewing && currentStop?.date
+                ? new Date(`${currentStop.date}T00:00:00Z`)
+                : new Date(result.acquisitionDate)
+              ).toLocaleDateString(dateLocale)}
               {!previewing && <> · {t("phCloud")}: {result.cloudCover}%</>}
             </span>
           </div>
