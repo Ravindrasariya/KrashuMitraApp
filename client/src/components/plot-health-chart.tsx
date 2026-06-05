@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   LineChart,
@@ -12,13 +12,31 @@ import {
   Legend,
 } from "recharts";
 import { Card } from "@/components/ui/card";
-import { Loader2, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Loader2, TrendingUp, Download } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/lib/i18n";
 import {
   computeConfidence,
   CONFIDENCE_CLASSES,
   type ConfidenceBand,
 } from "@/lib/plot-confidence";
+
+const BAND_LABEL_KEY: Record<ConfidenceBand, "phConfHigh" | "phConfMedium" | "phConfLow"> = {
+  high: "phConfHigh",
+  medium: "phConfMedium",
+  low: "phConfLow",
+};
 
 interface TimeSeriesPoint {
   date: string;
@@ -118,7 +136,84 @@ export function PlotHealthChart({
   onPointClick?: (date: string) => void;
 }) {
   const { t, language } = useTranslation();
+  const { toast } = useToast();
   const dateLocale = language === "hi" ? "hi-IN" : "en-IN";
+
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const ninetyAgoStr = useMemo(
+    () => new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10),
+    [],
+  );
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [csvStart, setCsvStart] = useState(ninetyAgoStr);
+  const [csvEnd, setCsvEnd] = useState(todayStr);
+  const [csvBusy, setCsvBusy] = useState(false);
+
+  const handleCsvDownload = async () => {
+    if (csvStart > csvEnd) {
+      toast({ title: t("phCsvInvalidRange"), variant: "destructive" });
+      return;
+    }
+    setCsvBusy(true);
+    try {
+      const params = new URLSearchParams({
+        lat: String(lat),
+        lng: String(lng),
+        boxSizeM: String(boxSizeM),
+        start: csvStart,
+        end: csvEnd,
+      });
+      const res = await fetch(`/api/plot-health/timeseries-range?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const json = (await res.json()) as { lat: number; lng: number; points: TimeSeriesPoint[] };
+      const reals = (json.points ?? []).filter((p) => !p.estimated);
+      if (reals.length === 0) {
+        toast({ title: t("phCsvEmpty") });
+        setCsvBusy(false);
+        return;
+      }
+      const latStr = json.lat.toFixed(6);
+      const lngStr = json.lng.toFixed(6);
+      const header = ["Date", "Lat", "Long", "NDVI", "NDRE", "NDMI", "Confidence %", "Confidence Level"];
+      const numCell = (v: number | null) => (v == null ? "" : String(v));
+      const csvCell = (v: string) =>
+        /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+      const toRow = (cells: string[]) => cells.map(csvCell).join(",");
+      const lines = [toRow(header)];
+      reals.forEach((p, i) => {
+        const conf = computeConfidence(p.validFraction, p, reals[i - 1] ?? null, reals[i + 1] ?? null);
+        lines.push(
+          toRow([
+            p.date,
+            latStr,
+            lngStr,
+            numCell(p.ndvi),
+            numCell(p.ndre),
+            numCell(p.ndmi),
+            String(conf.pct),
+            t(BAND_LABEL_KEY[conf.band]),
+          ]),
+        );
+      });
+      const csv = "\uFEFF" + lines.join("\r\n") + "\r\n";
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `plot-health_${latStr}_${lngStr}_${csvStart}_${csvEnd}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setCsvOpen(false);
+    } catch {
+      toast({ title: t("phCsvFailed"), variant: "destructive" });
+    } finally {
+      setCsvBusy(false);
+    }
+  };
 
   const { data, isLoading, isError } = useQuery<TimeSeriesResponse>({
     queryKey: ["/api/plot-health/timeseries", lat, lng, boxSizeM, date],
@@ -172,6 +267,18 @@ export function PlotHealthChart({
     <div className="flex items-center gap-2 mb-1">
       <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
       <h4 className="font-semibold text-sm">{t("phTrendTitle")}</h4>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="ml-auto h-7 w-7 text-emerald-700 dark:text-emerald-400 hover-elevate"
+        onClick={() => setCsvOpen(true)}
+        title={t("phCsvDownload")}
+        aria-label={t("phCsvDownload")}
+        data-testid="button-download-csv"
+      >
+        <Download className="w-4 h-4" />
+      </Button>
     </div>
   );
 
@@ -341,6 +448,69 @@ export function PlotHealthChart({
           </p>
         </>
       )}
+
+      <Dialog open={csvOpen} onOpenChange={(o) => !csvBusy && setCsvOpen(o)}>
+        <DialogContent className="sm:max-w-sm" data-testid="dialog-csv">
+          <DialogHeader>
+            <DialogTitle>{t("phCsvTitle")}</DialogTitle>
+            <DialogDescription>{t("phCsvDesc")}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-1">
+            <div className="grid gap-1.5">
+              <Label htmlFor="csv-start">{t("phCsvStart")}</Label>
+              <Input
+                id="csv-start"
+                type="date"
+                value={csvStart}
+                max={csvEnd || todayStr}
+                onChange={(e) => setCsvStart(e.target.value)}
+                data-testid="input-csv-start"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="csv-end">{t("phCsvEnd")}</Label>
+              <Input
+                id="csv-end"
+                type="date"
+                value={csvEnd}
+                min={csvStart}
+                max={todayStr}
+                onChange={(e) => setCsvEnd(e.target.value)}
+                data-testid="input-csv-end"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCsvOpen(false)}
+              disabled={csvBusy}
+              data-testid="button-csv-cancel"
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCsvDownload}
+              disabled={csvBusy}
+              data-testid="button-csv-confirm"
+            >
+              {csvBusy ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  {t("phCsvLoading")}
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-1.5" />
+                  {t("phCsvConfirm")}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

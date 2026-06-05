@@ -2021,6 +2021,68 @@ Respond in this structure:
     }
   });
 
+  // CSV export source: real (measured) NDVI/NDRE/NDMI for an explicit
+  // [start, end] range chosen by the farmer. Unlike /timeseries this returns
+  // measurements ONLY (no forecast) and accepts an arbitrary span, capped to
+  // keep a single CDSE Statistics request reasonable.
+  const TS_RANGE_MAX_DAYS = 366;
+  app.get("/api/plot-health/timeseries-range", isAuthenticated, async (req: any, res) => {
+    try {
+      if (!sentinel.hasCredentials()) {
+        return res.status(503).json({ code: "missing_credentials", message: "Satellite provider credentials are not configured." });
+      }
+      const lat = Number(req.query.lat);
+      const lng = Number(req.query.lng);
+      const boxSizeM = PLOT_HEALTH_BOX_SIZES.includes(Number(req.query.boxSizeM)) ? Number(req.query.boxSizeM) : 50;
+      const start = typeof req.query.start === "string" ? req.query.start : "";
+      const end = typeof req.query.end === "string" ? req.query.end : "";
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return res.status(400).json({ message: "Valid latitude and longitude are required" });
+      }
+      const isRealCalendarDate = (s: string) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(s) &&
+        new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
+      if (!isRealCalendarDate(start) || !isRealCalendarDate(end)) {
+        return res.status(400).json({ message: "Valid start and end dates (YYYY-MM-DD) are required" });
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      const startMs = Date.parse(`${start}T00:00:00Z`);
+      let endMs = Date.parse(`${end}T00:00:00Z`);
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+        return res.status(400).json({ message: "End date must be on or after the start date" });
+      }
+      // Real satellite data only exists up to today; clip the query there.
+      const realTo = end > today ? today : end;
+      const realToMs = Date.parse(`${realTo}T00:00:00Z`);
+      if (realToMs < startMs) {
+        return res.status(400).json({ message: "The selected range has no past dates with satellite data" });
+      }
+      const spanDays = Math.floor((realToMs - startMs) / 86400000) + 1;
+      if (spanDays > TS_RANGE_MAX_DAYS) {
+        return res.status(400).json({ message: `Please choose a range of ${TS_RANGE_MAX_DAYS} days or less` });
+      }
+
+      const cacheKey = `range|${lat.toFixed(5)}|${lng.toFixed(5)}|${boxSizeM}|${start}|${realTo}`;
+      let points = tsCache.get(cacheKey);
+      if (!points) {
+        points = await sentinel.getTimeSeries(lat, lng, boxSizeM, start, realTo);
+        tsCache.set(cacheKey, points);
+        if (tsCache.size > TS_CACHE_MAX) {
+          const oldest = tsCache.keys().next().value;
+          if (oldest !== undefined) tsCache.delete(oldest);
+        }
+      }
+
+      res.json({ lat, lng, boxSizeM, start, end, today, points });
+    } catch (error: any) {
+      if (error instanceof sentinel.MissingCredentialsError) {
+        return res.status(503).json({ code: "missing_credentials", message: "Satellite provider credentials are not configured." });
+      }
+      console.error("Plot health timeseries-range error:", error?.message || error);
+      res.status(502).json({ message: "Could not reach the satellite provider. Please try again." });
+    }
+  });
+
   // Task #152: per-user saved farm plots so a farmer can store a plot's
   // coordinates under a name and reload them from a dropdown in the Plot Health
   // Check flow instead of re-typing the lat/long every time.
