@@ -239,7 +239,7 @@ export function PlotHealthChart({
 
       const header = [
         "Date", "Lat", "Long", "NDVI", "NDRE", "NDMI", "Confidence %", "Confidence Level",
-        "Max Temp (°C)", "Min Temp (°C)", "Humidity (%)", "Rain (mm)", "Cloud Cover (%)",
+        "Max Temp (°C)", "Min Temp (°C)", "Humidity (%)", "Rain (mm)",
       ];
       const numCell = (v: number | null) => (v == null ? "" : String(v));
       const csvCell = (v: string) =>
@@ -249,9 +249,6 @@ export function PlotHealthChart({
       reals.forEach((p, i) => {
         const conf = computeConfidence(p.validFraction, p, reals[i - 1] ?? null, reals[i + 1] ?? null);
         const w = weatherByDate.get(p.date);
-        const cloud = Number.isFinite(p.validFraction)
-          ? Math.max(0, Math.min(100, Math.round((1 - p.validFraction) * 100)))
-          : null;
         lines.push(
           toRow([
             p.date,
@@ -266,7 +263,6 @@ export function PlotHealthChart({
             numCell(w?.min ?? null),
             numCell(w?.humidity ?? null),
             numCell(w?.rain ?? null),
-            numCell(cloud),
           ]),
         );
       });
