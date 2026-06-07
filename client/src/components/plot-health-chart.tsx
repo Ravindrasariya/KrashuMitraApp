@@ -176,7 +176,71 @@ export function PlotHealthChart({
       }
       const latStr = json.lat.toFixed(6);
       const lngStr = json.lng.toFixed(6);
-      const header = ["Date", "Lat", "Long", "NDVI", "NDRE", "NDMI", "Confidence %", "Confidence Level"];
+
+      // Actual recorded historical weather per calendar day at the plot. Open-Meteo's
+      // /v1/forecast serves the recent past (~last 92 days) when given past dates, and
+      // /v1/archive (ERA5, lags ~5 days) covers older dates — neither returns predictions
+      // for past dates. The range can span both, so fetch each window and merge by date.
+      // Any failure leaves weather cells blank but never blocks the CSV download.
+      type DayWeather = { max: number | null; min: number | null; humidity: number | null; rain: number | null };
+      const weatherByDate = new Map<string, DayWeather>();
+      try {
+        const dayMs = 86400000;
+        const todayMs = Date.parse(`${todayStr}T00:00:00Z`);
+        const clampEnd = csvEnd > todayStr ? todayStr : csvEnd;
+        // Forecast covers dates with daysAgo <= 90 (i.e. on/after today-90d); archive the rest.
+        const recentStartStr = new Date(todayMs - 90 * dayMs).toISOString().slice(0, 10);
+        const archiveEndStr = new Date(todayMs - 91 * dayMs).toISOString().slice(0, 10);
+        const fetchWeatherInto = async (base: string, s: string, e: string) => {
+          const url = `${base}?latitude=${lat}&longitude=${lng}&start_date=${s}&end_date=${e}`
+            + `&daily=temperature_2m_max,temperature_2m_min,precipitation_sum`
+            + `&hourly=relative_humidity_2m&timezone=Asia%2FKolkata`;
+          const d = await fetch(url).then((r) => r.json());
+          const daily = d?.daily || {};
+          const times: string[] = daily.time || [];
+          const humAcc = new Map<string, { sum: number; n: number }>();
+          const ht: string[] = d?.hourly?.time || [];
+          const hh: number[] = d?.hourly?.relative_humidity_2m || [];
+          ht.forEach((tstr, i) => {
+            const v = hh[i];
+            if (v == null || !Number.isFinite(v)) return;
+            const day = tstr.slice(0, 10);
+            const cur = humAcc.get(day) ?? { sum: 0, n: 0 };
+            cur.sum += v;
+            cur.n += 1;
+            humAcc.set(day, cur);
+          });
+          times.forEach((day, i) => {
+            const max = daily.temperature_2m_max?.[i];
+            const min = daily.temperature_2m_min?.[i];
+            const rain = daily.precipitation_sum?.[i];
+            const hum = humAcc.get(day);
+            weatherByDate.set(day, {
+              max: max == null ? null : Math.round(max * 10) / 10,
+              min: min == null ? null : Math.round(min * 10) / 10,
+              humidity: hum && hum.n ? Math.round(hum.sum / hum.n) : null,
+              rain: rain == null ? null : Math.round(rain * 10) / 10,
+            });
+          });
+        };
+        const jobs: Promise<void>[] = [];
+        const forecastStart = csvStart > recentStartStr ? csvStart : recentStartStr;
+        if (forecastStart <= clampEnd) {
+          jobs.push(fetchWeatherInto("https://api.open-meteo.com/v1/forecast", forecastStart, clampEnd));
+        }
+        const archiveEnd = clampEnd < archiveEndStr ? clampEnd : archiveEndStr;
+        if (csvStart <= archiveEnd) {
+          jobs.push(fetchWeatherInto("https://archive-api.open-meteo.com/v1/archive", csvStart, archiveEnd));
+        }
+        await Promise.allSettled(jobs);
+      } catch {
+        // Weather is best-effort; leave cells blank on failure.
+      }
+
+      const header = [
+        "Date", "Lat", "Long", "NDVI", "NDRE", "NDMI", "Confidence %", "Confidence Level",
+        "Max Temp (°C)", "Min Temp (°C)", "Humidity (%)", "Rain (mm)", "Cloud Cover (%)",
+      ];
       const numCell = (v: number | null) => (v == null ? "" : String(v));
       const csvCell = (v: string) =>
         /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
@@ -184,6 +248,10 @@ export function PlotHealthChart({
       const lines = [toRow(header)];
       reals.forEach((p, i) => {
         const conf = computeConfidence(p.validFraction, p, reals[i - 1] ?? null, reals[i + 1] ?? null);
+        const w = weatherByDate.get(p.date);
+        const cloud = Number.isFinite(p.validFraction)
+          ? Math.max(0, Math.min(100, Math.round((1 - p.validFraction) * 100)))
+          : null;
         lines.push(
           toRow([
             p.date,
@@ -194,6 +262,11 @@ export function PlotHealthChart({
             numCell(p.ndmi),
             String(conf.pct),
             t(BAND_LABEL_KEY[conf.band]),
+            numCell(w?.max ?? null),
+            numCell(w?.min ?? null),
+            numCell(w?.humidity ?? null),
+            numCell(w?.rain ?? null),
+            numCell(cloud),
           ]),
         );
       });
