@@ -1152,7 +1152,7 @@ export default function PlotHealth({
       )}
 
       {/* Stats panel */}
-      {result && !result.noClearImage && (
+      {result && !result.noClearImage && !(result.cropAssessment && result.cropAssessment.overall !== "none") && (
         <Card className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 space-y-3" data-testid="card-plot-stats">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h4 className="font-semibold text-sm inline-flex items-center gap-2">
