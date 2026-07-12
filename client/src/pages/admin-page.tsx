@@ -27,6 +27,16 @@ interface AdminUser {
   createdAt: string | null;
 }
 
+interface BulkUploadResult {
+  total: number;
+  createdCount: number;
+  skippedCount: number;
+  failedCount: number;
+  created: { name: string; phoneNumber: string; farmerCode: string }[];
+  skipped: { row: number; phoneNumber: string; reason: string }[];
+  failed: { row: number; reason: string }[];
+}
+
 const SERVICE_TYPE_CONFIG: Record<string, { icon: typeof FlaskConical; color: string; label: string }> = {
   soil_test: { icon: FlaskConical, color: "text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400", label: "soilTest" },
   potato_perishability_test: { icon: Leaf, color: "text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400", label: "potatoPerishTest" },
@@ -43,6 +53,9 @@ export default function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState({ firstName: "", lastName: "", phoneNumber: "", email: "" });
   const [resetConfirmId, setResetConfirmId] = useState<string | null>(null);
+  const bulkUploadRef = useRef<HTMLInputElement>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<BulkUploadResult | null>(null);
 
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -287,6 +300,46 @@ export default function AdminPage() {
     input.click();
   };
 
+  const handleBulkUserUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBulkUploading(true);
+    setBulkResult(null);
+    try {
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.readAsDataURL(file);
+      });
+      const res = await apiRequest("POST", "/api/admin/users/bulk-upload", { fileData: base64 });
+      const data: BulkUploadResult = await res.json();
+      setBulkResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      toast({
+        title: language === "hi"
+          ? `${data.createdCount} उपयोगकर्ता जोड़े गए`
+          : `${data.createdCount} users created`,
+      });
+    } catch {
+      toast({ title: language === "hi" ? "अपलोड विफल" : "Upload failed", variant: "destructive" });
+    } finally {
+      setBulkUploading(false);
+      if (bulkUploadRef.current) bulkUploadRef.current.value = "";
+    }
+  };
+
+  const downloadUserTemplate = () => {
+    const csv = "Name,Phone Number,PIN\nRamesh Kumar,9876543210,1234\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "users-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const openPriceCropDialog = (crop?: PriceCrop) => {
     if (crop) {
       setEditingPriceCrop(crop);
@@ -517,6 +570,79 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="mb-4" data-testid="card-bulk-upload">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <FileSpreadsheet className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-sm">{language === "hi" ? "एक्सेल से उपयोगकर्ता जोड़ें" : "Bulk Upload Users"}</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                {language === "hi"
+                  ? "एक्सेल/CSV फ़ाइल अपलोड करें जिसमें कॉलम हों: Name, Phone Number, PIN (4 अंक)। पहले से पंजीकृत नंबर छोड़ दिए जाएंगे।"
+                  : "Upload an Excel/CSV file with columns: Name, Phone Number, PIN (4 digits). Already-registered numbers are skipped."}
+              </p>
+              <input
+                ref={bulkUploadRef}
+                type="file"
+                accept=".xlsx,.xls,.csv,.xlsm"
+                className="hidden"
+                onChange={handleBulkUserUpload}
+                data-testid="input-bulk-upload"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => bulkUploadRef.current?.click()}
+                  disabled={bulkUploading}
+                  data-testid="button-bulk-upload"
+                >
+                  {bulkUploading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1" />}
+                  {language === "hi" ? "फ़ाइल चुनें" : "Choose File"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={downloadUserTemplate} data-testid="button-download-template">
+                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />
+                  {language === "hi" ? "नमूना टेम्पलेट" : "Sample Template"}
+                </Button>
+              </div>
+
+              {bulkResult && (
+                <div className="mt-3 space-y-2" data-testid="bulk-upload-result">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" data-testid="badge-bulk-created">
+                      {language === "hi" ? "जोड़े गए" : "Created"}: {bulkResult.createdCount}
+                    </Badge>
+                    <Badge variant="secondary" data-testid="badge-bulk-skipped">
+                      {language === "hi" ? "छोड़े गए" : "Skipped"}: {bulkResult.skippedCount}
+                    </Badge>
+                    <Badge variant="destructive" data-testid="badge-bulk-failed">
+                      {language === "hi" ? "विफल" : "Failed"}: {bulkResult.failedCount}
+                    </Badge>
+                  </div>
+                  {bulkResult.skipped.length > 0 && (
+                    <div className="text-xs">
+                      <p className="font-medium text-muted-foreground">{language === "hi" ? "छोड़े गए (पहले से पंजीकृत):" : "Skipped (already registered):"}</p>
+                      <ul className="list-disc list-inside text-muted-foreground">
+                        {bulkResult.skipped.map((s, i) => (
+                          <li key={i} data-testid={`text-bulk-skipped-${i}`}>{language === "hi" ? "पंक्ति" : "Row"} {s.row}: {s.phoneNumber}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {bulkResult.failed.length > 0 && (
+                    <div className="text-xs">
+                      <p className="font-medium text-destructive">{language === "hi" ? "विफल पंक्तियाँ:" : "Failed rows:"}</p>
+                      <ul className="list-disc list-inside text-destructive">
+                        {bulkResult.failed.map((f, i) => (
+                          <li key={i} data-testid={`text-bulk-failed-${i}`}>{language === "hi" ? "पंक्ति" : "Row"} {f.row}: {f.reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

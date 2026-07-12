@@ -1362,6 +1362,113 @@ Rules:
     }
   });
 
+  app.post("/api/admin/users/bulk-upload", isAdmin, async (req: any, res) => {
+    try {
+      const { fileData } = req.body;
+      if (!fileData) return res.status(400).json({ message: "No file data" });
+
+      const xlsxModule = await import("xlsx");
+      const XLSX = xlsxModule.default || xlsxModule;
+      const buffer = Buffer.from(fileData, "base64");
+      const workbook = XLSX.read(buffer, { type: "buffer" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "Excel file is empty" });
+      }
+
+      const pick = (row: any, keys: string[]) => {
+        for (const k of keys) {
+          if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== "") return row[k];
+        }
+        return undefined;
+      };
+
+      const normalizePhone = (val: any): string | null => {
+        let digits = String(val).replace(/\D/g, "");
+        if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+        else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+        return /^\d{10}$/.test(digits) ? digits : null;
+      };
+
+      const normalizePin = (val: any): string | null => {
+        let pin = String(val).trim();
+        if (/^\d{1,4}$/.test(pin)) pin = pin.padStart(4, "0");
+        return /^\d{4}$/.test(pin) ? pin : null;
+      };
+
+      const created: { name: string; phoneNumber: string; farmerCode: string }[] = [];
+      const skipped: { row: number; phoneNumber: string; reason: string }[] = [];
+      const failed: { row: number; reason: string }[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNum = i + 2; // account for header row + 1-indexing
+
+        const nameVal = pick(row, ["Name", "name", "NAME", "Full Name", "full name", "First Name", "first name", "firstName", "farmer name", "Farmer Name"]);
+        const phoneVal = pick(row, ["Phone Number", "phone number", "Phone", "phone", "PHONE", "phoneNumber", "phone_number", "Mobile", "mobile", "Mobile Number", "Phone No", "phone no"]);
+        const pinVal = pick(row, ["PIN", "Pin", "pin", "PIN Number", "pin number", "Password", "password"]);
+
+        const name = nameVal !== undefined ? String(nameVal).trim() : "";
+        if (!name) {
+          failed.push({ row: rowNum, reason: "Name is required" });
+          continue;
+        }
+        if (phoneVal === undefined) {
+          failed.push({ row: rowNum, reason: "Phone number is required" });
+          continue;
+        }
+        const phoneNumber = normalizePhone(phoneVal);
+        if (!phoneNumber) {
+          failed.push({ row: rowNum, reason: `Invalid phone number: ${String(phoneVal)}` });
+          continue;
+        }
+        if (pinVal === undefined) {
+          failed.push({ row: rowNum, reason: "PIN is required" });
+          continue;
+        }
+        const pin = normalizePin(pinVal);
+        if (!pin) {
+          failed.push({ row: rowNum, reason: "Invalid PIN (must be 4 digits)" });
+          continue;
+        }
+
+        try {
+          const dupe = await storage.getUserByPhone(phoneNumber);
+          if (dupe) {
+            skipped.push({ row: rowNum, phoneNumber, reason: "Phone number already registered" });
+            continue;
+          }
+          const hashedPin = await bcrypt.hash(pin, 10);
+          const user = await storage.createUser({ phoneNumber, firstName: name, hashedPin });
+          const farmerCode = await storage.ensureFarmerCode(user.id);
+          created.push({ name, phoneNumber, farmerCode });
+        } catch (err: any) {
+          if (err?.code === "23505") {
+            skipped.push({ row: rowNum, phoneNumber, reason: "Phone number already registered" });
+          } else {
+            console.error(`Bulk upload row ${rowNum} error:`, err);
+            failed.push({ row: rowNum, reason: "Failed to create user" });
+          }
+        }
+      }
+
+      res.json({
+        total: rows.length,
+        createdCount: created.length,
+        skippedCount: skipped.length,
+        failedCount: failed.length,
+        created,
+        skipped,
+        failed,
+      });
+    } catch (error) {
+      console.error("Bulk user upload error:", error);
+      res.status(500).json({ message: "Failed to process Excel file" });
+    }
+  });
+
   app.post("/api/service-requests", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.session.userId;

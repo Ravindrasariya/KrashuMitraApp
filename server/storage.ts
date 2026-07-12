@@ -123,6 +123,8 @@ export interface IStorage {
   getUserById(id: string): Promise<User | undefined>;
   ensureFarmerCode(userId: string): Promise<string>;
   getAllUsers(): Promise<User[]>;
+  getUserByPhone(phoneNumber: string): Promise<User | undefined>;
+  createUser(data: { phoneNumber: string; firstName: string; hashedPin: string }): Promise<User>;
   updateUserAdmin(id: string, data: Partial<Pick<User, "firstName" | "lastName" | "phoneNumber" | "email">>): Promise<User | undefined>;
   updateUserProfile(id: string, data: Partial<Pick<User, "firstName" | "village" | "tehsil" | "district" | "state" | "postalCode" | "latitude" | "longitude" | "firmName" | "firmAddress" | "firmState" | "firmPincode" | "firmPan" | "firmGst">>): Promise<User | undefined>;
   resetUserPin(id: string, hashedPin: string): Promise<User | undefined>;
@@ -273,6 +275,23 @@ class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getUserByPhone(phoneNumber: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.phoneNumber, phoneNumber));
+    return user;
+  }
+
+  async createUser(data: { phoneNumber: string; firstName: string; hashedPin: string }): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values({
+        phoneNumber: data.phoneNumber,
+        firstName: data.firstName,
+        pin: data.hashedPin,
+      })
+      .returning();
+    return user;
   }
 
   async updateUserAdmin(id: string, data: Partial<Pick<User, "firstName" | "lastName" | "phoneNumber" | "email">>): Promise<User | undefined> {
